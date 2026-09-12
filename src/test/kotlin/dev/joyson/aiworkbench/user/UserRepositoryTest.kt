@@ -6,7 +6,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
+import org.springframework.test.context.ActiveProfiles
 
+@ActiveProfiles("test")
 @DataJpaTest
 class UserRepositoryTest @Autowired constructor(
     private val userRepository: UserRepository,

@@ -44,9 +44,24 @@ DB_PASSWORD=workbench \
 ./gradlew test
 ```
 
-테스트는 기본적으로 H2를 사용해 빠르게 실행한다. 운영·개발 런타임 DB는 PostgreSQL이다.
+테스트는 `test` 프로필을 사용하며 H2로 빠르게 실행한다. Gradle은 passed/skipped/failed 이벤트와 전체 예외를 출력한다.
 
-### 4. 종료
+### 4. 로깅
+
+Spring Boot 기본 SLF4J/Logback을 사용한다. 애플리케이션 패키지는 기본 `DEBUG`, 나머지는 `INFO`로 출력한다.
+
+```kotlin
+private val log = LoggerFactory.getLogger(MyService::class.java)
+log.info("job submitted: jobId={}", jobId)
+```
+
+환경변수로 레벨을 조절할 수 있다.
+
+```bash
+LOG_LEVEL_ROOT=INFO LOG_LEVEL_APP=TRACE ./gradlew bootRun
+```
+
+### 5. 종료
 
 ```bash
 docker compose down
