@@ -73,6 +73,12 @@ docker compose down
 
 구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](docs/domain/domain-model.md)에 정리한다.
 
+## 아키텍처 학습 문서
+
+모듈러 모놀리스·Spring Modulith·DDD·모듈 간 의존성 원칙은 [`docs/architecture/modular-monolith-and-modulith.md`](docs/architecture/modular-monolith-and-modulith.md)에 정리한다.
+
+현재는 `ApplicationModules.verify()` 기반의 모듈 경계 검증 테스트를 사용한다.
+
 ## 현재 구현 범위
 
 - `AuthenticatedPrincipal`
