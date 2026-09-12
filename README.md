@@ -69,6 +69,10 @@ docker compose down
 
 데이터 볼륨까지 삭제하려면 별도로 `docker compose down -v`를 실행한다.
 
+## 도메인 문서
+
+구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](docs/domain/domain-model.md)에 정리한다.
+
 ## 현재 구현 범위
 
 - `AuthenticatedPrincipal`
