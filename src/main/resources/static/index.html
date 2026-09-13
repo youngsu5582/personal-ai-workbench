@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal AI Workbench — Auth Playground</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #272b35;
+    --text: #e6e8ee; --muted: #8b93a7; --accent: #6ea8fe; --ok: #4ade80; --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px; background: var(--bg); color: var(--text);
+         font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 13px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+            padding: 20px; margin-bottom: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--muted); margin: 0 0 14px; font-weight: 600; }
+  button { background: var(--accent); color: #0b1020; border: 0; border-radius: 7px;
+           padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  pre { background: #0b0d12; border: 1px solid var(--border); border-radius: 7px; padding: 14px;
+        overflow-x: auto; font-size: 12px; margin: 12px 0 0; white-space: pre-wrap; word-break: break-all; }
+  .status { font-size: 13px; margin-bottom: 12px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.idle { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 130px 1fr; gap: 6px 16px; font-size: 13px; }
+  .grid dt { color: var(--muted); } .grid dd { margin: 0; word-break: break-all; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  code { background: #0b0d12; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Auth Playground</h1>
+  <p class="sub">Google 로그인 → 내 서버가 발급한 JWT → Bearer 로 API 호출. 토큰은 이 페이지의 메모리에만 있다.</p>
+
+  <section>
+    <h2>1 · 로그인</h2>
+    <div id="loginStatus" class="status idle">토큰 없음</div>
+    <button id="loginBtn">Google 로 로그인</button>
+    <button id="logoutBtn" class="ghost">토큰 버리기</button>
+    <p class="note">
+      로그인 성공 시 서버가 60초짜리 HttpOnly 쿠키로 토큰을 건네고, 이 페이지가 <code>GET /auth/handoff</code> 로 한 번 교환한다.
+      URL 에도 localStorage 에도 토큰이 남지 않는다.
+    </p>
+  </section>
+
+  <section>
+    <h2>2 · 발급된 토큰</h2>
+    <div id="tokenEmpty" class="status idle">아직 발급받지 않았다.</div>
+    <div id="tokenBox" hidden>
+      <dl class="grid" id="claims"></dl>
+      <pre id="rawToken"></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>3 · 보호된 API 호출</h2>
+    <button id="meBtn" disabled>GET /api/me</button>
+    <button id="meNoTokenBtn" class="ghost">토큰 없이 호출 (401 확인)</button>
+    <pre id="apiResult">아직 호출하지 않았다.</pre>
+  </section>
+</main>
+
+<script>
+  // 토큰은 여기에만 산다. 새로고침하면 사라지는 것이 정상이다.
+  let accessToken = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function setStatus(el, text, kind) {
+    el.textContent = text;
+    el.className = 'status ' + kind;
+  }
+
+  function decodeJwtPayload(token) {
+    const part = token.split('.')[1];
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decodeURIComponent(escape(json)));
+  }
+
+  function renderToken(token) {
+    accessToken = token;
+    const claims = decodeJwtPayload(token);
+    const fmt = (v) => new Date(v * 1000).toLocaleString('ko-KR');
+    const rows = {
+      'iss (발급자)': claims.iss,
+      'sub (User uuid)': claims.sub,
+      'aud (대상)': Array.isArray(claims.aud) ? claims.aud.join(', ') : claims.aud,
+      'name': claims.name ?? '-',
+      'iat': fmt(claims.iat),
+      'exp': fmt(claims.exp),
+      'jti': claims.jti,
+    };
+    $('claims').innerHTML = Object.entries(rows)
+      .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    $('rawToken').textContent = token;
+    $('tokenEmpty').hidden = true;
+    $('tokenBox').hidden = false;
+    $('meBtn').disabled = false;
+    setStatus($('loginStatus'), '로그인됨 · ' + (claims.name ?? claims.sub), 'ok');
+  }
+
+  async function exchangeHandoffCookie() {
+    const res = await fetch('/auth/handoff', { credentials: 'include' });
+    if (!res.ok) {
+      setStatus($('loginStatus'), '토큰 교환 실패 (' + res.status + ')', 'err');
+      return;
+    }
+    const body = await res.json();
+    renderToken(body.accessToken);
+  }
+
+  async function callMe(withToken) {
+    const headers = withToken && accessToken
+      ? { Authorization: 'Bearer ' + accessToken }
+      : {};
+    const res = await fetch('/api/me', { headers });
+    const text = await res.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+    $('apiResult').textContent = `HTTP ${res.status} ${res.statusText}\n\n${pretty || '(빈 응답)'}`;
+  }
+
+  $('loginBtn').onclick = () => { location.href = '/oauth2/authorization/google'; };
+  $('logoutBtn').onclick = () => {
+    accessToken = null;
+    $('tokenBox').hidden = true;
+    $('tokenEmpty').hidden = false;
+    $('meBtn').disabled = true;
+    $('apiResult').textContent = '아직 호출하지 않았다.';
+    setStatus($('loginStatus'), '토큰 없음', 'idle');
+  };
+  $('meBtn').onclick = () => callMe(true);
+  $('meNoTokenBtn').onclick = () => callMe(false);
+
+  // 로그인 리다이렉트로 돌아왔으면 바로 교환한다.
+  const params = new URLSearchParams(location.search);
+  if (params.get('login') === 'success') {
+    history.replaceState({}, '', '/');
+    exchangeHandoffCookie();
+  } else if (params.get('login') === 'failed') {
+    history.replaceState({}, '', '/');
+    setStatus($('loginStatus'), '로그인 실패 — allowlist 또는 client 설정을 확인한다', 'err');
+  }
+</script>
+</body>
+</html>

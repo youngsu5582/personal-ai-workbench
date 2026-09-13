@@ -12,9 +12,17 @@ package dev.joyson.aiworkbench.auth.domain
  */
 enum class AuthErrorCode(val code: String, val message: String) {
 
+    /* 로그인 (OIDC 콜백에서의 거부) */
+    INVALID_ISSUER("invalid_issuer", "issuer 를 확인할 수 없다"),
+    INVALID_SUBJECT("invalid_subject", "subject 를 확인할 수 없다"),
+    EMAIL_NOT_VERIFIED("email_not_verified", "검증된 이메일이 필요하다"),
+    EMAIL_NOT_ALLOWED("email_not_allowed", "허용되지 않은 계정이다"),
+    USER_DISABLED("user_disabled", "비활성화된 사용자다"),
 
     /* 내가 발급한 토큰의 검증 */
     INVALID_AUDIENCE("invalid_audience", "이 토큰은 다른 대상용이다"),
 
+    /* 로그인 직후의 토큰 교환 */
+    NO_HANDOFF_TOKEN("no_handoff_token", "교환할 토큰이 없다. 로그인이 필요하다"),
     ;
 }
