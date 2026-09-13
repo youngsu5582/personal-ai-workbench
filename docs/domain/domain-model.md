@@ -32,6 +32,9 @@ AI Generation Workbench
 | 용어 | 의미 |
 | --- | --- |
 | User | Workbench의 사용자. 생성 작업과 Asset의 소유자다. |
+| UserIdentity | 한 User를 증명하는 외부 인증 주체 하나. (issuer, subject)로 식별한다. |
+| Issuer | 인증 발급자. OIDC면 ID token의 `iss`, 아니면 우리가 정한 상수다. |
+| Subject | 그 발급자 안에서 불변인 사용자 식별자. |
 | Owner | 특정 리소스를 소유하고 조회할 수 있는 User. |
 | GenerationJob | 이미지 생성 요청과 처리 상태를 나타내는 내부 작업이다. |
 | Provider | 실제 이미지 생성 요청을 처리하는 외부 AI 서비스다. |
@@ -44,16 +47,28 @@ AI Generation Workbench
 
 ## 4. 도메인 규칙과 불변식
 
-### User
+### User / UserIdentity
 
-- `externalSubject`는 외부 인증 주체와 연결되는 값이며 중복될 수 없다.
-- `status`가 `ACTIVE`인 User만 새로운 작업을 생성할 수 있다.
-- 로컬 개발에서는 `local:default` Subject를 가진 `default-user`를 사용한다.
+- 외부 인증 주체의 식별 기준은 `provider` 같은 논리 이름이 아니라 **(issuer, subject) 쌍**이다.
+- `UNIQUE(issuer, subject)` — 같은 외부 계정이 두 User에 연결될 수 없다.
+- `issuer`는 저장 전에 정규화한다. Google은 `iss`를 `https://accounts.google.com`과
+  `accounts.google.com` 두 형태로 줄 수 있고, 정규화하지 않으면 같은 사람이 두 행으로 갈라진다.
+- `subject`는 해당 발급자 안에서 불변인 값만 쓴다. GitHub의 `login`처럼 변경 가능한 값은 쓰지 않는다.
+- **로그인 수단이 0개인 User는 존재할 수 없다.** 마지막 identity는 해제할 수 없다.
+  이 규칙은 `UserWriter.unlink`가 지킨다. "자식 행이 최소 1개"를 강제하는 DB 제약은 없기 때문이다.
+  현재 count 확인은 TOCTOU에 열려 있다 — 해제 UI가 생기는 시점에 `@Version` 또는 비관적 락이 필요하다.
+- 한 User에 같은 issuer를 두 번 연결하지 않는다 (구글 계정 두 개를 한 계정에 붙일 수 없다).
+- **이메일이 같다는 이유로 기존 User에 자동 연결하지 않는다.** 공격자가 내 이메일로 다른 provider에
+  계정을 만들면 내 계정에 들어오게 된다. 기존 계정에 붙이는 것은 로그인된 상태에서만 가능하다.
+- `email`은 User가 아니라 identity가 주장하는 값이므로 `UserIdentity`에 둔다. 로그인 식별에는 쓰지 않는다.
+- `status`가 `ACTIVE`인 User만 로그인할 수 있고 새로운 작업을 생성할 수 있다.
 
 ### Ownership
 
 - 모든 사용자 소유 리소스는 `owner_user_id`를 가진다.
 - 조회 조건에는 항상 현재 인증 주체의 User ID가 포함되어야 한다.
+  단 이 규칙은 **HTTP 요청 경로에만** 적용된다. Worker 스레드에는 SecurityContext가 없으므로,
+  Worker는 컨텍스트가 아니라 행에 저장된 `owner_user_id`를 신뢰한다.
 - 클라이언트가 보낸 `owner_user_id`를 신뢰하지 않는다.
 - 다른 User의 Job·Asset은 존재 여부가 외부에 드러나지 않도록 조회 범위에서 제외한다.
 
@@ -73,6 +88,10 @@ AI Generation Workbench
 ```text
 User
   └─ User가 소유권의 기준이 되는 Aggregate Root
+
+UserIdentity
+  └─ User를 `user_id`로 참조하는 로그인 수단. 1:N이지만 JPA 컬렉션으로 매핑하지 않는다.
+     "로그인 수단이 0개일 수 없다"는 UserWriter가 명시적으로 지킨다.
 
 GenerationJob
   ├─ 생성 요청
@@ -121,17 +140,17 @@ Controller가 Provider API를 직접 호출하지 않는다. MCP도 Controller�
 
 현재 구현:
 
-- `User`
-- `UserRepository`
-- `AuthenticatedPrincipal`
-- `OwnerContext`
-- 로컬 PostgreSQL 개발 환경
-- H2 기반 테스트 환경
+- `User` / `UserIdentity` (1:N, `UNIQUE(issuer, subject)`)
+- `UserRegistry` — user 모듈의 공개 경계
+- Google OIDC 로그인, JIT provisioning, 이메일 allowlist
+- 자체 access token 발급(HS256)과 Bearer 검증
+- `AuthenticatedPrincipal` / `OwnerContext`
+- 로컬 PostgreSQL 개발 환경, H2 기반 테스트 환경
 
 다음 구현:
 
-1. `default-user` seed
-2. `GenerationJob` 모델
-3. Owner scope 조회
-4. Job 생성 API
-5. 상태 전이 테스트
+1. refresh token (rotation + reuse detection)
+2. GitHub provider — OIDC가 아니므로 issuer를 상수로 정한다
+3. 계정 연결 (로그인 상태에서 두 번째 provider 연결)
+4. `GenerationJob` 모델
+5. Owner scope 조회와 Job 생성 API
