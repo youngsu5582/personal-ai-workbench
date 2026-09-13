@@ -1,0 +1,27 @@
+# 로컬 개발에서만 쓰는 값.
+#
+# 비밀은 여기 두지 않는다 — 이 파일은 커밋되고, .env 는 커밋되지 않는다.
+# 그래서 client secret 과 jwt-secret 은 여기 없고 .env 에만 있다.
+#
+# 이 profile 은 bootRun 이 자동으로 켠다(build.gradle.kts).
+# jar 로 뜨는 배포에는 켜지지 않으므로, 배포에서 환경변수를 빠뜨리면
+# 로컬 값으로 뜨는 것이 아니라 기동에 실패한다.
+spring:
+  datasource:
+    url: "jdbc:postgresql://localhost:5433/personal_ai_workbench"
+    username: workbench
+    password: workbench
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+workbench:
+  auth:
+    issuer: "https://workbench.local"
+    # localhost 는 http 라 Secure 쿠키를 쓸 수 없다. 로컬만의 예외다.
+    cookie-secure: false
+
+logging:
+  level:
+    dev.joyson.aiworkbench: DEBUG

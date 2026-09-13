@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: personal-ai-workbench
+
+  # 비밀은 .env 에서 읽는다. 이 파일은 커밋되지 않는다.
+  # 실제 환경변수가 있으면 그쪽이 우선하므로 배포에서는 .env 없이 주입해도 된다.
+  config:
+    import: "optional:file:.env[.properties]"
+
+  # ── 아래 값들에는 기본값을 두지 않는다 ──────────────────────────────
+  # 기본값을 두면 배포에서 환경변수를 빠뜨렸을 때 조용히 로컬 설정으로 뜬다.
+  # 없으면 기동에 실패하는 편이 낫다. 로컬 값은 application-local.yaml 이 채운다.
+  datasource:
+    url: "${DB_URL}"
+    username: "${DB_USERNAME}"
+    password: "${DB_PASSWORD}"
+
+  jpa:
+    hibernate:
+      # 기본은 validate. 스키마를 자동으로 바꾸는 것은 로컬에서만 한다.
+      ddl-auto: "${JPA_DDL_AUTO:validate}"
+    open-in-view: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          # registration id 'google' 이 Spring 의 CommonOAuth2Provider.GOOGLE 과 이름으로 매칭된다.
+          # 그래서 authorization-uri·token-uri·jwk-set-uri·issuer-uri 를 여기 적지 않아도 된다.
+          # 이 이름은 /oauth2/authorization/{id} 와 /login/oauth2/code/{id} 의 {id} 이기도 하다.
+          google:
+            client-id: "${GOOGLE_CLIENT_ID}"
+            client-secret: "${GOOGLE_CLIENT_SECRET}"
+            scope:
+              - openid
+              - profile
+              - email
+
+# 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
+workbench:
+  auth:
+    issuer: "${AUTH_ISSUER}"
+    audience: "${AUTH_AUDIENCE:workbench-api}"
+    # 기본값이 없다. 있으면 저장소에 공개된 키로 서명하게 된다.
+    jwt-secret: "${AUTH_JWT_SECRET}"
+    access-token-ttl: "${AUTH_ACCESS_TOKEN_TTL:15m}"
+    # 기본은 HTTPS 전용. 평문으로 내보내는 쪽이 예외여야 한다.
+    cookie-secure: "${AUTH_COOKIE_SECURE:true}"
+    # 비워두면 누구나 로그인된다. 외부에 노출한다면 반드시 채운다.
+    allowed-emails: "${AUTH_ALLOWED_EMAILS:}"
+
+logging:
+  level:
+    root: "${LOG_LEVEL_ROOT:INFO}"
+    dev.joyson.aiworkbench: "${LOG_LEVEL_APP:INFO}"
+  pattern:
+    # %clr() 이 색을 만든다. 이걸 빼면(= 기본 패턴을 직접 덮어쓰면) 색이 전부 사라진다.
+    # 색 적용 여부는 spring.output.ansi.enabled 가 따로 결정한다(기본 DETECT).
+    # %wEx 는 스택트레이스를 보기 좋게 접어주는 Boot 전용 변환어다.
+    console: "%clr(%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}){faint} %clr(%-5level){} %clr([%thread]){faint} %clr(%logger{36}){cyan} %clr(-){faint} %m%n%wEx"
