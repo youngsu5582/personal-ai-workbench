@@ -2,21 +2,23 @@ spring:
   application:
     name: personal-ai-workbench
 
-  # 프로젝트 루트의 .env 를 설정으로 읽어들인다 (KEY=VALUE 라 properties 문법과 호환된다).
-  # 이게 없으면 bootRun·IntelliJ 어느 쪽도 .env 를 보지 않아서
-  # GOOGLE_CLIENT_ID 가 아래 기본값(local-dev-client-id)인 채로 뜨고 Google 이 invalid_client 를 준다.
-  # optional: 이라 파일이 없어도 기동은 된다. 실제 환경변수가 있으면 그쪽이 우선한다.
+  # 비밀은 .env 에서 읽는다. 이 파일은 커밋되지 않는다.
+  # 실제 환경변수가 있으면 그쪽이 우선하므로 배포에서는 .env 없이 주입해도 된다.
   config:
     import: "optional:file:.env[.properties]"
 
+  # ── 아래 값들에는 기본값을 두지 않는다 ──────────────────────────────
+  # 기본값을 두면 배포에서 환경변수를 빠뜨렸을 때 조용히 로컬 설정으로 뜬다.
+  # 없으면 기동에 실패하는 편이 낫다. 로컬 값은 application-local.yaml 이 채운다.
   datasource:
-    url: "${DB_URL:jdbc:postgresql://localhost:5433/personal_ai_workbench}"
-    username: "${DB_USERNAME:workbench}"
-    password: "${DB_PASSWORD:workbench}"
+    url: "${DB_URL}"
+    username: "${DB_USERNAME}"
+    password: "${DB_PASSWORD}"
 
   jpa:
     hibernate:
-      ddl-auto: "${JPA_DDL_AUTO:update}"
+      # 기본은 validate. 스키마를 자동으로 바꾸는 것은 로컬에서만 한다.
+      ddl-auto: "${JPA_DDL_AUTO:validate}"
     open-in-view: false
 
   security:
@@ -26,13 +28,9 @@ spring:
           # registration id 'google' 이 Spring 의 CommonOAuth2Provider.GOOGLE 과 이름으로 매칭된다.
           # 그래서 authorization-uri·token-uri·jwk-set-uri·issuer-uri 를 여기 적지 않아도 된다.
           # 이 이름은 /oauth2/authorization/{id} 와 /login/oauth2/code/{id} 의 {id} 이기도 하다.
-          #
-          # Google Cloud Console > Google Auth Platform > Clients 에서 발급한다.
-          # 승인된 리디렉션 URI 에 아래를 정확히 등록한다:
-          #   http://localhost:8080/login/oauth2/code/google
           google:
-            client-id: "${GOOGLE_CLIENT_ID:local-dev-client-id}"
-            client-secret: "${GOOGLE_CLIENT_SECRET:local-dev-client-secret}"
+            client-id: "${GOOGLE_CLIENT_ID}"
+            client-secret: "${GOOGLE_CLIENT_SECRET}"
             scope:
               - openid
               - profile
@@ -41,18 +39,20 @@ spring:
 # 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
 workbench:
   auth:
-    issuer: "${AUTH_ISSUER:https://workbench.local}"
+    issuer: "${AUTH_ISSUER}"
     audience: "${AUTH_AUDIENCE:workbench-api}"
-    jwt-secret: "${AUTH_JWT_SECRET:local-development-secret-please-change-me-32b}"
+    # 기본값이 없다. 있으면 저장소에 공개된 키로 서명하게 된다.
+    jwt-secret: "${AUTH_JWT_SECRET}"
     access-token-ttl: "${AUTH_ACCESS_TOKEN_TTL:15m}"
-    cookie-secure: "${AUTH_COOKIE_SECURE:false}"
+    # 기본은 HTTPS 전용. 평문으로 내보내는 쪽이 예외여야 한다.
+    cookie-secure: "${AUTH_COOKIE_SECURE:true}"
     # 비워두면 누구나 로그인된다. 외부에 노출한다면 반드시 채운다.
     allowed-emails: "${AUTH_ALLOWED_EMAILS:}"
 
 logging:
   level:
     root: "${LOG_LEVEL_ROOT:INFO}"
-    dev.joyson.aiworkbench: "${LOG_LEVEL_APP:DEBUG}"
+    dev.joyson.aiworkbench: "${LOG_LEVEL_APP:INFO}"
   pattern:
     # %clr() 이 색을 만든다. 이걸 빼면(= 기본 패턴을 직접 덮어쓰면) 색이 전부 사라진다.
     # 색 적용 여부는 spring.output.ansi.enabled 가 따로 결정한다(기본 DETECT).

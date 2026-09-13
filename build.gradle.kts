@@ -57,6 +57,12 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
+// 로컬 profile 은 개발용 태스크에서만 켠다.
+// jar 로 뜨는 배포에는 붙지 않으므로, 환경변수를 빠뜨리면 로컬 값으로 뜨는 대신 기동에 실패한다.
+tasks.bootRun {
+	systemProperty("spring.profiles.active", "local")
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
 	testLogging {
