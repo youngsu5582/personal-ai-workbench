@@ -42,3 +42,7 @@ out/
 ### Local secrets ###
 .env
 google-login-auth-design.html
+
+### Local file storage ###
+# workbench.storage.local.root 기본값. 생성된 이미지가 쌓인다.
+var/
