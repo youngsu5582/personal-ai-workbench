@@ -12,12 +12,16 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class GenerationJobWriter(
     private val generationJobRepository: GenerationJobRepository,
-    private val generationJobTaskRepository: GenerationJobTaskRepository
+    private val generationJobTaskRepository: GenerationJobTaskRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * Job 과 Task 를 만든다. **받아도 되는 요청인지는 여기서 묻지 않는다** —
+     * 그 판단은 [GenerationJobSubmitter] 가 하고, 이 클래스는 쓰기와 트랜잭션만 맡는다.
+     */
     @Transactional
-    fun generate(userId: Long, command: GenerationCommand): GenerationJobView {
+    fun create(userId: Long, command: GenerationCommand): GenerationJobView {
         val job = generationJobRepository.save(
             GenerationJob(
                 ownerUserId = userId,
