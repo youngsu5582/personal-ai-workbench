@@ -29,6 +29,7 @@ class GenerationJobWriterTest @Autowired constructor(
     private fun command(taskCount: Int) =
         GenerationCommand(
             option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+            model = "gpt-image-2",
             taskCount = taskCount,
         )
 

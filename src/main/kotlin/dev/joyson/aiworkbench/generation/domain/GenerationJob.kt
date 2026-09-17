@@ -56,6 +56,17 @@ class GenerationJob(
     @Column(nullable = false, updatable = false)
     val option: GenerationOption,
 
+    /**
+     * 무엇으로 만들 것인가. `gpt-image-2` 처럼 Provider 가 아는 모델 이름이다.
+     *
+     * [option] 안이 아니라 밖에 두는 이유: option 은 "무엇을 만들까" 고 model 은 "무엇으로 만들까" 다.
+     * 그리고 JSON 안에 묻으면 "이 모델로 돌린 작업" 을 조회·집계할 수 없다.
+     *
+     * 어느 Provider 가 이 모델을 다루는지는 여기서 모른다 — 접수 시점에 확인하고 넘어온 값이다.
+     */
+    @Column(nullable = false, updatable = false)
+    val model: String,
+
     @Column(nullable = false, updatable = false)
     val taskCount: Int,
 

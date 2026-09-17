@@ -40,8 +40,11 @@ class GenerationJobApiTest @Autowired constructor(
         tokenService.issueAccessToken(user.uuid, user.displayName).accessToken
     }
 
-    private fun body(taskCount: Int, option: String = OPTION) =
-        """{"option":$option,"taskCount":$taskCount}"""
+    private fun body(
+        taskCount: Int,
+        option: String = OPTION,
+        model: String = "gpt-image-2",
+    ) = """{"option":$option,"model":"$model","taskCount":$taskCount}"""
 
     private fun request(payload: String, withToken: Boolean = true) =
         mockMvc.post("/api/jobs") {
@@ -71,7 +74,7 @@ class GenerationJobApiTest @Autowired constructor(
 
     @Test
     fun `option 이 없으면 400 이다`() {
-        request("""{"taskCount":1}""").andExpect { status { isBadRequest() } }
+        request("""{"model":"gpt-image-2","taskCount":1}""").andExpect { status { isBadRequest() } }
     }
 
     @Test

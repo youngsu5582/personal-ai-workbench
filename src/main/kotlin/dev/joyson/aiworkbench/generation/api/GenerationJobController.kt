@@ -45,6 +45,8 @@ class GenerationJobController(
 data class GenerationRequest(
     @field:NotNull
     val option: GenerationOption?,
+    @field:NotBlank
+    val model: String?,
     @field:Min(1)
     @field:Max(4)
     val taskCount: Int,
@@ -52,6 +54,7 @@ data class GenerationRequest(
     fun toCommand(): GenerationCommand {
         return GenerationCommand(
             option = requireNotNull(option),
+            model = requireNotNull(model),
             taskCount = taskCount,
         )
     }

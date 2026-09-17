@@ -36,6 +36,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         GenerationJob(
             ownerUserId = 1L,
             option = option(prompt),
+            model = "gpt-image-2",
             taskCount = taskCount,
         )
 
@@ -61,6 +62,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val job = GenerationJob(
             ownerUserId = 1L,
             option = TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
+            model = "gpt-image-2",
             taskCount = 1,
         )
         val saved = em.persistAndFlush(job)
@@ -112,11 +114,11 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `상한을 넘는 기존 행도 읽을 수 있다`() {
         em.entityManager.createNativeQuery(
             """
-            insert into generation_jobs (uuid, owner_user_id, option, task_count, status, created_at, updated_at)
+            insert into generation_jobs (uuid, owner_user_id, option, model, task_count, status, created_at, updated_at)
             values (random_uuid(), 1,
                     '{"type":"text-to-image","prompt":"과거 데이터",
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}' format json,
-                    99,
+                    'gpt-image-2', 99,
                     'DISPATCHED', current_timestamp, current_timestamp)
             """,
         ).executeUpdate()
