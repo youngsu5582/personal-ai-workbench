@@ -4,6 +4,9 @@ import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
+import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
@@ -24,7 +27,10 @@ class GenerationJobWriterTest @Autowired constructor(
 ) {
 
     private fun command(taskCount: Int) =
-        GenerationCommand(option = TextToImageOption("고양이"), taskCount = taskCount)
+        GenerationCommand(
+            option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+            taskCount = taskCount,
+        )
 
     /**
      * `0..n` 은 끝을 포함해 n+1 개를 만든다.

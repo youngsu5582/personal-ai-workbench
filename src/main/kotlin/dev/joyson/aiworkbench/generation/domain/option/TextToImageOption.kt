@@ -2,7 +2,6 @@ package dev.joyson.aiworkbench.generation.domain.option
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 
-
 /**
  * 텍스트로 이미지를 만든다.
  *
@@ -10,7 +9,9 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
  * 도메인이 특정 Provider 의 표현을 알기 시작하면 Provider 를 바꿀 때 도메인이 따라 바뀐다.
  */
 data class TextToImageOption(
-    val prompt: String
+    val prompt: String,
+    val size: ImageSize,
+    val quality: Quality = Quality.AUTO,
 ) : GenerationOption {
     init {
         require(prompt.isNotBlank()) { "prompt 는 비어 있을 수 없다" }

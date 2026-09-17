@@ -2,10 +2,7 @@ package dev.joyson.aiworkbench.provider.openai
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
-import dev.joyson.aiworkbench.provider.domain.AspectRatio
-import dev.joyson.aiworkbench.provider.domain.ImageSize
-import dev.joyson.aiworkbench.provider.domain.Quality
-import dev.joyson.aiworkbench.provider.domain.Resolution
+import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import org.junit.jupiter.api.condition.EnabledIf
 import org.springframework.http.HttpHeaders
@@ -74,11 +71,8 @@ class OpenAIProviderLiveTest {
     private val model: String get() = System.getenv("OPENAI_MODEL") ?: "gpt-image-2"
 
     @Test
-    fun `비율로 요청하면 이미지가 온다`() {
-        val result = generate(
-            ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
-            "live-ratio-1x1-1k.png",
-        )
+    fun `정사각 이미지를 만든다`() {
+        val result = generate(1024, 1024, "live-1024x1024.png")
 
         assertPng(result.image)
     }
@@ -92,11 +86,8 @@ class OpenAIProviderLiveTest {
     @Test
     fun `임의 픽셀 크기를 받아주는지 확인한다`() {
         // 고정 메뉴(1024x1024 · 1536x1024 · 1024x1536)에 **없는** 값이어야 의미가 있다.
-        // 2048x1152 는 우리 `pixelsOf` 가 16:9 @ 2k 에 대해 실제로 만드는 값이라,
-        // 이게 거절되면 흔한 요청 대부분이 깨진다.
-        val size = ImageSize.ByPixels(2048, 1152)
-
-        val result = runCatching { generate(size, "live-pixels-2048x1152.png") }
+        // 2048x1152 는 16:9 @ 2k 요청이 실제로 만드는 값이라, 이게 거절되면 흔한 요청 대부분이 깨진다.
+        val result = runCatching { generate(2048, 1152, "live-2048x1152.png") }
             .onFailure { e ->
                 if (e is ExternalApiException) {
                     fail("임의 크기가 거절됐다. 허용 목록을 여기서 확인하고 pixelsOf 를 고친다 → ${e.message}")
@@ -107,11 +98,12 @@ class OpenAIProviderLiveTest {
         assertPng(result.image)
     }
 
-    private fun generate(size: ImageSize, fileName: String): ExternalApiGenerateResult {
+    private fun generate(width: Int, height: Int, fileName: String): ExternalApiGenerateResult {
         val request = ExternalApiGenerateRequest(
             prompt = "창밖을 보는 고양이, 수채화",
-            size = size,
-            quality = Quality.LOW, // 확인이 목적이므로 제일 싼 쪽으로 부른다
+            width = width,
+            height = height,
+            quality = ImageQuality.LOW, // 확인이 목적이므로 제일 싼 쪽으로 부른다
         )
 
         val response = provider.generate(model, request)
@@ -127,7 +119,7 @@ class OpenAIProviderLiveTest {
             """
             |
             |  model          = $model
-            |  요청 크기       = $size
+            |  요청 크기       = ${width}x$height
             |  응답 크기       = ${result.metadata.width}x${result.metadata.height}
             |  바이트         = ${result.metadata.fileSize}
             |  mimeType       = ${result.metadata.mimeType}

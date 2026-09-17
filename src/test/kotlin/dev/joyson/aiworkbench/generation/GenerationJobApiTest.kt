@@ -40,7 +40,7 @@ class GenerationJobApiTest @Autowired constructor(
         tokenService.issueAccessToken(user.uuid, user.displayName).accessToken
     }
 
-    private fun body(taskCount: Int, option: String = """{"type":"text-to-image","prompt":"고양이"}""") =
+    private fun body(taskCount: Int, option: String = OPTION) =
         """{"option":$option,"taskCount":$taskCount}"""
 
     private fun request(payload: String, withToken: Boolean = true) =
@@ -104,3 +104,6 @@ private object GenerationRequestConstraints {
         return field.getAnnotation(jakarta.validation.constraints.Max::class.java).value.toInt()
     }
 }
+
+private const val OPTION =
+    """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""

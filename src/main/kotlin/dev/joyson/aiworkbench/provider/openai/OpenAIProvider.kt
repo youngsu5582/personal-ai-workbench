@@ -6,8 +6,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ImageMetadata
-import dev.joyson.aiworkbench.provider.domain.ImageSize
-import dev.joyson.aiworkbench.provider.domain.Resolution
+import dev.joyson.aiworkbench.provider.ImageQuality
 import java.util.Base64
 
 /**
@@ -37,8 +36,6 @@ class OpenAIProvider(
         val target = OpenAIImageModel.find(model)
             ?: throw ExternalApiException(retryable = false, message = "다루지 않는 모델이다: $model")
 
-        val pixels = pixelsOf(request.size)
-
         val response = try {
             client.generate(
                 path = OpenAIImageEndpoint.GENERATIONS.path,
@@ -47,8 +44,8 @@ class OpenAIProvider(
                     prompt = request.prompt,
                     // 호출 1건이 이미지 1장이다. 장수는 Task 개수로 나뉘어 들어온다.
                     n = 1,
-                    size = "${pixels.width}x${pixels.height}",
-                    quality = request.quality.value,
+                    size = "${request.width}x${request.height}",
+                    quality = qualityOf(request.quality),
                     outputFormat = OUTPUT_FORMAT,
                 ),
             )
@@ -75,8 +72,8 @@ class OpenAIProvider(
                 ExternalApiGenerateResult(
                     image = image,
                     metadata = ImageMetadata(
-                        width = pixels.width,
-                        height = pixels.height,
+                        width = request.width,
+                        height = request.height,
                         mimeType = "image/$OUTPUT_FORMAT",
                         fileSize = image.size,
                     ),
@@ -87,44 +84,18 @@ class OpenAIProvider(
     }
 
     /**
-     * 요청한 크기를 픽셀로 확정한다.
+     * 포트의 품질 눈금을 OpenAI 의 허용값으로 옮긴다.
      *
-     * [ImageSize.ByPixels] 는 이미 픽셀이라 그대로 쓴다. 사용자가 정확한 값을 말했으므로
-     * 우리가 해석할 여지가 없다 — Provider 가 못 받으면 그건 거절이지 근사가 아니다.
-     *
-     * [ImageSize.ByRatio] 는 **긴 변** 기준으로 푼다 — `2k` 는 긴 쪽이 2048 이라는 뜻이고,
-     * 짧은 쪽은 비율에서 나온다. 가로 기준으로 잡으면 세로 이미지의 픽셀 수가 비율마다 들쭉날쭉해진다.
-     *
-     * ```
-     * 1:1  @ 1k  ->  1024x1024   두 변이 같으니 배율도 하나다
-     * 16:9 @ 2k  ->  2048x1152   16 을 2048 로 만드는 128 배율을 9 에도 적용한다
-     * 3:4  @ 1k  ->   768x1024   세로가 기니 세로가 1024 가 되고 가로가 따라 줄어든다
-     * ```
-     *
-     * 주의: OpenAI 가 임의 크기를 받는지 고정 목록만 받는지 아직 실제 호출로 확인하지 않았다.
-     * 고정 목록만 받는다면 이 함수가 "가장 가까운 허용 크기 고르기" 로 바뀐다.
-     * 바뀌는 곳이 여기 한 곳이도록 계산을 가뒀다.
+     * 지금은 값이 1:1 로 대응한다. 다른 Provider 가 다른 눈금을 쓰면 그 어댑터가 자기 표를 갖는다.
      */
-    private fun pixelsOf(size: ImageSize): Pixels = when (size) {
-        is ImageSize.ByPixels -> Pixels(size.width, size.height)
-        is ImageSize.ByRatio -> {
-            val longEdge = when (size.resolution) {
-                Resolution.ONE_K -> 1024
-                Resolution.TWO_K -> 2048
-                Resolution.FOUR_K -> 4096
-            }
-            // 비율의 큰 쪽을 longEdge 에 맞추는 배율을 구해, 두 변에 똑같이 적용한다.
-            // 16:9 를 2k 로 보내면 16 이 2048 이 되는 배율(128배)이 9 에도 걸려 1152 가 나온다.
-            // 나눗셈을 마지막에 두는 이유는 정수 나눗셈의 절삭을 변마다 한 번씩만 일으키기 위해서다.
-            val longerSide = maxOf(size.ratio.width, size.ratio.height)
-            Pixels(
-                width = longEdge * size.ratio.width / longerSide,
-                height = longEdge * size.ratio.height / longerSide,
-            )
-        }
+    private fun qualityOf(quality: ImageQuality): String = when (quality) {
+        ImageQuality.LOW -> "low"
+        ImageQuality.MEDIUM -> "medium"
+        ImageQuality.HIGH -> "high"
+        ImageQuality.XHIGH -> "xhigh"
+        ImageQuality.MAX -> "max"
+        ImageQuality.AUTO -> "auto"
     }
-
-    private data class Pixels(val width: Int, val height: Int)
 
     companion object {
         const val PROVIDER_NAME = "openai"
