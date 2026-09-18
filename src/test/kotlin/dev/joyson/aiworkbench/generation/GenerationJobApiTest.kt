@@ -2,10 +2,16 @@ package dev.joyson.aiworkbench.generation
 
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
+import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
@@ -23,6 +29,7 @@ import kotlin.test.assertEquals
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(GenerationJobApiTest.FakeProviderConfig::class)
 class GenerationJobApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
@@ -40,8 +47,26 @@ class GenerationJobApiTest @Autowired constructor(
         tokenService.issueAccessToken(user.uuid, user.displayName).accessToken
     }
 
-    private fun body(taskCount: Int, option: String = """{"type":"text-to-image","prompt":"고양이"}""") =
-        """{"option":$option,"taskCount":$taskCount}"""
+    private fun body(
+        taskCount: Int,
+        option: String = OPTION,
+        model: String = FAKE_MODEL,
+    ) = """{"option":$option,"model":"$model","taskCount":$taskCount}"""
+
+    /**
+     * API 키가 없는 테스트 환경에는 Provider 빈이 하나도 없다 — 그러면 어떤 모델도 접수되지 않는다.
+     * 여기서 보려는 것은 "요청 검증이 어디서 걸리는가" 지 Provider 가용성이 아니라서 하나를 세워둔다.
+     */
+    @TestConfiguration
+    class FakeProviderConfig {
+        @Bean
+        fun fakeProvider(): ExternalApiProvider = object : ExternalApiProvider {
+            override val name = "fake"
+            override fun supports(model: String) = model == FAKE_MODEL
+            override fun generate(model: String, request: ExternalApiGenerateRequest) =
+                ExternalApiGenerateResponse(result = emptyList())
+        }
+    }
 
     private fun request(payload: String, withToken: Boolean = true) =
         mockMvc.post("/api/jobs") {
@@ -69,9 +94,24 @@ class GenerationJobApiTest @Autowired constructor(
         request(body(taskCount = -1)).andExpect { status { isBadRequest() } }
     }
 
+    /**
+     * 접수를 통과시키면 몇 분 뒤 Task 실패로만 드러난다.
+     * 그 실패는 결정적이라 재시도해도 같아서, 큐 자리와 재시도 횟수만 태운다.
+     */
+    @Test
+    fun `다룰 수 있는 Provider 가 없는 모델은 400 이다`() {
+        request(body(taskCount = 1, model = "존재하지-않는-모델"))
+            .andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `model 이 없으면 400 이다`() {
+        request("""{"option":$OPTION,"taskCount":1}""").andExpect { status { isBadRequest() } }
+    }
+
     @Test
     fun `option 이 없으면 400 이다`() {
-        request("""{"taskCount":1}""").andExpect { status { isBadRequest() } }
+        request("""{"model":"$FAKE_MODEL","taskCount":1}""").andExpect { status { isBadRequest() } }
     }
 
     @Test
@@ -104,3 +144,7 @@ private object GenerationRequestConstraints {
         return field.getAnnotation(jakarta.validation.constraints.Max::class.java).value.toInt()
     }
 }
+
+private const val FAKE_MODEL = "fake-image-1"
+private const val OPTION =
+    """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""

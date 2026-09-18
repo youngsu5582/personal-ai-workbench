@@ -7,5 +7,7 @@ import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
  */
 class GenerationCommand(
     val option: GenerationOption,
+    /** 무엇으로 만들 것인가. 접수 시점에 다룰 수 있는 모델인지 확인된 값이다. */
+    val model: String,
     val taskCount: Int,
 )

@@ -1,6 +1,5 @@
-package dev.joyson.aiworkbench.provider.domain
+package dev.joyson.aiworkbench.generation.domain.option
 
-import org.springframework.modulith.NamedInterface
 
 import com.fasterxml.jackson.annotation.JsonValue
 
@@ -15,7 +14,6 @@ import com.fasterxml.jackson.annotation.JsonValue
  * [width]·[height] 를 함께 갖는 이유는 어댑터가 `"16:9"` 를 파싱하지 않게 하기 위해서다.
  * 해상도와 곱해 실제 픽셀 크기를 내거나, Provider 가 지원하는 크기 중 가장 가까운 것을 고를 때 쓴다.
  */
-@NamedInterface("domain")
 enum class AspectRatio(
     @get:JsonValue val value: String,
     /** 비율의 가로 쪽 수. 픽셀이 아니다. */

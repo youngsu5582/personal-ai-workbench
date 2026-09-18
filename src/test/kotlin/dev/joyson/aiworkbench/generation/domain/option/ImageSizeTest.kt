@@ -1,4 +1,4 @@
-package dev.joyson.aiworkbench.provider.domain
+package dev.joyson.aiworkbench.generation.domain.option
 
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.json.JsonTest

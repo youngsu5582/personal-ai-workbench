@@ -2,6 +2,10 @@ package dev.joyson.aiworkbench.generation
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
+import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.Quality
+import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
@@ -22,8 +26,19 @@ class GenerationJobPersistenceTest @Autowired constructor(
     private val em: TestEntityManager,
 ) {
 
+    private fun option(prompt: String = "고양이") = TextToImageOption(
+        prompt = prompt,
+        size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K),
+        quality = Quality.HIGH,
+    )
+
     private fun job(prompt: String = "고양이", taskCount: Int = 2) =
-        GenerationJob(ownerUserId = 1L, option = TextToImageOption(prompt), taskCount = taskCount)
+        GenerationJob(
+            ownerUserId = 1L,
+            option = option(prompt),
+            model = "gpt-image-2",
+            taskCount = taskCount,
+        )
 
     @Test
     fun `option 이 JSON 으로 저장되고 원래 타입으로 읽힌다`() {
@@ -34,6 +49,31 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
         val option = assertIs<TextToImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
         assertEquals("고양이", option.prompt)
+        assertEquals(Quality.HIGH, option.quality)
+
+        // 중첩 다형이다 — option 안의 size 도 자기 타입으로 돌아와야 한다.
+        val size = assertIs<ImageSize.ByRatio>(option.size, "중첩된 다형성 정보가 보존되지 않았다")
+        assertEquals(AspectRatio.SIXTEEN_NINE, size.ratio)
+        assertEquals(Resolution.TWO_K, size.resolution)
+    }
+
+    @Test
+    fun `픽셀로 말한 크기도 원래 타입으로 읽힌다`() {
+        val job = GenerationJob(
+            ownerUserId = 1L,
+            option = TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
+            model = "gpt-image-2",
+            taskCount = 1,
+        )
+        val saved = em.persistAndFlush(job)
+        em.clear()
+
+        val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
+
+        val option = assertIs<TextToImageOption>(loaded.option)
+        val size = assertIs<ImageSize.ByPixels>(option.size)
+        assertEquals(1920, size.width)
+        assertEquals(1080, size.height)
     }
 
     @Test
@@ -49,7 +89,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
     @Test
     fun `빈 prompt 는 만들 수 없다`() {
-        assertFailsWith<IllegalArgumentException> { TextToImageOption(" ") }
+        assertFailsWith<IllegalArgumentException> { option(prompt = " ") }
     }
 
     /**
@@ -74,8 +114,11 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `상한을 넘는 기존 행도 읽을 수 있다`() {
         em.entityManager.createNativeQuery(
             """
-            insert into generation_jobs (uuid, owner_user_id, option, task_count, status, created_at, updated_at)
-            values (random_uuid(), 1, '{"type":"text-to-image","prompt":"과거 데이터"}' format json, 99,
+            insert into generation_jobs (uuid, owner_user_id, option, model, task_count, status, created_at, updated_at)
+            values (random_uuid(), 1,
+                    '{"type":"text-to-image","prompt":"과거 데이터",
+                      "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}' format json,
+                    'gpt-image-2', 99,
                     'DISPATCHED', current_timestamp, current_timestamp)
             """,
         ).executeUpdate()

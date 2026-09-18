@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
-import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
+import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.ownership.OwnerContext
@@ -20,12 +20,12 @@ import java.util.*
 @RestController
 @RequestMapping("/api/jobs")
 class GenerationJobController(
-    private val generationJobWriter: GenerationJobWriter
+    private val generationJobSubmitter: GenerationJobSubmitter,
 ) {
 
     @PostMapping
     fun generate(owner: OwnerContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
-        val job = generationJobWriter.generate(owner.userId, request.toCommand())
+        val job = generationJobSubmitter.submit(owner.userId, request.toCommand())
         // 접수 확인이므로, 202 반환
         return ResponseEntity.accepted().body(GenerationResponse(job.uuid))
     }
@@ -45,6 +45,8 @@ class GenerationJobController(
 data class GenerationRequest(
     @field:NotNull
     val option: GenerationOption?,
+    @field:NotBlank
+    val model: String?,
     @field:Min(1)
     @field:Max(4)
     val taskCount: Int,
@@ -52,6 +54,7 @@ data class GenerationRequest(
     fun toCommand(): GenerationCommand {
         return GenerationCommand(
             option = requireNotNull(option),
+            model = requireNotNull(model),
             taskCount = taskCount,
         )
     }
