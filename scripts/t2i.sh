@@ -54,3 +54,10 @@ PAYLOAD=$(printf '%s' "$RESPONSE" | sed '$d')
 
 echo "  HTTP $STATUS"
 printf '%s' "$PAYLOAD" | python3 -m json.tool 2>/dev/null | sed 's/^/  /' || echo "  $PAYLOAD"
+
+# 접수는 202 로 끝난다. 결과는 조회로 물어야 하므로 다음 명령을 같이 알려준다.
+JOB_UUID=$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("uuid",""))' 2>/dev/null || true)
+if [ -n "${JOB_UUID:-}" ]; then
+  echo
+  echo "  WATCH=1 ./scripts/job.sh $JOB_UUID"
+fi
