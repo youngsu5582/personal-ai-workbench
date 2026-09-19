@@ -6,7 +6,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import jakarta.persistence.UniqueConstraint
+import jakarta.persistence.Index
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Instant
@@ -23,9 +23,10 @@ import java.util.UUID
 @Entity
 @Table(
     name = "generated_files",
-    uniqueConstraints = [
-        UniqueConstraint(name = "uk_generated_files_task_seq", columnNames = ["task_id", "sequence"]),
-    ],
+    // 유니크 제약을 걸지 않는다. "같은 Task 가 두 번 성공 처리되지 않는다" 는 Task 의 불변식이라
+    // Task 의 상태 전이가 지켜야 한다 — 자식 테이블의 제약으로 대신 지키면 그 제약을 성립시키려고
+    // 뜻 없는 컬럼이 따라붙는다. 인덱스는 조회 때문에 둔다.
+    indexes = [Index(name = "idx_generated_files_task", columnList = "task_id")],
 )
 class GeneratedFile(
 
@@ -41,14 +42,10 @@ class GeneratedFile(
     @Column(name = "task_id", nullable = false, updatable = false)
     val taskId: Long,
 
-    /** 한 호출이 여러 장을 줄 때의 순번. 0부터 시작한다. */
-    @Column(name = "sequence", nullable = false, updatable = false)
-    val sequence: Int,
-
     /**
      * 보관소에서의 위치.
      *
-     * Task 와 순번으로부터 결정적으로 만들어진다 — 재시도가 같은 키에 덮어쓰도록.
+     * [uuid] 로부터 만들어진다 — 한 Task 가 파일을 몇 개 내든 겹치지 않는다.
      * 이 값이 없으면 파일은 저장돼 있는데 아무도 못 찾는다.
      */
     @Column(name = "storage_key", nullable = false, updatable = false)

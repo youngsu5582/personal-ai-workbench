@@ -14,8 +14,8 @@ interface FileStorage {
     /**
      * [key] 자리에 [content] 를 쓴다. 같은 키가 이미 있으면 덮어쓴다.
      *
-     * 덮어쓰기를 허용하는 이유는 Task 재시도 때문이다 — 같은 Task 를 다시 돌리면
-     * 같은 키에 새 결과가 들어가야 한다. 실패한 시도의 잔해가 남으면 그게 더 나쁘다.
+     * 덮어쓰기는 키-값 보관소의 성질을 그대로 따른 것이다. 부르는 쪽이 키를 겹치지 않게
+     * 만들면 일어나지 않는 일이라, 여기서 막지 않는다.
      */
     fun put(key: String, content: ByteArray, contentType: String)
 

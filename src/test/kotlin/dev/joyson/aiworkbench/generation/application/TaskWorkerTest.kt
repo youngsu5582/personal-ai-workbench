@@ -96,15 +96,37 @@ class TaskWorkerTest @Autowired constructor(
 
         workerWith(provider { success() }).process(task.id!!)
 
-        val file = generatedFileRepository.findAllByTaskIdOrderBySequence(task.id!!).single()
+        val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
         // 키에 작업 구조가 드러난다 — 나중에 접두사로 한 번에 지울 수 있다.
-        assertEquals("jobs/${job.uuid}/tasks/${task.uuid}/0.png", file.storageKey)
+        assertEquals("jobs/${job.uuid}/tasks/${task.uuid}/${file.uuid}.png", file.storageKey)
         assertContentEquals(image, storage.read(file.storageKey))
         assertEquals(1024, file.metadata.width)
         assertEquals(image.size, file.metadata.fileSize)
 
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    @Test
+    fun `한 Task 가 여러 장을 내면 각각 다른 키로 보관된다`() {
+        val (_, task) = newTask()
+
+        val twoImages = ExternalApiGenerateResponse(
+            result = List(2) {
+                ExternalApiGenerateResult(
+                    image = image,
+                    metadata = ImageMetadata(1024, 1024, "image/png", image.size),
+                )
+            },
+        )
+
+        workerWith(provider { twoImages }).process(task.id!!)
+
+        val files = generatedFileRepository.findAllByTaskId(task.id!!)
+        assertEquals(2, files.size)
+        // 키가 파일마다 갈리므로 뒤엣것이 앞엣것을 덮지 않는다.
+        assertEquals(2, files.map { it.storageKey }.toSet().size)
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
     }
 
     @Test
@@ -164,7 +186,7 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
         // 키가 Task 와 순번만으로 정해져 재시도가 잔해를 남기지 않는다.
-        assertEquals(1, generatedFileRepository.findAllByTaskIdOrderBySequence(task.id!!).size)
+        assertEquals(1, generatedFileRepository.findAllByTaskId(task.id!!).size)
         assertEquals(1, storage.written.size)
         assertEquals(2, taskRepository.findById(task.id!!).get().attemptCount)
     }

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -82,16 +83,16 @@ class TaskStateWriterTest @Autowired constructor(
         val (jobId, taskIds) = newJob(taskCount = 2)
         writer.claim(limit = 2)
 
-        writer.succeed(taskIds[0], listOf(StoredFile(0, "k0", metadata())))
+        writer.succeed(taskIds[0], listOf(StoredFile(UUID.randomUUID(), "k0", metadata())))
 
         // 아직 남은 Task 가 있으면 닫히지 않는다.
         assertEquals(JobLifecycle.PENDING, jobRepository.findById(jobId).get().status)
 
-        writer.succeed(taskIds[1], listOf(StoredFile(0, "k1", metadata())))
+        writer.succeed(taskIds[1], listOf(StoredFile(UUID.randomUUID(), "k1", metadata())))
 
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(jobId).get().status)
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(taskIds[0]).get().status)
-        assertEquals("k0", generatedFileRepository.findAllByTaskIdOrderBySequence(taskIds[0]).single().storageKey)
+        assertEquals("k0", generatedFileRepository.findAllByTaskId(taskIds[0]).single().storageKey)
     }
 
     @Test
