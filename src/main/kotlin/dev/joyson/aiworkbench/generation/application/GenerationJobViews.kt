@@ -2,16 +2,18 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
+import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import java.time.Instant
 import java.util.*
 
 data class GenerationJobView(
     val uuid: UUID,
+    val status: JobLifecycle,
+    val model: String,
     val option: GenerationOption,
     val createdAt: Instant,
-    val progress: GenerationJobProgress
-
+    val progress: GenerationJobProgress,
 )
 
 /**
@@ -23,7 +25,9 @@ data class GenerationJobView(
  */
 internal fun GenerationJob.toView(progress: GenerationJobProgress): GenerationJobView = GenerationJobView(
     uuid = uuid,
+    status = status,
+    model = model,
     option = option,
     createdAt = createdAt,
-    progress = progress
+    progress = progress,
 )
