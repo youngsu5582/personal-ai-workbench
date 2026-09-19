@@ -14,6 +14,7 @@ import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.util.UUID
 
 /**
  * Task 하나를 끝까지 처리한다 — 번역 → Provider 호출 → 보관 → 기록.
@@ -77,17 +78,20 @@ class TaskWorker(
      *
      * 상태 기록보다 **먼저** 한다. 순서를 뒤집으면 SUCCEEDED 인데 파일이 없는 행이 생길 수 있고,
      * 그건 목록에서 깨진 이미지로만 드러난다. 반대 순서의 실패(파일은 있는데 기록이 없음)는
-     * 재시도가 같은 키에 덮어써서 스스로 정리된다.
+     * 아무도 가리키지 않는 파일 하나로 끝난다 — 눈에 띄지 않고, Job 을 지울 때 함께 지워진다.
      */
     private fun store(
         job: GenerationJob,
         task: GenerationJobTask,
         response: ExternalApiGenerateResponse,
-    ): List<StoredFile> = response.result.mapIndexed { sequence, result ->
-        val key = StorageKeys.generatedFile(job.uuid, task.uuid, sequence, result.metadata.mimeType)
+    ): List<StoredFile> = response.result.map { result ->
+        // 파일의 식별자를 여기서 정한다. 키와 행이 같은 uuid 를 쓰므로 서로를 가리킨다.
+        val fileUuid = UUID.randomUUID()
+        val key = StorageKeys.generatedFile(job.uuid, task.uuid, fileUuid, result.metadata.mimeType)
         fileStorage.put(key, result.image, result.metadata.mimeType)
+
         StoredFile(
-            sequence = sequence,
+            uuid = fileUuid,
             storageKey = key,
             metadata = FileMetadata(
                 width = result.metadata.width,

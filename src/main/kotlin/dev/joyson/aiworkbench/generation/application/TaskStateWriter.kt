@@ -11,10 +11,11 @@ import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.util.UUID
 
 /** 저장까지 끝난 결과물 하나. */
 data class StoredFile(
-    val sequence: Int,
+    val uuid: UUID,
     val storageKey: String,
     val metadata: FileMetadata,
 )
@@ -53,9 +54,12 @@ class TaskStateWriter(
     /**
      * 성공을 기록한다. Task 가 모두 끝났으면 Job 도 닫는다.
      *
-     * 같은 Task 로 두 번 불릴 일은 없다 — SUCCEEDED 는 종료 상태라 재시도 대상이 아니고,
-     * 실패한 시도는 여기까지 오지 않는다. 그래도 두 번 불린다면 그건 같은 Task 가 두 번
-     * 처리됐다는 뜻이라, `UNIQUE(task_id, sequence)` 가 조용히 덮지 않고 터뜨리는 편이 낫다.
+     * 같은 Task 로 두 번 불릴 일은 없다 — 스케줄러가 한 곳에서 돌고, `claim` 은 PENDING 만 집으며,
+     * 재시도는 FAILED 를 거치므로 앞 시도는 이미 끝나 있다.
+     *
+     * 이 전제가 깨지는 첫 시점은 **RUNNING 고착을 회수하는 기능을 만들 때**다. 회수가 아직 살아 있는
+     * Task 를 되돌리면 두 워커가 겹친다. 그때 이 전이를 조건부 UPDATE(`... AND status = 'RUNNING'`)로
+     * 바꿔 이긴 쪽만 파일을 쓰게 한다 — Job 을 닫을 때 쓰는 것과 같은 방법이다.
      */
     @Transactional
     fun succeed(taskId: Long, files: List<StoredFile>) {
@@ -64,8 +68,8 @@ class TaskStateWriter(
         generatedFileRepository.saveAll(
             files.map {
                 GeneratedFile(
+                    uuid = it.uuid,
                     taskId = taskId,
-                    sequence = it.sequence,
                     storageKey = it.storageKey,
                     metadata = it.metadata,
                 )
