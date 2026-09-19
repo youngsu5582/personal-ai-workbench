@@ -32,7 +32,7 @@ import kotlin.test.fail
  * ```
  * OPENAI_LIVE=1 WORKBENCH_PROVIDER_OPENAI_API_KEY=sk-... ./gradlew test --tests '*LiveTest*'
  * ```
- * 키는 `.env` 의 `workbench.provider.openai.api-key` 에서도 읽는다.
+ * 키는 `.env` 의 `WORKBENCH_PROVIDER_OPENAI_API_KEY` 에서도 읽는다.
  * 모델을 바꿔 확인하려면 `OPENAI_MODEL=gpt-image-2.5-flare` 를 함께 준다.
  *
  * ### 두 겹으로 막는다
@@ -151,7 +151,7 @@ class OpenAIProviderLiveTest {
         @JvmStatic
         fun apiKey(): String? =
             System.getenv("WORKBENCH_PROVIDER_OPENAI_API_KEY")
-                ?: dotEnv("workbench.provider.openai.api-key")
+                ?: dotEnv("WORKBENCH_PROVIDER_OPENAI_API_KEY")
 
         /** 키만으로는 부족하다 — 명시적 의사표시가 있어야 한다. */
         @JvmStatic

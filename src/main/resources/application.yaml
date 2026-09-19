@@ -49,6 +49,13 @@ workbench:
     # 비워두면 누구나 로그인된다. 외부에 노출한다면 반드시 채운다.
     allowed-emails: "${AUTH_ALLOWED_EMAILS:}"
 
+  provider:
+    # 이 키만 다른 값들과 규칙이 다르다 — 비어 있어도 기동에 실패하지 않는다.
+    # 대신 OpenAI Provider 빈이 만들어지지 않아 `ProviderRegistry` 에서도 사라진다.
+    # OpenAI 를 쓰지 않는 환경이 정상이기 때문이다.
+    openai:
+      api-key: "${WORKBENCH_PROVIDER_OPENAI_API_KEY:}"
+
 logging:
   level:
     root: "${LOG_LEVEL_ROOT:INFO}"
