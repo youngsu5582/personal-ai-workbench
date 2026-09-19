@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
+import dev.joyson.aiworkbench.generation.application.GenerationJobReader
 import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
@@ -11,6 +12,8 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.NotBlank
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -21,6 +24,7 @@ import java.util.*
 @RequestMapping("/api/jobs")
 class GenerationJobController(
     private val generationJobSubmitter: GenerationJobSubmitter,
+    private val generationJobReader: GenerationJobReader,
 ) {
 
     @PostMapping
@@ -29,6 +33,17 @@ class GenerationJobController(
         // 접수 확인이므로, 202 반환
         return ResponseEntity.accepted().body(GenerationResponse(job.uuid))
     }
+
+    /**
+     * 진행 상황을 묻는다. 클라이언트는 `status` 가 CLOSED 가 될 때까지 다시 묻는다.
+     *
+     * 남의 Job 도 404 다 — 403 은 "그 uuid 는 존재한다" 를 알려준다.
+     */
+    @GetMapping("/{uuid}")
+    fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
+        generationJobReader.findOwned(uuid, owner.userId)
+            ?.let { ResponseEntity.ok(it.toResponse()) }
+            ?: ResponseEntity.notFound().build()
 }
 
 /**

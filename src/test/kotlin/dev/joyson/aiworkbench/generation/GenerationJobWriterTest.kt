@@ -55,7 +55,8 @@ class GenerationJobWriterTest @Autowired constructor(
         val view = writer.create(userId = 1L, command = command(taskCount = 4))
 
         assertEquals(4, view.progress.total)
-        assertEquals(0, view.progress.progress, "방금 만든 Job 이 완료로 보고되면 안 된다")
+        assertEquals(0, view.progress.succeeded, "방금 만든 Job 이 완료로 보고되면 안 된다")
+        assertEquals(4, view.progress.remaining)
     }
 
     @Test

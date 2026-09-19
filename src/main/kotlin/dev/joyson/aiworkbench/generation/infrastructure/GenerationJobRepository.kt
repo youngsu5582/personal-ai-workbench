@@ -2,11 +2,14 @@ package dev.joyson.aiworkbench.generation.infrastructure
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import org.springframework.data.jpa.repository.JpaRepository
+import java.util.UUID
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 interface GenerationJobRepository : JpaRepository<GenerationJob, Long> {
+
+    fun findByUuid(uuid: UUID): GenerationJob?
 
     /**
      * 남은 Task 가 없으면 Job 을 닫는다. 이미 닫혔거나 남은 Task 가 있으면 아무것도 하지 않는다.
