@@ -29,7 +29,9 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * 폴링으로 보이는 것과 보이면 안 되는 것을 고정한다.
@@ -146,7 +148,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
      * 워커가 꺼져 있어(`worker.enabled: false`) 상태를 직접 옮긴다.
      * RUNNING 을 거치는 것은 전이 규칙이 그렇게 정해져 있기 때문이다.
      */
-    private fun jobWithOneSuccessAndOneFailure(token: String): String {
+    private fun jobWithOneSuccessAndOneFailure(token: String): Pair<String, ByteArray> {
         val jobUuid = submit(token, taskCount = 2)
         val job = jobRepository.findByUuid(UUID.fromString(jobUuid))!!
         val tasks = taskRepository.findAllByJobIdOrderBySequence(job.id!!)
@@ -168,7 +170,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
         )
         fail(tasks[1], "rate limit")
 
-        return jobUuid
+        return jobUuid to bytes
     }
 
     private fun succeed(task: GenerationJobTask) {
@@ -186,7 +188,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
     @Test
     fun `실패한 Task 도 자리를 지키고 성공한 Task 는 파일 주소를 준다`() {
         val token = tokenOf("files-owner")
-        val jobUuid = jobWithOneSuccessAndOneFailure(token)
+        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
 
         query(jobUuid, token).andExpect {
             status { isOk() }
@@ -197,7 +199,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks.length()") { value(2) }
             jsonPath("$.tasks[0].status") { value("SUCCEEDED") }
             jsonPath("$.tasks[0].files.length()") { value(1) }
-            jsonPath("$.tasks[0].files[0].uuid") { exists() }
+            jsonPath("$.tasks[0].files[0].url") { exists() }
             jsonPath("$.tasks[0].files[0].width") { value(1024) }
 
             // 실패한 자리가 목록에서 사라지지 않는다 — 이것이 파일만 평평하게 담지 않는 이유다.
@@ -206,6 +208,40 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks[1].files.length()") { value(0) }
         }
     }
+
+    @Test
+    fun `응답이 준 주소로 파일을 받는다`() {
+        val token = tokenOf("download-owner")
+        val (jobUuid, bytes) = jobWithOneSuccessAndOneFailure(token)
+
+        val url = fileUrlOf(jobUuid, token)
+        val response = mockMvc.get(url) { header("Authorization", "Bearer $token") }
+            .andExpect { status { isOk() } }
+            .andReturn().response
+
+        assertEquals(MIME, response.contentType?.substringBefore(';'))
+        assertContentEquals(bytes, response.contentAsByteArray)
+        // 파일명은 형식에서 짓는다. 보관소 키가 해시로 바뀌어도 받는 쪽 이름은 그대로다.
+        assertTrue(
+            response.getHeader("Content-Disposition")!!.endsWith(""".png""""),
+            response.getHeader("Content-Disposition")!!,
+        )
+    }
+
+    @Test
+    fun `남의 파일은 받을 수 없다`() {
+        val token = tokenOf("download-owner-2")
+        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
+
+        val url = fileUrlOf(jobUuid, token)
+        mockMvc.get(url) { header("Authorization", "Bearer ${tokenOf("download-stranger")}") }
+            .andExpect { status { isNotFound() } }
+    }
+
+    /** 주소를 테스트가 지어내지 않는다 — 응답이 준 것을 그대로 쓴다. */
+    private fun fileUrlOf(jobUuid: String, token: String): String =
+        query(jobUuid, token).andReturn().response.contentAsString
+            .substringAfter("\"url\":\"").substringBefore("\"")
 
     companion object {
         private const val FAKE_MODEL = "fake-model"

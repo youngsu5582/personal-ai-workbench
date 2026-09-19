@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.infrastructure
 
+import dev.joyson.aiworkbench.generation.domain.MimeTypes
 import java.util.UUID
 
 /**
@@ -21,9 +22,5 @@ import java.util.UUID
 object StorageKeys {
 
     fun generatedFile(jobUuid: UUID, taskUuid: UUID, fileUuid: UUID, mimeType: String): String =
-        "jobs/$jobUuid/tasks/$taskUuid/$fileUuid.${extensionOf(mimeType)}"
-
-    /** `image/png` → `png`. 모르는 형식은 `bin` 으로 둔다 — 확장자가 없는 것보다 낫다. */
-    private fun extensionOf(mimeType: String): String =
-        mimeType.substringAfterLast('/', "").ifBlank { "bin" }
+        "jobs/$jobUuid/tasks/$taskUuid/$fileUuid.${MimeTypes.extensionOf(mimeType)}"
 }

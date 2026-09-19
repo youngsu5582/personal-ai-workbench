@@ -37,6 +37,8 @@ data class TaskResponse(
 
 data class FileResponse(
     val uuid: UUID,
+    /** 받는 쪽은 이 값을 **불투명하게** 다룬다. 오브젝트 스토어로 바뀌면 서명된 절대 URL 이 된다. */
+    val url: String,
     val width: Int,
     val height: Int,
     val mimeType: String,
@@ -62,6 +64,7 @@ private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
 
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(
     uuid = uuid,
+    url = GeneratedFileController.pathOf(uuid),
     width = metadata.width,
     height = metadata.height,
     mimeType = metadata.mimeType,

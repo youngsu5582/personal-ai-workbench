@@ -56,8 +56,9 @@ while :; do
 done
 
 # Task 를 자리째 보여준다. 실패한 자리도 목록에 남는다.
-printf '%s' "$PAYLOAD" | python3 -c '
-import json, sys
+printf '%s' "$PAYLOAD" | BASE_URL="$BASE_URL" python3 -c '
+import json, os, sys
+base = os.environ["BASE_URL"]
 job = json.loads(sys.stdin.read())
 print()
 for task in job.get("tasks", []):
@@ -66,6 +67,10 @@ for task in job.get("tasks", []):
         head += "  ({})".format(task["failureReason"])
     print(head)
     for f in task.get("files", []):
-        print("     {}  {}x{}  {:,} bytes".format(
-            f["uuid"], f["width"], f["height"], f["fileSize"]))
+        print("     {}{}  {}x{}  {:,} bytes".format(
+            base, f["url"], f["width"], f["height"], f["fileSize"]))
 '
+
+# 받으려면 토큰이 필요하다. 서명된 URL 과 달리 매 요청마다 소유권을 확인한다.
+echo
+echo "  내려받기:  curl -H \"Authorization: Bearer \$(./scripts/dev-token.sh)\" -o out.png <url>"
