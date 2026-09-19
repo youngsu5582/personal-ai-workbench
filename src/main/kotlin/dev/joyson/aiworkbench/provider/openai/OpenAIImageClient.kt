@@ -29,9 +29,22 @@ class OpenAIImageClient(
      * @param path 보낼 엔드포인트 경로. `baseUrl` 기준 상대 경로다.
      */
     fun generate(path: String, request: OpenAIImageRequest): OpenAIImageResponse {
-        log.info("이미지 생성을 요청한다: path={} model={} n={}", path, request.model, request.n)
+        log.debug("이미지 생성을 요청한다: path={} model={} n={}", path, request.model, request.n)
 
-        return restClient.post()
+        val startedAt = System.nanoTime()
+        try {
+            return post(path, request)
+        } finally {
+            // 실패했을 때도 남긴다 — 타임아웃이 의심되는 순간에 필요한 숫자가 바로 이것이다.
+            log.info(
+                "이미지 생성 호출이 끝났다. model={} n={} 소요={}ms",
+                request.model, request.n, (System.nanoTime() - startedAt) / 1_000_000,
+            )
+        }
+    }
+
+    private fun post(path: String, request: OpenAIImageRequest): OpenAIImageResponse =
+        restClient.post()
             .uri(path)
             .body(request)
             .exchange { _, response ->
@@ -51,7 +64,6 @@ class OpenAIImageClient(
                     throw OpenAIException(status, parsed ?: raw?.take(500)?.ifBlank { null } ?: "본문이 비어 있다")
                 }
             }
-    }
 }
 
 /**

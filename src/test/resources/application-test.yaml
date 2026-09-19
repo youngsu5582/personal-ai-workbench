@@ -24,6 +24,10 @@ spring:
               - email
 
 workbench:
+  generation:
+    worker:
+      # 테스트가 도는 동안 폴러가 끼어들면 Task 상태가 테스트 몰래 바뀐다.
+      enabled: false
   auth:
     issuer: "https://workbench.test"
     audience: workbench-api
