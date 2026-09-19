@@ -1,6 +1,6 @@
 package dev.joyson.aiworkbench.provider.openai
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -14,9 +14,13 @@ import java.net.http.HttpClient
  *
  * 키가 없으면 빈이 없고, 빈이 없으면 Provider 목록에도 안 나타난다 —
  * "지원 목록" 을 따로 관리하지 않아도 설정과 가용성이 한 줄로 이어진다.
+ *
+ * `@ConditionalOnProperty` 가 아닌 이유: 그쪽은 **값이 비어 있어도 "설정됨" 으로 본다.**
+ * `api-key: "${WORKBENCH_PROVIDER_OPENAI_API_KEY:}"` 처럼 기본값 빈 문자열을 두는 순간
+ * 키 없는 환경에서도 빈이 만들어지고, 실패가 기동 시점이 아니라 첫 호출의 401 로 미뤄진다.
  */
 @Configuration
-@ConditionalOnProperty("workbench.provider.openai.api-key")
+@ConditionalOnExpression($$"!'${workbench.provider.openai.api-key:}'.isBlank()")
 @EnableConfigurationProperties(OpenAIProperties::class)
 class OpenAIClientConfig {
 
