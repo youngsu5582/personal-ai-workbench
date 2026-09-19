@@ -34,8 +34,8 @@ password: workbench
 
 | 없을 때 | 결과 |
 |---|---|
-| `ddl-auto`가 `validate` | 스키마를 만들지 않아 기동에 실패한다 |
 | `cookie-secure`가 `true` | http인 localhost에서 로그인 쿠키가 실리지 않는다 |
+| 로그 레벨이 `INFO` | 어디까지 진행됐는지 보이지 않는다 |
 
 프로필을 켜면 `application-local.yaml`이 DB 주소까지 채우므로 별도 환경변수는 필요 없다.
 비밀(`.env`)만 있으면 된다.
@@ -46,14 +46,30 @@ password: workbench
 ./gradlew test
 ```
 
-테스트는 `test` 프로필을 사용하며 H2로 빠르게 실행한다. Gradle은 passed/skipped/failed 이벤트와 전체 예외를 출력한다.
+**Docker가 켜져 있어야 한다.** 테스트는 Testcontainers로 PostgreSQL을 띄우고 거기서 돈다.
+H2를 쓰면 `jsonb`·`uuid`·`timestamp with time zone`·체크 제약이 흉내로만 검증된다.
+
+컨테이너는 JUnit 세션마다 한 번만 뜬다(`PostgresTestDatabase`). 테스트 클래스는 아무것도 하지 않아도 된다.
+같은 곳에서 **테스트가 `application.yaml` 을 상속하지 않게** 끊는다 — 그러지 않으면 `.env` 가 있는 기계에서만
+개발 DB 주소와 실제 API 키가 테스트로 들어와 결과가 기계마다 갈린다.
+
+스프링을 띄우는 테스트는 `IntegrationTest` 를 상속한다. 설정이 같아야 컨텍스트가 재사용되기 때문이다.
+컨테이너·가짜 Provider·인메모리 보관소는 `SharedTestConfig` 한 곳에 있다 — 나중에 MQ·Redis 도 여기 붙는다.
+
+```kotlin
+class MyApiTest @Autowired constructor(...) : IntegrationTest()
+```
+
+상속하지 않는 것은 이유가 있을 때뿐이다 — 빈 DB 가 필요한 `SchemaMigrationTest`,
+실제 포트가 필요한 `HandoffErrorStatusTest`, JSON 매핑만 보는 `ImageSizeTest`.
+Gradle은 passed/skipped/failed 이벤트와 전체 예외를 출력한다.
 
 ### 4. 설정 파일
 
 | 파일 | 무엇이 | 커밋 |
 |---|---|---|
 | `application.yaml` | 공통. 반드시 있어야 할 값에는 **기본값을 두지 않는다** | ✓ |
-| `application-local.yaml` | 로컬의 비밀 아닌 값 (DB 주소, `ddl-auto`, 로그 레벨) | ✓ |
+| `application-local.yaml` | 로컬의 비밀 아닌 값 (DB 주소, 쿠키, 로그 레벨) | ✓ |
 | `.env` | 비밀만 (client secret, jwt secret, allowlist) | ✗ |
 
 기본값을 두면 배포에서 환경변수를 빠뜨렸을 때 조용히 로컬 설정으로 뜬다.
@@ -65,7 +81,27 @@ password: workbench
 `.properties`가 아니라 YAML을 쓰는 이유는 인코딩이다. `.properties`는 Java 명세상 ISO-8859-1이라
 IDE가 한글 주석을 깨뜨리는데, YAML은 명세가 UTF-8이라 그 문제가 없다.
 
-### 5. 로깅
+### 5. 스키마
+
+스키마는 `src/main/resources/db/migration`이 정한다. 엔티티는 검증받는 쪽이다.
+
+```
+ddl-auto: validate   ← 어디서나. 로컬도 예외가 아니다
+```
+
+엔티티를 고쳤으면 마이그레이션을 **같은 커밋에** 넣는다. 빠뜨리면 기동이 실패하는데,
+그게 배포에서 알게 되는 것보다 낫다.
+
+`ddl-auto: update`가 못 하던 일이 정확히 사고가 나던 자리다 — 기존 행이 있는 테이블에
+NOT NULL 컬럼 추가(WARN으로 삼킨다), 체크 제약 갱신(보지 않는다), 컬럼·제약 삭제(하지 않는다).
+
+JSON 컬럼(`option`, `metadata`)에 저장되는 타입에 **필수 필드를 추가하는 것도 같은 일**이다.
+스키마는 그대로라 `validate`는 통과하지만 기존 행을 못 읽게 된다. 이것도 마이그레이션이 필요하다.
+
+jOOQ 코드는 이 마이그레이션에서 생성된다(`DDLDatabase`). 살아 있는 DB에 붙지 않으므로
+빌드에 DB가 필요 없고, 생성된 코드가 정본과 어긋날 수 없다.
+
+### 6. 로깅
 
 Spring Boot 기본 SLF4J/Logback을 사용한다. 애플리케이션 패키지는 `local` 프로필에서 `DEBUG`,
 그 외에는 `INFO`로 출력한다.
@@ -81,7 +117,7 @@ log.info("job submitted: jobId={}", jobId)
 LOG_LEVEL_ROOT=INFO LOG_LEVEL_APP=TRACE ./gradlew bootRun
 ```
 
-### 6. 종료
+### 7. 종료
 
 ```bash
 docker compose down
@@ -146,8 +182,11 @@ AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된�
 
 ### 기존 DB를 쓰고 있었다면
 
-`users.external_subject` 에 걸려 있던 단일 컬럼 unique 인덱스는 `ddl-auto=update` 가 지우지 못한다.
-로컬 DB를 한 번 비우고 시작한다.
+Flyway가 이미 스키마가 있는 DB를 V1 지점에서 시작하므로(`baseline-on-migrate`) 그냥 띄우면 된다.
+`flyway_schema_history`에 BASELINE 한 줄이 생기고 V1은 다시 돌지 않는다.
+
+`ddl-auto=update`가 지우지 못해 남은 것들(예: `users.external_subject`)은 그대로 있다.
+`validate`는 여분 컬럼을 문제 삼지 않으므로 기동에는 영향이 없다. 깔끔하게 시작하려면 비우면 된다.
 
 ```bash
 docker compose down -v && docker compose up -d postgres
