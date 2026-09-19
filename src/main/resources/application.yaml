@@ -17,8 +17,11 @@ spring:
 
   jpa:
     hibernate:
-      # 기본은 validate. 스키마를 자동으로 바꾸는 것은 로컬에서만 한다.
-      ddl-auto: "${JPA_DDL_AUTO:validate}"
+      # 스키마는 Flyway 가 만든다. Hibernate 는 확인만 한다.
+      #
+      # 환경변수로 뚫어두지 않는다. 뚫어두면 "이번 한 번만" 이 배포에서 스키마를 바꾸는 길이 되고,
+      # 그렇게 바뀐 스키마는 db/migration 어디에도 남지 않는다.
+      ddl-auto: validate
     open-in-view: false
 
   # 스키마는 db/migration 이 정한다. 엔티티는 그것을 검증받는 쪽이다.
