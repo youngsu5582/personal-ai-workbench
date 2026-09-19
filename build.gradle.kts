@@ -27,6 +27,10 @@ dependencyManagement {
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	// flyway-core 만 넣으면 자동 설정이 붙지 않는다 — Boot 4 는 자동 설정이 모듈별로 갈려 있다.
+	implementation("org.springframework.boot:spring-boot-flyway")
+	// Flyway 도 DB 별 지원이 모듈로 갈렸다. 없으면 postgresql URL 을 못 다룬다.
+	runtimeOnly("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")

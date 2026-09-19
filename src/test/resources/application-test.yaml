@@ -8,6 +8,12 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
+  # 마이그레이션은 PostgreSQL 문법으로 쓰여 있어 H2 에서 돌지 않는다.
+  # 대부분의 테스트는 엔티티에서 만든 스키마로 충분하고, 마이그레이션 자체는
+  # SchemaMigrationTest 가 진짜 PostgreSQL 에 걸어본다.
+  flyway:
+    enabled: false
+
   security:
     oauth2:
       client:
