@@ -12,9 +12,8 @@ spring:
     username: workbench
     password: workbench
 
-  jpa:
-    hibernate:
-      ddl-auto: update
+  # 로컬도 스키마를 손대지 않는다. 엔티티를 고쳤으면 db/migration 에 마이그레이션을 같이 넣는다.
+  # 빠뜨리면 기동이 실패하는데, 그게 배포에서 알게 되는 것보다 낫다.
 
 workbench:
   auth:
