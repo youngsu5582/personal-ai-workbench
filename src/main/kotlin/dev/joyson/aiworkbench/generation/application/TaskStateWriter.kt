@@ -38,22 +38,15 @@ class TaskStateWriter(
 
     /**
      * 처리할 Task 를 집어 RUNNING 으로 바꾼다.
-     *
-     * **집는 쪽이 하나라는 것을 전제한다.** 지금은 스케줄러 스레드 하나가 직렬로 부르고,
-     * 앞 배치가 끝나야 다음 폴이 시작한다. 그래서 조회와 상태 변경 사이에 끼어들 것이 없다.
-     *
-     * 그 전제가 깨지는 경우는 셋이다 — 인스턴스를 늘리거나, 폴링을 동시에 돌리거나,
-     * 다른 곳에서 이 메서드를 부르거나. 그때는 조회-변경이 원자적이어야 하므로
-     * `FOR UPDATE SKIP LOCKED` 나 조건부 UPDATE 로 바꿔야 한다.
-     * (동시 처리 수를 늘리는 것은 해당되지 않는다 — 처리가 병렬일 뿐 집는 것은 그대로 하나다.)
      */
     @Transactional
     fun claim(limit: Int): List<Long> {
         val claimed = taskRepository
             .findByStatusOrderByIdAsc(TaskStatus.PENDING, PageRequest.of(0, limit))
             .onEach { it.transitionTo(TaskStatus.RUNNING) }
-        // 같은 트랜잭션에서 다시 조회해도 PENDING 으로 보이지 않도록 여기서 확정한다.
-        taskRepository.flush()
+        if (claimed.isEmpty()) return emptyList()
+
+        log.debug("task 를 집어 RUNNING 으로 옮겼다. uuidList={}", claimed.mapNotNull { it.uuid })
         return claimed.mapNotNull { it.id }
     }
 
@@ -106,9 +99,6 @@ class TaskStateWriter(
     }
 
     private fun closeIfFinished(task: GenerationJobTask) {
-        // 조건부 UPDATE 는 DB 의 현재 상태를 본다. 방금 바꾼 Task 상태가 아직 안 나갔으면
-        // "아직 안 끝났다" 로 읽혀 Job 이 닫히지 않는다.
-        taskRepository.flush()
         if (jobRepository.closeIfAllTasksFinished(task.jobId) > 0) {
             log.info("job 의 모든 task 가 끝났다. jobId={}", task.jobId)
         }

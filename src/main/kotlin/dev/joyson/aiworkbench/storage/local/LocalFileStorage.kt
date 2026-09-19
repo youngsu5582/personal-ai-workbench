@@ -32,7 +32,9 @@ class LocalFileStorage(
             // 일시적 잠금일 수도 있어 재시도 대상으로 둔다 — 상한은 부르는 쪽이 건다.
             throw FileStorageException(retryable = true, message = "파일을 쓰지 못했다: $key", cause = e)
         }
-        log.debug("결과물을 저장했다. key={} bytes={} type={}", key, content.size, contentType)
+        // 키가 아니라 실제 경로를 남긴다. 키만으로는 root 를 모르면 파일을 열 수 없고,
+        // root 를 아는 곳이 여기뿐이다.
+        log.debug("결과물을 저장했다. path={} bytes={} type={}", path, content.size, contentType)
     }
 
     override fun read(key: String): ByteArray? =

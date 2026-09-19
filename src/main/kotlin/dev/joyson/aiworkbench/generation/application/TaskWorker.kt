@@ -51,6 +51,7 @@ class TaskWorker(
 
         log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
 
+        val startedAt = System.nanoTime()
         val stored = try {
             val response = provider.generate(job.model, requestFactory.from(job.option))
             store(job, task, response)
@@ -63,6 +64,12 @@ class TaskWorker(
         }
 
         stateWriter.succeed(taskId, stored)
+        log.info(
+            "task 처리를 완료했다. uuid={} 소요={}ms 파일={}",
+            task.uuid,
+            (System.nanoTime() - startedAt) / 1_000_000,
+            stored.map { it.storageKey },
+        )
     }
 
     /**

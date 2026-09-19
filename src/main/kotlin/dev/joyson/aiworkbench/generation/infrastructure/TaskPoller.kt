@@ -42,14 +42,13 @@ class TaskPoller(
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Scheduled(
-        fixedDelayString = "\${workbench.generation.worker.poll-interval-millis:3000}",
-        initialDelayString = "\${workbench.generation.worker.initial-delay-millis:5000}",
+        fixedDelayString = $$"${workbench.generation.worker.poll-interval-millis:3000}",
+        initialDelayString = $$"${workbench.generation.worker.initial-delay-millis:5000}",
     )
     fun poll() {
         val claimed = stateWriter.claim(properties.batchSize)
         if (claimed.isEmpty()) return
 
-        log.debug("task {}건을 집었다", claimed.size)
 
         val running = claimed.map { taskId ->
             CompletableFuture.runAsync({ worker.process(taskId) }, executor)
