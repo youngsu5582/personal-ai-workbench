@@ -1,0 +1,37 @@
+name: build
+
+# main 으로 가는 변경은 전부 여기를 통과해야 한다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 같은 브랜치에 새 커밋이 오면 돌고 있던 것은 버린다. 어차피 결과를 안 본다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # 의존성과 빌드 결과를 캐시한다. 설정 파일이 바뀌면 알아서 새로 받는다.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 테스트가 Testcontainers 로 PostgreSQL 을 띄운다. ubuntu-latest 러너에는 Docker 가 있다.
+      - run: ./gradlew build --no-daemon
+
+      # 실패했을 때 어느 테스트가 왜 깨졌는지 보려면 리포트가 필요하다.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+          retention-days: 7
