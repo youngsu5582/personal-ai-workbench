@@ -115,9 +115,9 @@ class GenerationJobPersistenceTest @Autowired constructor(
         em.entityManager.createNativeQuery(
             """
             insert into generation_jobs (uuid, owner_user_id, option, model, task_count, status, created_at, updated_at)
-            values (random_uuid(), 1,
+            values (gen_random_uuid(), 1,
                     '{"type":"text-to-image","prompt":"과거 데이터",
-                      "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}' format json,
+                      "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}'::jsonb,
                     'gpt-image-2', 99,
                     'DISPATCHED', current_timestamp, current_timestamp)
             """,
