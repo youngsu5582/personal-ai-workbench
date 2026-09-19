@@ -15,7 +15,7 @@ import java.util.UUID
 /**
  * Provider 와의 상호작용 **1건**.
  *
- * 결과물 1개가 아니다. Provider 가 호출 한 번으로 이미지 4장을 주면 Task 는 1개고 Asset 이 4개다.
+ * 결과물 1개가 아니다. Provider 가 호출 한 번으로 이미지 4장을 주면 Task 는 1개고 GeneratedFile 이 4개다.
  * 결과물 단위로 잡으면, 그 4개가 같은 외부 식별자를 공유하며 항상 함께 움직여
  * 나눠도 아무것도 나뉘지 않는다.
  *
