@@ -48,8 +48,8 @@ dependencies {
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
-	testRuntimeOnly("com.h2database:h2")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+	// LauncherSessionListener 를 구현하므로 런타임이 아니라 컴파일에도 필요하다.
+	testImplementation("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
