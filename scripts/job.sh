@@ -55,4 +55,17 @@ while :; do
   sleep "$INTERVAL"
 done
 
-printf '%s' "$PAYLOAD" | python3 -m json.tool 2>/dev/null | sed 's/^/  /'
+# Task 를 자리째 보여준다. 실패한 자리도 목록에 남는다.
+printf '%s' "$PAYLOAD" | python3 -c '
+import json, sys
+job = json.loads(sys.stdin.read())
+print()
+for task in job.get("tasks", []):
+    head = "  #{} {}".format(task["sequence"], task["status"])
+    if task.get("failureReason"):
+        head += "  ({})".format(task["failureReason"])
+    print(head)
+    for f in task.get("files", []):
+        print("     {}  {}x{}  {:,} bytes".format(
+            f["uuid"], f["width"], f["height"], f["fileSize"]))
+'

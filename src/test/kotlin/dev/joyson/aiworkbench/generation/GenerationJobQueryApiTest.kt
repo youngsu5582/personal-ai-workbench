@@ -1,9 +1,18 @@
 package dev.joyson.aiworkbench.generation
 
 import dev.joyson.aiworkbench.auth.application.TokenService
+import dev.joyson.aiworkbench.generation.domain.FileMetadata
+import dev.joyson.aiworkbench.generation.domain.GeneratedFile
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.generation.domain.TaskStatus
+import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
+import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
 import org.springframework.beans.factory.annotation.Autowired
@@ -12,6 +21,7 @@ import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
@@ -19,6 +29,7 @@ import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * 폴링으로 보이는 것과 보이면 안 되는 것을 고정한다.
@@ -37,6 +48,10 @@ class GenerationJobQueryApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
+    private val jobRepository: GenerationJobRepository,
+    private val taskRepository: GenerationJobTaskRepository,
+    private val fileRepository: GeneratedFileRepository,
+    private val fileStorage: FileStorage,
 ) {
 
     @TestConfiguration
@@ -47,6 +62,18 @@ class GenerationJobQueryApiTest @Autowired constructor(
             override fun supports(model: String) = model == FAKE_MODEL
             override fun generate(model: String, request: ExternalApiGenerateRequest) =
                 ExternalApiGenerateResponse(result = emptyList())
+        }
+
+        /** 테스트가 실제 디스크에 파일을 남기지 않게 한다. */
+        @Bean
+        @Primary
+        fun inMemoryStorage(): FileStorage = object : FileStorage {
+            private val written = mutableMapOf<String, ByteArray>()
+            override fun put(key: String, content: ByteArray, contentType: String) {
+                written[key] = content
+            }
+
+            override fun read(key: String): ByteArray? = written[key]
         }
     }
 
@@ -113,8 +140,76 @@ class GenerationJobQueryApiTest @Autowired constructor(
         query(uuid, token = null).andExpect { status { isUnauthorized() } }
     }
 
+    /**
+     * 한 장은 성공하고 한 장은 실패한 Job 을 만든다.
+     *
+     * 워커가 꺼져 있어(`worker.enabled: false`) 상태를 직접 옮긴다.
+     * RUNNING 을 거치는 것은 전이 규칙이 그렇게 정해져 있기 때문이다.
+     */
+    private fun jobWithOneSuccessAndOneFailure(token: String): String {
+        val jobUuid = submit(token, taskCount = 2)
+        val job = jobRepository.findByUuid(UUID.fromString(jobUuid))!!
+        val tasks = taskRepository.findAllByJobIdOrderBySequence(job.id!!)
+
+        val bytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1, 2, 3)
+        // 워커가 하는 것과 같은 순서 — 파일의 uuid 를 먼저 정하고 그것으로 키를 만든다.
+        val fileUuid = UUID.randomUUID()
+        val key = StorageKeys.generatedFile(job.uuid, tasks[0].uuid, fileUuid, MIME)
+        fileStorage.put(key, bytes, MIME)
+
+        succeed(tasks[0])
+        fileRepository.save(
+            GeneratedFile(
+                uuid = fileUuid,
+                taskId = tasks[0].id!!,
+                storageKey = key,
+                metadata = FileMetadata(width = 1024, height = 1024, mimeType = MIME, fileSize = bytes.size),
+            ),
+        )
+        fail(tasks[1], "rate limit")
+
+        return jobUuid
+    }
+
+    private fun succeed(task: GenerationJobTask) {
+        task.transitionTo(TaskStatus.RUNNING)
+        task.transitionTo(TaskStatus.SUCCEEDED)
+        taskRepository.save(task)
+    }
+
+    private fun fail(task: GenerationJobTask, reason: String) {
+        task.transitionTo(TaskStatus.RUNNING)
+        task.transitionTo(TaskStatus.FAILED, failureReason = reason)
+        taskRepository.save(task)
+    }
+
+    @Test
+    fun `실패한 Task 도 자리를 지키고 성공한 Task 는 파일 주소를 준다`() {
+        val token = tokenOf("files-owner")
+        val jobUuid = jobWithOneSuccessAndOneFailure(token)
+
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.progress.succeeded") { value(1) }
+            jsonPath("$.progress.failed") { value(1) }
+            jsonPath("$.progress.remaining") { value(0) }
+
+            jsonPath("$.tasks.length()") { value(2) }
+            jsonPath("$.tasks[0].status") { value("SUCCEEDED") }
+            jsonPath("$.tasks[0].files.length()") { value(1) }
+            jsonPath("$.tasks[0].files[0].uuid") { exists() }
+            jsonPath("$.tasks[0].files[0].width") { value(1024) }
+
+            // 실패한 자리가 목록에서 사라지지 않는다 — 이것이 파일만 평평하게 담지 않는 이유다.
+            jsonPath("$.tasks[1].status") { value("FAILED") }
+            jsonPath("$.tasks[1].failureReason") { value("rate limit") }
+            jsonPath("$.tasks[1].files.length()") { value(0) }
+        }
+    }
+
     companion object {
         private const val FAKE_MODEL = "fake-model"
+        private const val MIME = "image/png"
         private val OPTION =
             """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
     }

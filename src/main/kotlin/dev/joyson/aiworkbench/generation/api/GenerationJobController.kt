@@ -3,7 +3,6 @@ package dev.joyson.aiworkbench.generation.api
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobReader
 import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
-import dev.joyson.aiworkbench.generation.application.GenerationJobView
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.ownership.OwnerContext
@@ -41,9 +40,9 @@ class GenerationJobController(
      * 남의 Job 도 404 다 — 403 은 "그 uuid 는 존재한다" 를 알려준다.
      */
     @GetMapping("/{uuid}")
-    fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobView> =
+    fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
         generationJobReader.findOwned(uuid, owner.userId)
-            ?.let { ResponseEntity.ok(it) }
+            ?.let { ResponseEntity.ok(it.toResponse()) }
             ?: ResponseEntity.notFound().build()
 }
 

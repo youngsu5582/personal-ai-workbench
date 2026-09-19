@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
+import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import org.springframework.stereotype.Service
@@ -11,6 +12,7 @@ import java.util.UUID
 class GenerationJobReader(
     private val generationJobRepository: GenerationJobRepository,
     private val generationJobTaskRepository: GenerationJobTaskRepository,
+    private val generatedFileRepository: GeneratedFileRepository,
 ) {
 
     /**
@@ -26,8 +28,17 @@ class GenerationJobReader(
             ?: return null
 
         // Task 는 Job 당 최대 MAX_TASK_COUNT 개라 그대로 가져와 센다.
-        // 집계 쿼리를 따로 두면 쿼리는 하나 줄지만, 나중에 파일 목록을 실을 자리가 없어진다.
+        // 집계 쿼리를 따로 두면 쿼리는 하나 줄지만, 같은 결과에서 파일 목록을 만들 수 없다.
         val tasks = generationJobTaskRepository.findAllByJobIdOrderBySequence(requireNotNull(job.id))
-        return job.toView(GenerationJobProgress.of(job.taskCount, tasks))
+
+        // Task 마다 한 번씩 묻지 않는다. Task 가 넷이면 쿼리도 넷이 된다.
+        val filesByTaskId = generatedFileRepository
+            .findAllByTaskIdIn(tasks.mapNotNull { it.id })
+            .groupBy { it.taskId }
+
+        return job.toView(
+            progress = GenerationJobProgress.of(job.taskCount, tasks),
+            tasks = tasks.map { it.toView(filesByTaskId[it.id].orEmpty()) },
+        )
     }
 }
