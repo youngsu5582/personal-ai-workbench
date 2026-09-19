@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
 
 /**
  * 큐 테이블에서 할 일을 꺼내 [TaskWorker] 에 넘긴다.
@@ -35,6 +37,7 @@ class TaskPoller(
     private val stateWriter: TaskStateWriter,
     private val worker: TaskWorker,
     private val properties: GenerationWorkerProperties,
+    private val executor: ExecutorService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -47,10 +50,15 @@ class TaskPoller(
         if (claimed.isEmpty()) return
 
         log.debug("task {}건을 집었다", claimed.size)
-        claimed.forEach { taskId ->
-            // 한 건이 터져도 나머지는 계속 간다. 여기서 못 잡으면 스케줄러가 멈춘다.
-            runCatching { worker.process(taskId) }
-                .onFailure { log.error("task 처리 중 예기치 못한 오류. taskId={}", taskId, it) }
+
+        val running = claimed.map { taskId ->
+            CompletableFuture.runAsync({ worker.process(taskId) }, executor)
+                // 한 건이 터져도 나머지는 계속 간다. 삼키지 않으면 allOf 가 통째로 실패한다.
+                .exceptionally { log.error("task 처리 중 예기치 못한 오류. taskId={}", taskId, it); null }
         }
+
+        // 이번 배치가 끝날 때까지 기다린다. 바로 돌아가면 fixedDelay 가 다음 폴을 시작해
+        // 동시 처리 수가 batchSize 를 넘어 무한정 늘어난다.
+        CompletableFuture.allOf(*running.toTypedArray()).join()
     }
 }
