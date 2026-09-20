@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.auth
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.api.HandoffCookie
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
@@ -21,14 +22,11 @@ import kotlin.test.assertTrue
  * 로그인 흐름(리다이렉트·code 교환)은 Spring 의 책임이므로 여기서 테스트하지 않는다.
  * 내가 책임지는 경계는 토큰 발급과 그 토큰으로의 소유자 해석이다.
  */
-@ActiveProfiles("test")
-@SpringBootTest
-@AutoConfigureMockMvc
 class TokenAuthenticationTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
-) {
+) : IntegrationTest() {
 
     @Test
     fun `토큰이 없으면 401 이다`() {

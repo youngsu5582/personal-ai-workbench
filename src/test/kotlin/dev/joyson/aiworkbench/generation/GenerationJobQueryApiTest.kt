@@ -1,5 +1,7 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.SharedTestConfig
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
@@ -42,10 +44,6 @@ import kotlin.test.assertTrue
  * 테스트 프로필은 워커가 꺼져 있어(`workbench.generation.worker.enabled: false`)
  * 접수한 Job 이 그대로 머문다. 그래서 진행 상황이 결정적으로 관측된다.
  */
-@ActiveProfiles("test")
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(GenerationJobQueryApiTest.FakeProviderConfig::class)
 class GenerationJobQueryApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
@@ -54,30 +52,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
     private val taskRepository: GenerationJobTaskRepository,
     private val fileRepository: GeneratedFileRepository,
     private val fileStorage: FileStorage,
-) {
-
-    @TestConfiguration
-    class FakeProviderConfig {
-        @Bean
-        fun queryTestProvider(): ExternalApiProvider = object : ExternalApiProvider {
-            override val name = "fake"
-            override fun supports(model: String) = model == FAKE_MODEL
-            override fun generate(model: String, request: ExternalApiGenerateRequest) =
-                ExternalApiGenerateResponse(result = emptyList())
-        }
-
-        /** 테스트가 실제 디스크에 파일을 남기지 않게 한다. */
-        @Bean
-        @Primary
-        fun inMemoryStorage(): FileStorage = object : FileStorage {
-            private val written = mutableMapOf<String, ByteArray>()
-            override fun put(key: String, content: ByteArray, contentType: String) {
-                written[key] = content
-            }
-
-            override fun read(key: String): ByteArray? = written[key]
-        }
-    }
+) : IntegrationTest() {
 
     private fun tokenOf(subject: String): String {
         val user = userRegistry.resolveOrRegister(
@@ -244,7 +219,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
             .substringAfter("\"url\":\"").substringBefore("\"")
 
     companion object {
-        private const val FAKE_MODEL = "fake-model"
+        private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
         private const val MIME = "image/png"
         private val OPTION =
             """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""

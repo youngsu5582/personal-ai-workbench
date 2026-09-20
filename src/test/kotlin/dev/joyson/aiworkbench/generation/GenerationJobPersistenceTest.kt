@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
@@ -8,9 +9,7 @@ import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
-import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager
-import org.springframework.test.context.ActiveProfiles
+import jakarta.persistence.EntityManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -20,11 +19,9 @@ import kotlin.test.assertIs
  * option 은 종류마다 모양이 달라 JSON 한 컬럼에 담는다.
  * "저장했다 읽으면 원래 타입으로 돌아오는가" 가 이 매핑의 성립 조건이다.
  */
-@ActiveProfiles("test")
-@DataJpaTest
 class GenerationJobPersistenceTest @Autowired constructor(
-    private val em: TestEntityManager,
-) {
+    private val em: EntityManager,
+) : IntegrationTest() {
 
     private fun option(prompt: String = "고양이") = TextToImageOption(
         prompt = prompt,
@@ -42,7 +39,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
     @Test
     fun `option 이 JSON 으로 저장되고 원래 타입으로 읽힌다`() {
-        val saved = em.persistAndFlush(job())
+        val saved = job().also { em.persist(it); em.flush() }
         em.clear()
 
         val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
@@ -65,7 +62,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             model = "gpt-image-2",
             taskCount = 1,
         )
-        val saved = em.persistAndFlush(job)
+        val saved = job.also { em.persist(it); em.flush() }
         em.clear()
 
         val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
@@ -112,7 +109,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
      */
     @Test
     fun `상한을 넘는 기존 행도 읽을 수 있다`() {
-        em.entityManager.createNativeQuery(
+        em.createNativeQuery(
             """
             insert into generation_jobs (uuid, owner_user_id, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), 1,
@@ -124,7 +121,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         ).executeUpdate()
         em.flush(); em.clear()
 
-        val loaded = em.entityManager
+        val loaded = em
             .createQuery("select j from GenerationJob j where j.taskCount = 99", GenerationJob::class.java)
             .singleResult
 
