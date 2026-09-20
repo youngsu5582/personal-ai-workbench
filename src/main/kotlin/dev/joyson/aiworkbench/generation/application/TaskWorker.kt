@@ -2,7 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
-import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.generation.domain.Sha256
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
@@ -55,7 +55,7 @@ class TaskWorker(
         val startedAt = System.nanoTime()
         val stored = try {
             val response = provider.generate(job.model, requestFactory.from(job.option))
-            store(job, task, response)
+            store(job, response)
         } catch (e: ExternalApiException) {
             stateWriter.fail(taskId, e.message ?: "Provider 호출이 실패했다", e.retryable)
             return
@@ -78,17 +78,23 @@ class TaskWorker(
      *
      * 상태 기록보다 **먼저** 한다. 순서를 뒤집으면 SUCCEEDED 인데 파일이 없는 행이 생길 수 있고,
      * 그건 목록에서 깨진 이미지로만 드러난다. 반대 순서의 실패(파일은 있는데 기록이 없음)는
-     * 아무도 가리키지 않는 파일 하나로 끝난다 — 눈에 띄지 않고, Job 을 지울 때 함께 지워진다.
+     * 아무도 가리키지 않는 파일 하나로 끝난다 — 눈에 띄지 않고, 나중에 정리 작업이 걷어낸다.
      */
     private fun store(
         job: GenerationJob,
-        task: GenerationJobTask,
         response: ExternalApiGenerateResponse,
     ): List<StoredFile> = response.result.map { result ->
-        // 파일의 식별자를 여기서 정한다. 키와 행이 같은 uuid 를 쓰므로 서로를 가리킨다.
-        val fileUuid = UUID.randomUUID()
-        val key = StorageKeys.generatedFile(job.uuid, task.uuid, fileUuid, result.metadata.mimeType)
+        // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
+        val key = StorageKeys.generatedFile(
+            ownerUuid = job.ownerUserUuid,
+            digest = Sha256.of(result.image),
+            mimeType = result.metadata.mimeType,
+        )
         fileStorage.put(key, result.image, result.metadata.mimeType)
+
+        // 행의 식별자는 따로 둔다. digest 에서 파생시키면 같은 바이트를 가진 두 행이
+        // uk_generated_files_uuid 에서 충돌한다 — 키는 내용 주소, 행 식별자는 랜덤이다.
+        val fileUuid = UUID.randomUUID()
 
         StoredFile(
             uuid = fileUuid,

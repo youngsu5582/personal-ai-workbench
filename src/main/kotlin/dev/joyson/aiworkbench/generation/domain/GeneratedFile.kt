@@ -45,7 +45,12 @@ class GeneratedFile(
     /**
      * 보관소에서의 위치.
      *
-     * [uuid] 로부터 만들어진다 — 한 Task 가 파일을 몇 개 내든 겹치지 않는다.
+     * **내용으로 정해진다** — 바이트의 SHA-256 이 키의 본체다. 그래서 같은 바이트를 가진 다른 행과
+     * 이 값을 **공유할 수 있다.** 유니크 제약을 걸지 않는 근거는 [dev.joyson.aiworkbench.generation.infrastructure.StorageKeys] 에 있다.
+     *
+     * digest 를 따로 컬럼으로 두지 않는 이유도 여기 있다 — 키 안에 있어
+     * `substringAfterLast('/').substringBefore('.')` 로 되돌릴 수 있다.
+     *
      * 이 값이 없으면 파일은 저장돼 있는데 아무도 못 찾는다.
      */
     @Column(name = "storage_key", nullable = false, updatable = false)
