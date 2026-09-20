@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.user
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.user.application.DefaultUserRegistry
 import dev.joyson.aiworkbench.user.application.UserReader
 import dev.joyson.aiworkbench.user.application.UserWriter
@@ -20,14 +21,11 @@ import kotlin.test.assertFailsWith
  * 테스트 트랜잭션을 끄는 것(NOT_SUPPORTED)이 핵심이다.
  * 켜둔 채로 하면 UserWriter 가 테스트 트랜잭션에 합류해 프로덕션과 다른 상황을 보게 된다.
  */
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(UserWriter::class, UserReader::class, DefaultUserRegistry::class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RegistrationConflictTest @Autowired constructor(
     private val userWriter: UserWriter,
     private val userRegistry: DefaultUserRegistry,
-) {
+) : IntegrationTest() {
     private fun command(subject: String) =
         RegisterIdentityCommand.of("https://accounts.google.com", subject, "Joyson", "j@example.com")
 

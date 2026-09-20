@@ -21,6 +21,10 @@ import org.testcontainers.utility.DockerImageName
  *
  * 세션이 열릴 때 시스템 프로퍼티로 넣으면 슬라이스든 아니든 모든 컨텍스트가 같은 값을 본다.
  *
+ * `@ServiceConnection` 으로 옮겨봤더니 **전체 테스트가 12초에서 43초가 됐다.**
+ * Boot 가 컨텍스트를 닫을 때 컨테이너도 같이 내려서 다음 컨텍스트가 다시 띄우기 때문이다
+ * (컨테이너 생성 2회 → 3회). 세션 수명에 묶어두면 그 일이 일어나지 않는다.
+ *
  * 컨테이너는 JVM 당 하나, JVM 이 끝날 때 Testcontainers 의 ryuk 이 치운다.
  */
 class PostgresTestDatabase : LauncherSessionListener {

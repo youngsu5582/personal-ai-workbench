@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
@@ -34,15 +35,12 @@ import kotlin.test.assertTrue
  *
  * Provider 와 보관소는 가짜다. 여기서 보려는 것은 **경로와 상태 전이**지 외부 API 의 동작이 아니다.
  */
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(TaskStateWriter::class)
 class TaskWorkerTest @Autowired constructor(
     private val stateWriter: TaskStateWriter,
     private val jobRepository: GenerationJobRepository,
     private val taskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
-) {
+) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
     /** 키별로 마지막에 쓴 바이트만 남는다 — 실제 보관소의 덮어쓰기와 같다. */
