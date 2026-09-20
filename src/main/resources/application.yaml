@@ -21,6 +21,13 @@ spring:
       ddl-auto: "${JPA_DDL_AUTO:validate}"
     open-in-view: false
 
+  # 스키마는 db/migration 이 정한다. 엔티티는 그것을 검증받는 쪽이다.
+  flyway:
+    # 이미 스키마가 있는 DB 는 V1 을 다시 돌리지 않고 그 지점에서 시작한다.
+    # ddl-auto 로 만들어져 굴러가던 DB 를 옮겨 태우기 위한 것이고, 새 DB 에는 영향이 없다.
+    baseline-on-migrate: true
+    baseline-version: 1
+
   security:
     oauth2:
       client:
