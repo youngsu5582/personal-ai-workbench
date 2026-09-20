@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.user
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.user.application.DefaultUserRegistry
 import dev.joyson.aiworkbench.user.application.UserReader
 import dev.joyson.aiworkbench.user.application.UserWriter
@@ -17,15 +18,12 @@ import kotlin.test.assertTrue
 private const val GOOGLE = "https://accounts.google.com"
 private const val GITHUB = "https://github.com"
 
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(UserWriter::class, UserReader::class, DefaultUserRegistry::class)
 class UserRegistryTest @Autowired constructor(
     // 공개 인터페이스가 아니라 구현을 주입한다.
     // link/unlink 는 아직 공개 경계에 없고 구현에만 있기 때문이다.
     private val userRegistry: DefaultUserRegistry,
     private val userReader: UserReader,
-) {
+) : IntegrationTest() {
 
     private fun command(issuer: String, subject: String, name: String = "Joyson", email: String? = "joyson@example.com") =
         RegisterIdentityCommand.of(issuer, subject, name, email)

@@ -1,5 +1,7 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.SharedTestConfig
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -26,15 +28,11 @@ import kotlin.test.assertEquals
  * 같은 잘못된 입력이라도 요청 바인딩에서 걸리면 400, 서비스까지 들어가서 터지면 500 이다.
  * 상한 없는 taskCount 가 실제로 500 을 내고 Provider 호출을 무제한으로 만들 수 있었다.
  */
-@ActiveProfiles("test")
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(GenerationJobApiTest.FakeProviderConfig::class)
 class GenerationJobApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
-) {
+) : IntegrationTest() {
     private val token: String by lazy {
         val user = userRegistry.resolveOrRegister(
             RegisterIdentityCommand.of(
@@ -52,21 +50,6 @@ class GenerationJobApiTest @Autowired constructor(
         option: String = OPTION,
         model: String = FAKE_MODEL,
     ) = """{"option":$option,"model":"$model","taskCount":$taskCount}"""
-
-    /**
-     * API 키가 없는 테스트 환경에는 Provider 빈이 하나도 없다 — 그러면 어떤 모델도 접수되지 않는다.
-     * 여기서 보려는 것은 "요청 검증이 어디서 걸리는가" 지 Provider 가용성이 아니라서 하나를 세워둔다.
-     */
-    @TestConfiguration
-    class FakeProviderConfig {
-        @Bean
-        fun fakeProvider(): ExternalApiProvider = object : ExternalApiProvider {
-            override val name = "fake"
-            override fun supports(model: String) = model == FAKE_MODEL
-            override fun generate(model: String, request: ExternalApiGenerateRequest) =
-                ExternalApiGenerateResponse(result = emptyList())
-        }
-    }
 
     private fun request(payload: String, withToken: Boolean = true) =
         mockMvc.post("/api/jobs") {
@@ -145,6 +128,6 @@ private object GenerationRequestConstraints {
     }
 }
 
-private const val FAKE_MODEL = "fake-image-1"
+private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
 private const val OPTION =
     """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
