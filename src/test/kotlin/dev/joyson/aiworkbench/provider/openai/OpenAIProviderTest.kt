@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.provider.openai
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiImageInput
 import dev.joyson.aiworkbench.provider.ImageQuality
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -38,7 +39,20 @@ class OpenAIProviderTest {
         width: Int = 1024,
         height: Int = 1024,
         quality: ImageQuality = ImageQuality.HIGH,
-    ) = ExternalApiGenerateRequest(prompt = "고양이", width = width, height = height, quality = quality)
+        images: List<ExternalApiImageInput> = emptyList(),
+    ) = ExternalApiGenerateRequest(
+        prompt = "고양이",
+        width = width,
+        height = height,
+        quality = quality,
+        images = images,
+    )
+
+    private fun input(mimeType: String = "image/png") = ExternalApiImageInput(
+        bytes = "원본".toByteArray(),
+        mimeType = mimeType,
+        filename = "source.png",
+    )
 
     @Test
     fun `아는 모델만 지원한다고 답한다`() {
@@ -121,6 +135,65 @@ class OpenAIProviderTest {
         val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
 
         assertTrue(ex.retryable)
+    }
+
+    /**
+     * 경로를 가르는 것은 타입이 아니라 [ExternalApiGenerateRequest.images] 의 유무다.
+     * 컴파일러가 지켜주지 못하는 규칙이라 두 방향을 테스트가 붙잡는다.
+     */
+    @Test
+    fun `이미지가 없으면 generations 로 보낸다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
+
+        provider.generate("gpt-image-2", request())
+
+        server.verify()
+    }
+
+    @Test
+    fun `이미지가 있으면 edits 로 보낸다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.EDITS.path}"))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
+
+        provider.generate("gpt-image-2", request(images = listOf(input())))
+
+        server.verify()
+    }
+
+    @Test
+    fun `edits 응답도 바이트로 풀어 돌려준다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.EDITS.path}"))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
+
+        val response = provider.generate("gpt-image-2", request(images = listOf(input())))
+
+        assertContentEquals(image, response.result[0].image)
+        assertEquals("image/png", response.result[0].metadata.mimeType)
+    }
+
+    /** 보내봐야 거절당하는 요청이라 왕복하지 않는다. 다시 보내도 같으므로 재시도 대상도 아니다. */
+    @Test
+    fun `다루지 않는 입력 형식은 보내기 전에 거절한다`() {
+        val ex = assertFailsWith<ExternalApiException> {
+            provider.generate("gpt-image-2", request(images = listOf(input(mimeType = "image/gif"))))
+        }
+
+        assertFalse(ex.retryable)
+        // 요청이 나가지 않았다.
+        server.verify()
+    }
+
+    @Test
+    fun `받을 수 있는 장수를 넘으면 보내기 전에 거절한다`() {
+        val tooMany = List(OpenAIProvider.MAX_INPUT_IMAGES + 1) { input() }
+
+        val ex = assertFailsWith<ExternalApiException> {
+            provider.generate("gpt-image-2", request(images = tooMany))
+        }
+
+        assertFalse(ex.retryable)
+        server.verify()
     }
 
     /**

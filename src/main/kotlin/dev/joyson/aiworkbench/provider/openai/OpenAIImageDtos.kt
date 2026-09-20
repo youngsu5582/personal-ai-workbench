@@ -27,6 +27,47 @@ data class OpenAIImageRequest(
     val outputFormat: String? = null,
 )
 
+/**
+ * `/v1/images/edits` 요청.
+ *
+ * **이 파일에서 유일하게 Jackson 애노테이션이 없는 타입이다.** multipart 로 나가므로 직렬화를
+ * 거치지 않는다 — 필드 이름과 폼 키의 대응은 [OpenAIImageClient] 의 파트 빌더가 정본이다.
+ *
+ * `data class` 가 아닌 이유는 [images] 의 원소가 `ByteArray` 를 품어서다.
+ *
+ * 응답은 generations 와 같은 모양이라 [OpenAIImageResponse] 를 그대로 쓴다.
+ */
+class OpenAIImageEditRequest(
+    val model: String,
+    val prompt: String,
+    val images: List<OpenAIImageEditImage>,
+    /** 1–10. 호출 1건이 이미지 1장이므로 지금은 항상 1이다. */
+    val n: Int? = null,
+    /** 커스텀 `WIDTHxHEIGHT`. 양변이 16의 배수여야 한다. */
+    val size: String? = null,
+    /** `low` · `medium` · `high` · `xhigh` · `max` · `auto` */
+    val quality: String? = null,
+    val outputFormat: String? = null,
+) {
+    init {
+        require(images.isNotEmpty()) { "고칠 이미지가 없다" }
+    }
+}
+
+/**
+ * 파트 하나로 실릴 이미지.
+ *
+ * 포트의 `ExternalApiImageInput` 과 모양이 같지만 재사용하지 않는다 — 이 파일은 우리 어휘를
+ * 모르는 자리고, 옮기는 일은 어댑터가 한다. [OpenAIImageRequest] 와 같은 관계다.
+ */
+class OpenAIImageEditImage(
+    val bytes: ByteArray,
+    /** 파트의 `Content-Type`. 없으면 받는 쪽이 확장자로 형식을 추측하게 된다. */
+    val contentType: String,
+    /** 파트의 `filename`. 이 값이 있어야 파일로 취급된다. */
+    val filename: String,
+)
+
 data class OpenAIImageResponse(
     val created: Long = 0,
     val data: List<OpenAIGeneratedImage> = emptyList(),
