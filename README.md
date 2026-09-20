@@ -235,6 +235,42 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 
 로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다. **클라이언트는 아무것도 안 바꾼다.**
 
+## 이미지 투 이미지
+
+본인이 생성한 결과 파일의 UUID를 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
+`sources[].uuid`는 생성 결과 파일의 UUID이며, 업로드 URL 발급 응답의 UUID는 아직 사용할 수 없다.
+
+```http
+POST /api/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "option": {
+    "type": "image-to-image",
+    "prompt": "수채화로 바꿔줘",
+    "sources": [{"type": "generated", "uuid": "<generated-file-uuid>"}],
+    "size": {"type": "pixels", "width": 1024, "height": 1024},
+    "quality": "high"
+  },
+  "model": "gpt-image-2",
+  "taskCount": 1
+}
+```
+
+`202 Accepted`의 Job UUID로 `GET /api/jobs/{uuid}`에서 결과를 조회한다.
+존재하지 않거나 다른 사용자 소유인 입력은 접수 시 거절하며, 워커 실행 시에도 소유권을 확인한다.
+
+S3 호환 보관소에서는 워커가 실행·재시도마다 새 presigned GET URL을 발급하고, OpenAI의
+`POST /v1/images/edits`에 JSON `images[].image_url`로 전달한다. 이미지 바이트는 보관소에서
+Provider로 직접 이동하며, URL은 Job 옵션에 저장하거나 로그에 출력하지 않는다.
+URL 발급자가 없는 로컬 저장소에서는 앱이 바이트를 읽어 기존 multipart 전송을 사용한다.
+
+URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. 로컬 Garage의 `localhost:3900`은
+외부 OpenAI에서 접근할 수 없다. 실제 URL 입력을 사용하려면 앱과 Provider 모두 접근 가능한
+보관소 endpoint를 설정한다. 실제 OpenAI URL 편집 호출은 아직 미검증이며, 전송 계약은 대역 테스트로 검증한다.
+[OpenAI 공식 편집 API 계약](https://developers.openai.com/api/reference/resources/images/methods/edit)
+
 ## 직접 업로드 URL 발급
 
 S3 호환 보관소에서는 Bearer 토큰으로 `POST /api/uploads`를 호출한다.
