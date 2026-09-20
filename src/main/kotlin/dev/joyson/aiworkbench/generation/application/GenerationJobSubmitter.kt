@@ -1,5 +1,9 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.infrastructure.ImageSourceFinder
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -19,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 class GenerationJobSubmitter(
     private val generationJobWriter: GenerationJobWriter,
     private val providerRegistry: ProviderRegistry,
+    private val imageSourceFinder: ImageSourceFinder,
 ) {
 
     /**
@@ -33,6 +38,30 @@ class GenerationJobSubmitter(
         providerRegistry.find(command.model)
             ?: throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
+        requireOwnedSources(ownerUuid, command.option)
+
         return generationJobWriter.create(ownerUuid, command)
+    }
+
+    /**
+     * 고치겠다고 지목한 이미지가 실제로 있고 내 것인지 본다.
+     *
+     * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
+     * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
+     *
+     * **바이트는 읽지 않는다.** 이 메서드는 트랜잭션 안이고, 보관소 읽기가 거기 들어오면
+     * 커넥션을 그 시간만큼 붙잡는다. 있는지 묻는 데는 메타 행이면 충분하다.
+     *
+     * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
+     */
+    private fun requireOwnedSources(ownerUuid: UUID, option: GenerationOption) {
+        val sources = when (option) {
+            // 입력을 요구하지 않는 종류다. 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
+            is TextToImageOption -> return
+            is ImageToImageOption -> option.sources
+        }
+
+        sources.firstOrNull { imageSourceFinder.findOwned(it, ownerUuid) == null }
+            ?.let { throw UnknownImageSourceException(it.uuid) }
     }
 }

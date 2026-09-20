@@ -6,6 +6,8 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.ImageSource
+import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
@@ -72,6 +74,67 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val size = assertIs<ImageSize.ByPixels>(option.size)
         assertEquals(1920, size.width)
         assertEquals(1080, size.height)
+    }
+
+    @Test
+    fun `이미지 변형 옵션도 원래 타입으로 읽힌다`() {
+        val sourceUuid = UUID.randomUUID()
+        val job = GenerationJob(
+            ownerUserUuid = UUID.randomUUID(),
+            option = ImageToImageOption(
+                prompt = "수채화로",
+                sources = listOf(ImageSource.Generated(sourceUuid)),
+                size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
+            ),
+            model = "gpt-image-2",
+            taskCount = 1,
+        )
+        val saved = job.also { em.persist(it); em.flush() }
+        em.clear()
+
+        val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
+
+        // 다형이 세 겹이다 — option, sources 의 원소, 그리고 size.
+        val option = assertIs<ImageToImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
+        val source = assertIs<ImageSource.Generated>(option.sources.single(), "참조의 종류가 보존되지 않았다")
+        assertEquals(sourceUuid, source.uuid)
+        assertIs<ImageSize.ByRatio>(option.size)
+        assertEquals("수채화로", option.prompt)
+    }
+
+    /**
+     * 저장된 JSON 의 모양이 곧 계약이다. 판별자나 키를 바꾸면 이 행부터 못 읽는다.
+     * [상한을 넘는 기존 행도 읽을 수 있다] 와 같은 성격의 방어다.
+     */
+    @Test
+    fun `이미 저장된 이미지 변형 행도 읽을 수 있다`() {
+        em.createNativeQuery(
+            """
+            insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
+            values (gen_random_uuid(), gen_random_uuid(),
+                    '{"type":"image-to-image","prompt":"과거 데이터",
+                      "sources":[{"type":"generated","uuid":"11111111-1111-1111-1111-111111111111"}],
+                      "size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}'::jsonb,
+                    'gpt-image-2', 1,
+                    'DISPATCHED', current_timestamp, current_timestamp)
+            """,
+        ).executeUpdate()
+        em.flush(); em.clear()
+
+        val loaded = em
+            .createQuery(
+                "select j from GenerationJob j where j.model = 'gpt-image-2' order by j.id desc",
+                GenerationJob::class.java,
+            )
+            .resultList
+            .first()
+
+        val option = assertIs<ImageToImageOption>(loaded.option)
+        assertEquals("과거 데이터", option.prompt)
+        assertEquals(
+            UUID.fromString("11111111-1111-1111-1111-111111111111"),
+            assertIs<ImageSource.Generated>(option.sources.single()).uuid,
+        )
     }
 
     @Test

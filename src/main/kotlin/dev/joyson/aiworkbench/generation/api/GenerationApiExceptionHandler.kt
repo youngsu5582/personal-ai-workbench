@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.api
 
+import dev.joyson.aiworkbench.generation.application.UnknownImageSourceException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
@@ -25,5 +26,16 @@ class GenerationApiExceptionHandler {
             title = "다룰 수 없는 모델"
             setProperty("model", e.model)
             setProperty("availableProviders", e.available)
+        }
+
+    /**
+     * 없는 것인지 남의 것인지 말하지 않는다 — 구분하면 그 uuid 의 존재가 새어 나간다.
+     * 다시 보낸다고 달라지지 않으므로 4xx 다.
+     */
+    @ExceptionHandler(UnknownImageSourceException::class)
+    fun handleUnknownImageSource(e: UnknownImageSourceException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.message).apply {
+            title = "쓸 수 없는 입력 이미지"
+            setProperty("sourceUuid", e.sourceUuid.toString())
         }
 }

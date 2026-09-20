@@ -2,10 +2,12 @@ package dev.joyson.aiworkbench.generation.infrastructure
 
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiImageInput
 import dev.joyson.aiworkbench.provider.ImageQuality
 import org.springframework.stereotype.Component
 
@@ -20,7 +22,15 @@ import org.springframework.stereotype.Component
 @Component
 class ProviderRequestFactory {
 
-    fun from(option: GenerationOption): ExternalApiGenerateRequest = when (option) {
+    /**
+     * @param images 이미 읽어 온 입력 이미지. **읽는 일은 여기서 하지 않는다** —
+     *   매핑 함수가 조회를 시작하면 호출자가 그 비용을 볼 수 없게 된다.
+     *   기본값이 빈 목록이라 입력이 없는 종류를 옮길 때는 부르는 쪽이 달라지지 않는다.
+     */
+    fun from(
+        option: GenerationOption,
+        images: List<ResolvedImage> = emptyList(),
+    ): ExternalApiGenerateRequest = when (option) {
         is TextToImageOption -> {
             val (width, height) = pixelsOf(option.size)
             ExternalApiGenerateRequest(
@@ -30,7 +40,29 @@ class ProviderRequestFactory {
                 quality = qualityOf(option.quality),
             )
         }
+
+        is ImageToImageOption -> {
+            // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 읽어 넘기기를 빠뜨린 것이다.
+            // 그대로 두면 이미지 없는 요청이 조용히 t2i 로 나가 과금된다.
+            require(images.isNotEmpty()) { "고칠 이미지를 읽어 넘기지 않았다" }
+
+            val (width, height) = pixelsOf(option.size)
+            ExternalApiGenerateRequest(
+                prompt = option.prompt,
+                width = width,
+                height = height,
+                quality = qualityOf(option.quality),
+                images = images.map { inputOf(it) },
+            )
+        }
     }
+
+    /** 보관소에서 읽어 온 이미지를 포트의 어휘로 옮긴다. */
+    private fun inputOf(image: ResolvedImage): ExternalApiImageInput = ExternalApiImageInput(
+        bytes = image.bytes,
+        mimeType = image.mimeType,
+        filename = image.filename,
+    )
 
     /**
      * 크기를 픽셀로 확정한다.

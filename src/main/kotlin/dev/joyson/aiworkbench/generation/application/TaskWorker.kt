@@ -31,6 +31,7 @@ class TaskWorker(
     private val jobRepository: GenerationJobRepository,
     private val providerRegistry: ProviderRegistry,
     private val requestFactory: ProviderRequestFactory,
+    private val imageSourceResolver: ImageSourceResolver,
     private val fileStorage: FileStorage,
     private val stateWriter: TaskStateWriter,
 ) {
@@ -54,8 +55,15 @@ class TaskWorker(
 
         val startedAt = System.nanoTime()
         val stored = try {
-            val response = provider.generate(job.model, requestFactory.from(job.option))
+            // 고칠 이미지가 있으면 여기서 읽는다. 접수 때 확인했더라도 그 사이 지워졌을 수 있고,
+            // 어차피 바이트가 필요하므로 조회가 헛일이 아니다.
+            // 재시도마다 다시 읽는 대가를 치르지만, 4k 이미지를 워커가 들고 있는 것보다 낫다.
+            val images = imageSourceResolver.resolve(job.ownerUserUuid, job.option)
+            val response = provider.generate(job.model, requestFactory.from(job.option, images))
             store(job, response)
+        } catch (e: ImageSourceUnavailableException) {
+            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
+            return
         } catch (e: ExternalApiException) {
             stateWriter.fail(taskId, e.message ?: "Provider 호출이 실패했다", e.retryable)
             return
