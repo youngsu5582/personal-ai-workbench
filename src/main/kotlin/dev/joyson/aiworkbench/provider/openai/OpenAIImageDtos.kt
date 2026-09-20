@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import dev.joyson.aiworkbench.provider.UnknownFields
+import java.net.URI
 
 /**
  * OpenAI Images API 의 요청·응답을 그대로 옮긴 타입이다.
@@ -28,6 +29,65 @@ data class OpenAIImageRequest(
     @param:JsonProperty("output_format")
     @get:JsonProperty("output_format")
     val outputFormat: String? = null,
+)
+
+/**
+ * `/v1/images/edits` 요청.
+ *
+ * 바이트는 multipart로, 주소를 포함한 요청은 JSON DTO로 옮긴다.
+ * 전송 형식의 선택과 필드 대응은 [OpenAIImageClient]가 맡는다.
+ *
+ * `data class` 가 아닌 이유는 [images] 의 원소가 `ByteArray` 를 품어서다.
+ *
+ * 응답은 generations 와 같은 모양이라 [OpenAIImageResponse] 를 그대로 쓴다.
+ */
+class OpenAIImageEditRequest(
+    val model: String,
+    val prompt: String,
+    val images: List<OpenAIImageEditImage>,
+    /** 1–10. 호출 1건이 이미지 1장이므로 지금은 항상 1이다. */
+    val n: Int? = null,
+    /** 커스텀 `WIDTHxHEIGHT`. 양변이 16의 배수여야 한다. */
+    val size: String? = null,
+    /** `low` · `medium` · `high` · `xhigh` · `max` · `auto` */
+    val quality: String? = null,
+    val outputFormat: String? = null,
+) {
+    init {
+        require(images.isNotEmpty()) { "고칠 이미지가 없다" }
+    }
+}
+
+/**
+ * 파트 하나로 실릴 이미지.
+ *
+ * 포트의 `ExternalApiFileInput` 과 모양이 같지만 재사용하지 않는다 — 이 파일은 우리 어휘를
+ * 모르는 자리고, 옮기는 일은 어댑터가 한다. [OpenAIImageRequest] 와 같은 관계다.
+ */
+sealed interface OpenAIImageEditImage {
+    class Bytes(val bytes: ByteArray, val contentType: String, val filename: String) : OpenAIImageEditImage
+    class Url(val url: URI) : OpenAIImageEditImage
+}
+
+/** 주소 입력은 JSON의 images[].image_url로 전송한다. multipart의 image[]와 계약이 다르다. */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class OpenAIImageEditJsonRequest(
+    val model: String,
+    val prompt: String,
+    val images: List<OpenAIImageReference>,
+    val n: Int?,
+    val size: String?,
+    val quality: String?,
+    @param:JsonProperty("output_format")
+    @get:JsonProperty("output_format")
+    val outputFormat: String?,
+)
+
+/** URL은 DTO의 toString에서도 노출하지 않는다. */
+class OpenAIImageReference(
+    @param:JsonProperty("image_url")
+    @get:JsonProperty("image_url")
+    val imageUrl: String,
 )
 
 data class OpenAIImageResponse(
