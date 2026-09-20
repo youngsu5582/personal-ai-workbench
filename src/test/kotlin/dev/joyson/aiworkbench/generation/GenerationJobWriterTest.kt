@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
@@ -17,14 +18,11 @@ import org.springframework.test.context.ActiveProfiles
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(GenerationJobWriter::class)
 class GenerationJobWriterTest @Autowired constructor(
     private val writer: GenerationJobWriter,
     private val jobRepository: GenerationJobRepository,
     private val taskRepository: GenerationJobTaskRepository,
-) {
+) : IntegrationTest() {
 
     private fun command(taskCount: Int) = GenerationCommand(
         option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),

@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
@@ -27,15 +28,12 @@ import kotlin.test.assertTrue
  * 이 셋이 워커의 안전장치다. 여기가 틀리면 같은 Task 가 두 번 처리되거나(과금 두 번),
  * 실패한 Task 가 영원히 재시도되거나, 끝난 Job 이 안 닫힌다.
  */
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(TaskStateWriter::class)
 class TaskStateWriterTest @Autowired constructor(
     private val writer: TaskStateWriter,
     private val jobRepository: GenerationJobRepository,
     private val taskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
-) {
+) : IntegrationTest() {
 
     private fun newJob(taskCount: Int = 2): Pair<Long, List<Long>> {
         val job = jobRepository.saveAndFlush(

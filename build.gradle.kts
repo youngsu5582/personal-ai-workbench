@@ -48,8 +48,8 @@ dependencies {
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
-	testRuntimeOnly("com.h2database:h2")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+	// LauncherSessionListener 를 구현하므로 런타임이 아니라 컴파일에도 필요하다.
+	testImplementation("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
@@ -72,6 +72,17 @@ tasks.bootRun {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+
+	// 테스트는 application.yaml 을 **상속하지 않는다.**
+	//
+	// Boot 는 application.yaml 을 읽고 그 위에 application-{profile}.yaml 을 덮는다.
+	// 교체가 아니라 중첩이라, application.yaml 의 `spring.config.import: file:.env` 가
+	// 테스트에도 적용된다. 그러면 .env 가 있는 기계에서만 개발 DB 주소와 실제 API 키가
+	// 테스트 컨텍스트로 들어와, 같은 코드가 기계마다 다르게 돈다.
+	//
+	// 이름을 바꿔 아예 다른 파일을 읽게 한다. 테스트가 쓰는 설정은 application-test.yaml 에만 있다.
+	// 리스너가 아니라 여기 두는 이유는, 리스너가 없어도 상속은 끊겨 있어야 하기 때문이다.
+	systemProperty("spring.config.name", "application-test")
 	testLogging {
 		events("passed", "skipped", "failed")
 		showStandardStreams = true

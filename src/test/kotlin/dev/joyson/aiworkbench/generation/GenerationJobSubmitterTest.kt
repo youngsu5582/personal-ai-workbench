@@ -1,5 +1,7 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.SharedTestConfig
+import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
 import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
@@ -29,33 +31,11 @@ import kotlin.test.assertFailsWith
  *
  * 앞으로 크레딧 차감·요금제 한도가 들어올 곳이라, 그 규칙들의 테스트도 여기 쌓인다.
  */
-@ActiveProfiles("test")
-@DataJpaTest
-@Import(
-    GenerationJobSubmitter::class,
-    GenerationJobWriter::class,
-    GenerationJobSubmitterTest.FakeProviderConfig::class,
-)
 class GenerationJobSubmitterTest @Autowired constructor(
     private val submitter: GenerationJobSubmitter,
     private val jobRepository: GenerationJobRepository,
     private val taskRepository: GenerationJobTaskRepository,
-) {
-
-    @TestConfiguration
-    class FakeProviderConfig {
-        @Bean
-        fun providerRegistry(): ProviderRegistry = ProviderRegistry(
-            listOf(
-                object : ExternalApiProvider {
-                    override val name = "fake"
-                    override fun supports(model: String) = model == MODEL
-                    override fun generate(model: String, request: ExternalApiGenerateRequest) =
-                        ExternalApiGenerateResponse(result = emptyList())
-                },
-            ),
-        )
-    }
+) : IntegrationTest() {
 
     private fun command(model: String = MODEL, taskCount: Int = 2) = GenerationCommand(
         option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
@@ -88,6 +68,6 @@ class GenerationJobSubmitterTest @Autowired constructor(
     }
 
     private companion object {
-        const val MODEL = "fake-image-1"
+        const val MODEL = SharedTestConfig.FAKE_MODEL
     }
 }
