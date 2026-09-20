@@ -22,7 +22,8 @@ import kotlin.test.fail
  *
  * 나머지 테스트는 전부 `MockRestServiceServer` 라 *"우리가 이렇게 보낸다"* 만 증명한다.
  * *"OpenAI 가 받아준다"* 는 이 테스트만 증명한다 — 엔드포인트 경로, 모델 이름,
- * 임의 크기 허용 여부, `quality` 값, 필드명(`output_format`·`b64_json`).
+ * 임의 크기 허용 여부, `quality` 값, 필드명(`output_format`·`b64_json`),
+ * 그리고 **`usage` 블록의 실제 생김새**. 뒤엣것은 과금 근거인데 문서로만 알고 있다.
  *
  * `OpenAIImageClient` 만 따로 검증하지 않는 이유는 **비용이 같기 때문**이다.
  * 여기서 [ExternalApiGenerateRequest] 부터 넣으면 우리 번역 코드(크기 계산·품질 매핑·모델→경로·
@@ -111,6 +112,11 @@ class OpenAIProviderLiveTest {
         assertTrue(response.result.isNotEmpty(), "응답에 이미지가 없다")
         val result = response.result.first()
 
+        // 토큰 기반 비용 계산이 통째로 이 블록에 기대고 있다. 없으면 전제가 틀린 것이라
+        // 크기·품질 기반 추정으로 설계를 바꿔야 하고, 그 사실이 조용히 지나가면 안 된다.
+        val usage = response.usage
+            ?: fail("응답에 usage 가 없다. 토큰으로 비용을 내는 전제가 틀렸다 — 요청 파라미터 기반 추정으로 바꾼다")
+
         val path = Path.of("build/live-test/$fileName")
         path.createParentDirectories()
         path.writeBytes(result.image)
@@ -125,6 +131,9 @@ class OpenAIProviderLiveTest {
             |  mimeType       = ${result.metadata.mimeType}
             |  revisedPrompt  = ${result.revisedPrompt ?: "(없음)"}
             |  저장           = ${path.toAbsolutePath()}
+            |
+            |  usage 원문 (이 항목 이름들이 단가표의 키가 된다)
+            |${usage.raw.entries.joinToString("\n") { "            |    ${it.key} = ${it.value}" }}
             |
             """.trimMargin(),
         )

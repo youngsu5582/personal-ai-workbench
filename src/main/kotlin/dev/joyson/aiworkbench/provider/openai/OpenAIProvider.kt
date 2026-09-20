@@ -7,15 +7,17 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ImageQuality
+import dev.joyson.aiworkbench.provider.ProviderUsage
 import java.util.Base64
 
 /**
  * 표준 요청을 OpenAI 의 어휘로 옮기는 어댑터.
  *
- * 이 클래스가 하는 일은 **번역 세 가지**뿐이다.
+ * 이 클래스가 하는 일은 **번역 네 가지**뿐이다.
  *   1. 모델 이름 → 세대와 경로 ([OpenAIImageModel])
  *   2. 표준 옵션(비율·해상도) → OpenAI 의 `size` 문자열
  *   3. OpenAI 실패 → [ExternalApiException] (재시도 가능 여부만 사실로 옮긴다)
+ *   4. OpenAI 의 `usage` → [ProviderUsage] (해석하지 않고 그대로 싣는다)
  *
  * HTTP 는 [OpenAIImageClient] 가, 정책(재시도 횟수·다른 Provider 로 넘길지)은 호출하는 쪽이 맡는다.
  */
@@ -60,6 +62,13 @@ class OpenAIProvider(
             )
         }
 
+        if (response.unknown.isNotEmpty) {
+            // 지금은 버리지만 버렸다는 사실은 남긴다. 여기 뜨는 이름이 단가의 축이면
+            // 그때 컬럼이나 jsonb 로 승격한다 — 온 줄도 모르는 것과는 다르다.
+            // 객체를 그대로 넘긴다. 자르는 일은 toString 이 하므로 여기서 기억할 것이 없다.
+            log.warn("OpenAI 가 우리가 모르는 필드를 보냈다. model={} 필드={}", model, response.unknown)
+        }
+
         if (response.data.isEmpty()) {
             // 200 인데 이미지가 없는 건 설명되지 않는 상태다. 일시적일 수 있으니 재시도 대상으로 둔다.
             throw ExternalApiException(retryable = true, message = "응답에 이미지가 없다")
@@ -67,6 +76,8 @@ class OpenAIProvider(
 
         val decoder = Base64.getDecoder()
         return ExternalApiGenerateResponse(
+            // OpenAI 는 토큰만 말하고 비용은 말하지 않는다. 달러로 바꾸는 것은 단가를 아는 쪽의 일이다.
+            usage = response.usage?.let { ProviderUsage(raw = it) },
             result = response.data.map {
                 val image = decoder.decode(it.b64Json)
                 ExternalApiGenerateResult(
