@@ -1,3 +1,12 @@
+# 테스트가 쓰는 설정 **전부**. application.yaml 을 덮는 파일이 아니다.
+#
+# 이름은 프로필 덮어쓰기처럼 생겼지만, build.gradle.kts 가 `spring.config.name` 을 이 이름으로
+# 바꿔 두어서 Boot 는 이 파일 하나만 읽는다. application.yaml 은 읽지 않는다 —
+# 거기 있는 `spring.config.import: file:.env` 가 테스트에 개발 DB 주소와 실제 API 키를
+# 끌고 들어오기 때문이다.
+#
+# 그래서 공통 설정을 application.yaml 에 추가하면 **여기에도 같이 넣어야** 테스트가 본다.
+
 spring:
   datasource:
     # 진짜 주소는 PostgresTestDatabase 가 컨테이너를 띄워 시스템 프로퍼티로 넣는다.
