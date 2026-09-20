@@ -59,6 +59,22 @@ workbench:
     # 비워두면 누구나 로그인된다. 외부에 노출한다면 반드시 채운다.
     allowed-emails: "${AUTH_ALLOWED_EMAILS:}"
 
+  storage:
+    # 이름이 곧 FileStorageFactory 의 빈 이름이다. 오타·빈 값은 기동에서 잡힌다.
+    provider: "${STORAGE_PROVIDER:local}"
+    local:
+      root: "${STORAGE_LOCAL_ROOT:./var/assets}"
+    # provider 가 s3 일 때만 읽힌다. bucket 이 비어 있으면 기동에 실패한다.
+    s3:
+      bucket: "${STORAGE_S3_BUCKET:}"
+      region: "${STORAGE_S3_REGION:us-east-1}"
+      # MinIO·R2 를 가리킬 때만 채운다. 비우면 AWS 로 간다.
+      endpoint: "${STORAGE_S3_ENDPOINT:}"
+      # 비우면 SDK 기본 탐색(환경변수·인스턴스 역할)에 맡긴다.
+      access-key: "${STORAGE_S3_ACCESS_KEY:}"
+      secret-key: "${STORAGE_S3_SECRET_KEY:}"
+      path-style-access: "${STORAGE_S3_PATH_STYLE_ACCESS:false}"
+
   provider:
     # 이 키만 다른 값들과 규칙이 다르다 — 비어 있어도 기동에 실패하지 않는다.
     # 대신 OpenAI Provider 빈이 만들어지지 않아 `ProviderRegistry` 에서도 사라진다.
