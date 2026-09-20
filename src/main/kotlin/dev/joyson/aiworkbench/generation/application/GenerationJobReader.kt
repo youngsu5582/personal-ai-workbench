@@ -22,9 +22,9 @@ class GenerationJobReader(
      * 찾지 못한 것을 예외가 아니라 `null` 로 돌려주는 이유는 호출 지점마다 처리가 갈리기 때문이다.
      */
     @Transactional(readOnly = true)
-    fun findOwned(uuid: UUID, ownerUserId: Long): GenerationJobView? {
+    fun findOwned(uuid: UUID, ownerUuid: UUID): GenerationJobView? {
         val job = generationJobRepository.findByUuid(uuid)
-            ?.takeIf { it.isOwnedBy(ownerUserId) }
+            ?.takeIf { it.isOwnedBy(ownerUuid) }
             ?: return null
 
         // Task 는 Job 당 최대 MAX_TASK_COUNT 개라 그대로 가져와 센다.

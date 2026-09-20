@@ -38,13 +38,22 @@ class GenerationJob(
     val uuid: UUID = UUID.randomUUID(),
 
     /**
-     * 소유자. `users.id` 를 가리키지만 **FK 도 JPA 연관관계도 두지 않는다.**
+     * 소유자. `users.uuid` 를 가리키지만 **FK 도 JPA 연관관계도 두지 않는다.**
      *
      * generation 과 user 는 다른 모듈이고, 모듈 경계를 넘는 스키마 결합은
      * 나중에 모듈을 떼어낼 때 그 이음매를 막는다.
+     *
+     * `users.id` 가 아니라 uuid 인 이유가 둘이다.
+     *
+     * 하나는 위와 같은 이유의 연장이다 — 떼어낼 것을 대비한 느슨한 참조라면 상대 모듈의
+     * **내부 대리키**여서는 안 된다. 별도 서비스가 되는 순간 그 id 공간은 공유되지 않는다.
+     *
+     * 다른 하나는 워커다. 보관소 키에 소유자가 들어가는데 **워커는 요청 맥락이 없는 비동기 실행**이라
+     * 이 행에서 바로 읽어야 한다. id 만 두면 user 모듈에 물어봐야 하고, 사용자가 사라진 경우
+     * 키를 만들지 못해 생성과 무관한 이유로 Task 가 실패한다.
      */
-    @Column(name = "owner_user_id", nullable = false, updatable = false)
-    val ownerUserId: Long,
+    @Column(name = "owner_user_uuid", nullable = false, updatable = false)
+    val ownerUserUuid: UUID,
 
     /**
      * 생성 입력. 종류마다 모양이 달라 JSON 한 컬럼에 담는다.
@@ -106,7 +115,7 @@ class GenerationJob(
         status = JobLifecycle.DISPATCHED
     }
 
-    fun isOwnedBy(userId: Long): Boolean = ownerUserId == userId
+    fun isOwnedBy(userUuid: UUID): Boolean = ownerUserUuid == userUuid
 
     @PreUpdate
     fun touch() {

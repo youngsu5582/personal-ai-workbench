@@ -43,13 +43,13 @@ class GeneratedFileFinder(
     private val mimeType: Field<String> =
         DSL.field("{0} ->> 'mimeType'", SQLDataType.VARCHAR, GENERATED_FILES.METADATA)
 
-    fun findOwned(fileUuid: UUID, ownerUserId: Long): FileLocation? =
+    fun findOwned(fileUuid: UUID, ownerUuid: UUID): FileLocation? =
         dsl.select(GENERATED_FILES.STORAGE_KEY, mimeType)
             .from(GENERATED_FILES)
             .join(GENERATION_JOB_TASKS).on(GENERATION_JOB_TASKS.ID.eq(GENERATED_FILES.TASK_ID))
             .join(GENERATION_JOBS).on(GENERATION_JOBS.ID.eq(GENERATION_JOB_TASKS.JOB_ID))
             .where(GENERATED_FILES.UUID.eq(fileUuid))
-            .and(GENERATION_JOBS.OWNER_USER_ID.eq(ownerUserId))
+            .and(GENERATION_JOBS.OWNER_USER_UUID.eq(ownerUuid))
             .fetchOne()
             ?.let { (storageKey, mimeType) ->
                 FileLocation(storageKey = storageKey!!, mimeType = mimeType!!)

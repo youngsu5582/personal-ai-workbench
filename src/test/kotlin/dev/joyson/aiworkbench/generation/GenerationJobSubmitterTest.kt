@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import java.util.UUID
 import dev.joyson.aiworkbench.SharedTestConfig
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
@@ -45,7 +46,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
 
     @Test
     fun `다룰 수 있는 모델이면 접수하고 Task 까지 만든다`() {
-        val view = submitter.submit(userId = 1L, command = command())
+        val view = submitter.submit(ownerUuid = UUID.randomUUID(), command = command())
 
         assertEquals(1, jobRepository.count())
         assertEquals(2, taskRepository.count())
@@ -59,7 +60,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
     @Test
     fun `다룰 Provider 가 없는 모델은 접수되지 않는다`() {
         assertFailsWith<UnsupportedModelException> {
-            submitter.submit(userId = 1L, command = command(model = "존재하지-않는-모델"))
+            submitter.submit(ownerUuid = UUID.randomUUID(), command = command(model = "존재하지-않는-모델"))
         }
 
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.

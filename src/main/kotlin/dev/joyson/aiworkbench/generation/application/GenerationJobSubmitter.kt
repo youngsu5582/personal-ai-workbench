@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import org.springframework.stereotype.Service
+import java.util.UUID
 import org.springframework.transaction.annotation.Transactional
 
 /**
@@ -28,10 +29,10 @@ class GenerationJobSubmitter(
      * 호출자마다 같은 검사를 기억해야 하고, 한 곳만 빠뜨려도 조용히 통과한다.
      */
     @Transactional
-    fun submit(userId: Long, command: GenerationCommand): GenerationJobView {
+    fun submit(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
         providerRegistry.find(command.model)
             ?: throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
-        return generationJobWriter.create(userId, command)
+        return generationJobWriter.create(ownerUuid, command)
     }
 }

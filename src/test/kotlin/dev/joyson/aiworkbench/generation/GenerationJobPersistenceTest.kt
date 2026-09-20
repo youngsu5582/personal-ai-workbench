@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
@@ -31,7 +32,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
     private fun job(prompt: String = "고양이", taskCount: Int = 2) =
         GenerationJob(
-            ownerUserId = 1L,
+            ownerUserUuid = UUID.randomUUID(),
             option = option(prompt),
             model = "gpt-image-2",
             taskCount = taskCount,
@@ -57,7 +58,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     @Test
     fun `픽셀로 말한 크기도 원래 타입으로 읽힌다`() {
         val job = GenerationJob(
-            ownerUserId = 1L,
+            ownerUserUuid = UUID.randomUUID(),
             option = TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
             model = "gpt-image-2",
             taskCount = 1,
@@ -111,8 +112,8 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `상한을 넘는 기존 행도 읽을 수 있다`() {
         em.createNativeQuery(
             """
-            insert into generation_jobs (uuid, owner_user_id, option, model, task_count, status, created_at, updated_at)
-            values (gen_random_uuid(), 1,
+            insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
+            values (gen_random_uuid(), gen_random_uuid(),
                     '{"type":"text-to-image","prompt":"과거 데이터",
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}'::jsonb,
                     'gpt-image-2', 99,

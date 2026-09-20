@@ -28,8 +28,8 @@ class GeneratedFileReader(
      *
      * 서명된 URL 을 쓰게 되면 이 메서드는 사라진다 — 바이트가 우리를 통과하지 않는다.
      */
-    fun download(fileUuid: UUID, ownerUserId: Long): DownloadedFile? {
-        val location = generatedFileFinder.findOwned(fileUuid, ownerUserId) ?: return null
+    fun download(fileUuid: UUID, ownerUuid: UUID): DownloadedFile? {
+        val location = generatedFileFinder.findOwned(fileUuid, ownerUuid) ?: return null
         val content = fileStorage.read(location.storageKey) ?: return null
 
         return DownloadedFile(

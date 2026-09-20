@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
@@ -77,7 +78,7 @@ class TaskWorkerTest @Autowired constructor(
     private fun newTask(model: String = MODEL): Pair<GenerationJob, GenerationJobTask> {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
-                ownerUserId = 1L,
+                ownerUserUuid = UUID.randomUUID(),
                 option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
                 model = model,
                 taskCount = 1,

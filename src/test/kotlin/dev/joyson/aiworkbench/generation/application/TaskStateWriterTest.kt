@@ -38,7 +38,7 @@ class TaskStateWriterTest @Autowired constructor(
     private fun newJob(taskCount: Int = 2): Pair<Long, List<Long>> {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
-                ownerUserId = 1L,
+                ownerUserUuid = UUID.randomUUID(),
                 option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
                 model = "gpt-image-2",
                 taskCount = taskCount,

@@ -7,6 +7,7 @@ import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.util.UUID
 import org.springframework.transaction.annotation.Transactional
 
 @Service
@@ -21,10 +22,10 @@ class GenerationJobWriter(
      * 그 판단은 [GenerationJobSubmitter] 가 하고, 이 클래스는 쓰기와 트랜잭션만 맡는다.
      */
     @Transactional
-    fun create(userId: Long, command: GenerationCommand): GenerationJobView {
+    fun create(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
         val job = generationJobRepository.save(
             GenerationJob(
-                ownerUserId = userId,
+                ownerUserUuid = ownerUuid,
                 option = command.option,
                 model = command.model,
                 taskCount = command.taskCount

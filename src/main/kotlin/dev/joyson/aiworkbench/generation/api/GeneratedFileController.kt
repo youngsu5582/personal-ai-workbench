@@ -30,7 +30,7 @@ class GeneratedFileController(
 
     @GetMapping("/{uuid}")
     fun download(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<ByteArray> {
-        val file = generatedFileReader.download(uuid, owner.userId)
+        val file = generatedFileReader.download(uuid, owner.uuid)
             ?: return ResponseEntity.notFound().build()
 
         return ResponseEntity.ok()
