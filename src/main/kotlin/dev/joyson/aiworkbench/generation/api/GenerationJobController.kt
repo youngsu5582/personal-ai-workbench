@@ -29,7 +29,7 @@ class GenerationJobController(
 
     @PostMapping
     fun generate(owner: OwnerContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
-        val job = generationJobSubmitter.submit(owner.userId, request.toCommand())
+        val job = generationJobSubmitter.submit(owner.uuid, request.toCommand())
         // 접수 확인이므로, 202 반환
         return ResponseEntity.accepted().body(GenerationResponse(job.uuid))
     }
@@ -41,7 +41,7 @@ class GenerationJobController(
      */
     @GetMapping("/{uuid}")
     fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
-        generationJobReader.findOwned(uuid, owner.userId)
+        generationJobReader.findOwned(uuid, owner.uuid)
             ?.let { ResponseEntity.ok(it.toResponse()) }
             ?: ResponseEntity.notFound().build()
 }

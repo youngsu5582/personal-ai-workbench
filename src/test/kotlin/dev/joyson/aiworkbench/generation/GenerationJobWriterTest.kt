@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
@@ -36,21 +37,21 @@ class GenerationJobWriterTest @Autowired constructor(
      */
     @Test
     fun `요청한 개수만큼만 Task 를 만든다`() {
-        writer.create(userId = 1L, command = command(taskCount = 4))
+        writer.create(ownerUuid = UUID.randomUUID(), command = command(taskCount = 4))
 
         assertEquals(4, taskRepository.findAll().size)
     }
 
     @Test
     fun `Task 의 sequence 는 0부터 연속이다`() {
-        writer.create(userId = 1L, command = command(taskCount = 3))
+        writer.create(ownerUuid = UUID.randomUUID(), command = command(taskCount = 3))
 
         assertEquals(listOf(0, 1, 2), taskRepository.findAll().map { it.sequence }.sorted())
     }
 
     @Test
     fun `생성 직후에는 아무것도 완료되지 않았다`() {
-        val view = writer.create(userId = 1L, command = command(taskCount = 4))
+        val view = writer.create(ownerUuid = UUID.randomUUID(), command = command(taskCount = 4))
 
         assertEquals(4, view.progress.total)
         assertEquals(0, view.progress.succeeded, "방금 만든 Job 이 완료로 보고되면 안 된다")
@@ -59,7 +60,7 @@ class GenerationJobWriterTest @Autowired constructor(
 
     @Test
     fun `Task 를 만든 뒤 Job 은 DISPATCHED 이고 Task 는 PENDING 이다`() {
-        writer.create(userId = 1L, command = command(taskCount = 2))
+        writer.create(ownerUuid = UUID.randomUUID(), command = command(taskCount = 2))
 
         assertEquals(JobLifecycle.DISPATCHED, jobRepository.findAll().single().status)
         assertEquals(setOf(TaskStatus.PENDING), taskRepository.findAll().map { it.status }.toSet())
@@ -67,9 +68,10 @@ class GenerationJobWriterTest @Autowired constructor(
 
     @Test
     fun `소유자는 인자로 받은 사용자다`() {
-        writer.create(userId = 42L, command = command(taskCount = 1))
+        val owner = UUID.randomUUID()
+        writer.create(ownerUuid = owner, command = command(taskCount = 1))
 
-        assertEquals(42L, jobRepository.findAll().single().ownerUserId)
+        assertEquals(owner, jobRepository.findAll().single().ownerUserUuid)
     }
 
     private companion object {
