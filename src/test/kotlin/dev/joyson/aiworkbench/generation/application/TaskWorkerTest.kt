@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
+import dev.joyson.aiworkbench.generation.domain.Sha256
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
@@ -13,6 +14,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -96,8 +98,11 @@ class TaskWorkerTest @Autowired constructor(
         workerWith(provider { success() }).process(task.id!!)
 
         val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
-        // 키에 작업 구조가 드러난다 — 나중에 접두사로 한 번에 지울 수 있다.
-        assertEquals("jobs/${job.uuid}/tasks/${task.uuid}/${file.uuid}.png", file.storageKey)
+        // 자리는 내용이 정하고, 소유자로 먼저 갈린다.
+        assertEquals(
+            StorageKeys.generatedFile(job.ownerUserUuid, Sha256.of(image), "image/png"),
+            file.storageKey,
+        )
         assertContentEquals(image, storage.read(file.storageKey))
         assertEquals(1024, file.metadata.width)
         assertEquals(image.size, file.metadata.fileSize)
@@ -107,26 +112,49 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     @Test
-    fun `한 Task 가 여러 장을 내면 각각 다른 키로 보관된다`() {
+    fun `같은 바이트를 두 장 내면 한 자리에 보관되고 행은 둘이다`() {
         val (_, task) = newTask()
 
-        val twoImages = ExternalApiGenerateResponse(
-            result = List(2) {
-                ExternalApiGenerateResult(
-                    image = image,
-                    metadata = ImageMetadata(1024, 1024, "image/png", image.size),
-                )
-            },
-        )
-
-        workerWith(provider { twoImages }).process(task.id!!)
+        workerWith(provider { twoResults(image, image) }).process(task.id!!)
 
         val files = generatedFileRepository.findAllByTaskId(task.id!!)
+        // 내용이 같으면 자리도 같다 — 이것이 내용 주소로 옮겨왔다는 증거다.
+        assertEquals(1, storage.written.size)
+        assertEquals(1, files.map { it.storageKey }.toSet().size)
+        // 행은 따로 남는다. 키를 공유해도 각자 자기 식별자를 갖는다.
         assertEquals(2, files.size)
-        // 키가 파일마다 갈리므로 뒤엣것이 앞엣것을 덮지 않는다.
-        assertEquals(2, files.map { it.storageKey }.toSet().size)
-        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertEquals(2, files.map { it.uuid }.toSet().size)
     }
+
+    @Test
+    fun `다른 바이트는 다른 자리에 보관된다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { twoResults(image, byteArrayOf(9, 9, 9)) }).process(task.id!!)
+
+        val files = generatedFileRepository.findAllByTaskId(task.id!!)
+        assertEquals(2, files.map { it.storageKey }.toSet().size)
+        assertEquals(2, storage.written.size)
+    }
+
+    @Test
+    fun `보관소 키는 소유자로 먼저 갈린다`() {
+        val (job, task) = newTask()
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
+        assertTrue(file.storageKey.startsWith("users/${job.ownerUserUuid}/blobs/"))
+    }
+
+    private fun twoResults(first: ByteArray, second: ByteArray) = ExternalApiGenerateResponse(
+        result = listOf(first, second).map {
+            ExternalApiGenerateResult(
+                image = it,
+                metadata = ImageMetadata(1024, 1024, "image/png", it.size),
+            )
+        },
+    )
 
     @Test
     fun `다시 해볼 만한 실패는 큐로 돌아가고 Job 은 열려 있다`() {
@@ -184,7 +212,7 @@ class TaskWorkerTest @Autowired constructor(
 
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
-        // 키가 Task 와 순번만으로 정해져 재시도가 잔해를 남기지 않는다.
+        // 재시도가 같은 바이트를 내면 자리도 같다 — 이 테스트의 가짜 Provider 가 그렇다.
         assertEquals(1, generatedFileRepository.findAllByTaskId(task.id!!).size)
         assertEquals(1, storage.written.size)
         assertEquals(2, taskRepository.findById(task.id!!).get().attemptCount)

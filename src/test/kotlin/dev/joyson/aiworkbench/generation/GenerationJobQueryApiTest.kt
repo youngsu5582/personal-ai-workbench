@@ -10,6 +10,7 @@ import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.Sha256
 import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -129,9 +130,9 @@ class GenerationJobQueryApiTest @Autowired constructor(
         val tasks = taskRepository.findAllByJobIdOrderBySequence(job.id!!)
 
         val bytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1, 2, 3)
-        // 워커가 하는 것과 같은 순서 — 파일의 uuid 를 먼저 정하고 그것으로 키를 만든다.
+        // 워커와 같은 방식으로 키를 만든다 — 자리는 내용이 정하고, 행 식별자는 따로 둔다.
         val fileUuid = UUID.randomUUID()
-        val key = StorageKeys.generatedFile(job.uuid, tasks[0].uuid, fileUuid, MIME)
+        val key = StorageKeys.generatedFile(job.ownerUserUuid, Sha256.of(bytes), MIME)
         fileStorage.put(key, bytes, MIME)
 
         succeed(tasks[0])
