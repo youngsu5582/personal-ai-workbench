@@ -1,0 +1,22 @@
+# Garage 단일 노드 설정.
+#
+# 분산 스토리지라 1대로 써도 "이 노드에 얼마를 할당한다" 는 선언(layout)이 필요하다.
+# 그 단계를 빼면 컨테이너는 떴는데 PUT 이 실패한다 — garage-init 이 그 일을 한다.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+# 노드가 하나다. 복제할 상대가 없다.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# 로컬 전용 값이다. 노드가 하나라 RPC 가 밖으로 나가지 않는다.
+rpc_secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+[s3_api]
+# AWS 리전 개념이 없지만 SDK 가 요구하므로 이름을 하나 정해준다.
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"

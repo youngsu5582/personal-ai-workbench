@@ -124,6 +124,72 @@ docker compose down
 ```
 
 데이터 볼륨까지 삭제하려면 별도로 `docker compose down -v`를 실행한다.
+Garage 를 함께 띄웠다면 내릴 때도 `COMPOSE_PROFILES=s3` 를 준다 — 프로필에 속한 컨테이너는 그 변수가 있어야 대상에 잡힌다.
+
+## S3 호환 보관소로 돌려보기
+
+결과물은 기본적으로 로컬 디스크(`./var/assets`)에 쌓인다. S3 경로를 확인하려면 [Garage](https://garagehq.deuxfleurs.fr/) 를 띄운다. MinIO 대신 Garage 인 이유는 홈랩 규모를 겨냥해 만들어졌고 라이선스·배포 정책이 안정적이기 때문이다.
+
+### 1. Garage 시작
+
+```bash
+COMPOSE_PROFILES=s3 docker compose up -d
+```
+
+`profiles: ["s3"]` 가 붙어 있어 **평소 `docker compose up -d` 에는 뜨지 않는다.**
+
+### 2. 최초 1회 부트스트랩
+
+Garage 는 분산 스토리지라 노드가 하나여도 **"이 노드에 얼마를 할당한다"(layout)를 선언해야** 데이터를 받는다. 이 단계를 빼면 컨테이너는 떠 있는데 저장이 실패한다.
+
+```bash
+export COMPOSE_PROFILES=s3
+NODE=$(docker compose exec -T garage /garage node id -q | cut -d@ -f1)
+
+docker compose exec -T garage /garage layout assign -z dc1 -c 1G "$NODE"
+docker compose exec -T garage /garage layout apply --version 1
+docker compose exec -T garage /garage bucket create workbench
+docker compose exec -T garage /garage key import --yes -n app-key \
+  GK00000000000000000000dev 0000000000000000000000000000000000000000000000000000000000000001
+docker compose exec -T garage /garage bucket allow --read --write workbench --key app-key
+```
+
+> 명령을 변수(`G="docker compose exec …"`)로 줄여 쓰고 싶어지는데, **zsh 에서는 안 된다.**
+> zsh 는 변수를 단어로 쪼개지 않아 전체가 명령 이름 하나로 취급된다. 길어도 그대로 친다.
+
+볼륨을 지우지 않는 한 **다시 할 필요 없다.** `docker compose down -v` 로 볼륨까지 지웠다면 다시 친다.
+
+> 자동화하지 않은 이유: Garage 이미지에 셸이 없어 init 컨테이너로 명령을 엮을 수 없다. 커스텀 이미지를 만드는 것보다, 평생 한 번인 작업을 문서로 두는 편이 낫다고 판단했다.
+>
+> `key import` 로 값을 정해 넣는다. `key create` 는 자격증명을 **만들어 돌려주므로** 출력을 받아 적어야 한다. 위 값은 **로컬 전용**이다.
+
+### 3. `.env` 에 보관소 설정 추가
+
+```properties
+STORAGE_PROVIDER=s3
+STORAGE_S3_BUCKET=workbench
+STORAGE_S3_REGION=garage
+STORAGE_S3_ENDPOINT=http://localhost:3900
+STORAGE_S3_ACCESS_KEY=GK00000000000000000000dev
+STORAGE_S3_SECRET_KEY=0000000000000000000000000000000000000000000000000000000000000001
+STORAGE_S3_PATH_STYLE_ACCESS=true
+```
+
+`path-style-access` 가 필요한 이유는 가상 호스트 방식(`bucket.localhost`)을 풀어줄 DNS 가 로컬에 없기 때문이다. **실제 AWS S3 나 Cloudflare R2 로 갈 때는 `endpoint` 를 그쪽 주소로, `path-style-access` 를 `false` 로 바꾸면 된다 — 코드는 그대로다.**
+
+`bucket` 이 비어 있으면 기동에 실패한다. 오타를 낸 `provider` 도 가능한 이름과 함께 거절당한다.
+
+### 4. 확인
+
+Garage 에는 웹 콘솔이 없다. 객체는 `mc` 나 AWS CLI 로 본다.
+
+```bash
+aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
+```
+
+키 모양은 `users/{ownerUuid}/blobs/{ab}/{cd}/{sha256}.png` 다 — 자리를 내용이 정하므로 같은 바이트는 한 자리를 쓴다.
+
+로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다.
 
 ## 도메인 문서
 
