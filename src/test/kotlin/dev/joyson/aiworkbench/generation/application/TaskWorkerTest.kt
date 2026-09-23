@@ -14,7 +14,6 @@ import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
-import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
 import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -85,7 +84,6 @@ class TaskWorkerTest @Autowired constructor(
         taskRepository = taskRepository,
         jobRepository = jobRepository,
         providerRegistry = ProviderRegistry(listOf(provider)),
-        requestFactory = ProviderRequestFactory(),
         fileStorage = fileStorage,
         stateWriter = stateWriter,
         callRecorder = recorder,

@@ -39,7 +39,6 @@ class TaskWorker(
     private val taskRepository: GenerationJobTaskRepository,
     private val jobRepository: GenerationJobRepository,
     private val providerRegistry: ProviderRegistry,
-    private val requestFactory: ProviderRequestFactory,
     private val fileStorage: FileStorage,
     private val stateWriter: TaskStateWriter,
     private val callRecorder: ProviderCallRecorder,
@@ -62,7 +61,7 @@ class TaskWorker(
 
         log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
 
-        val request = requestFactory.from(job.option)
+        val request = ProviderRequestFactory.from(job.option)
         val processMark = TimeSource.Monotonic.markNow()
 
         // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
