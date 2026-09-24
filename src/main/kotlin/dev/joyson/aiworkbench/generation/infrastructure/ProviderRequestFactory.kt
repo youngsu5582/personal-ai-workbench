@@ -7,7 +7,6 @@ import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ImageQuality
-import org.springframework.stereotype.Component
 
 /**
  * 우리 도메인 어휘를 Provider 포트의 어휘로 옮긴다.
@@ -16,9 +15,12 @@ import org.springframework.stereotype.Component
  * 의존하는 쪽인 여기에 있다.
  *
  * [GenerationOption] 이 `sealed` 라 새 생성 종류를 추가하면 아래 `when` 이 컴파일 에러로 드러난다.
+ *
+ * 상태도 의존도 없는 순수 번역이라 빈이 아니라 `object` 다. 주입해도 갈아끼울 것이 없고
+ * — 이 저장소는 목 라이브러리를 쓰지 않아 순수 함수에는 대역을 만들 것조차 없다 —
+ * 부르는 쪽 생성자만 길어진다. `StorageKeys` 와 같은 자리다.
  */
-@Component
-class ProviderRequestFactory {
+object ProviderRequestFactory {
 
     fun from(option: GenerationOption): ExternalApiGenerateRequest = when (option) {
         is TextToImageOption -> {

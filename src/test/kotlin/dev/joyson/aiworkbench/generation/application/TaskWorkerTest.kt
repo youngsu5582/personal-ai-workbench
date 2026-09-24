@@ -15,7 +15,6 @@ import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
-import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -23,18 +22,24 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ProviderRegistry
+import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.usage.ImageRequest
+import dev.joyson.aiworkbench.usage.ProviderCallRecorder
+import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
+import dev.joyson.aiworkbench.usage.infrastructure.ProviderCallRepository
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
-import org.springframework.context.annotation.Import
-import org.springframework.test.context.ActiveProfiles
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * 요청이 실제 결과물이 되기까지를 한 번에 본다 — 번역 → Provider → 보관 → 기록.
+ * 요청이 실제 결과물이 되기까지를 한 번에 본다 — 번역 → Provider → 지출 기록 → 보관 → 상태 기록.
  *
  * Provider 와 보관소는 가짜다. 여기서 보려는 것은 **경로와 상태 전이**지 외부 API 의 동작이 아니다.
  */
@@ -43,6 +48,8 @@ class TaskWorkerTest @Autowired constructor(
     private val jobRepository: GenerationJobRepository,
     private val taskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
+    private val callRecorder: ProviderCallRecorder,
+    private val callRepository: ProviderCallRepository,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -54,12 +61,13 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     private fun provider(behavior: () -> ExternalApiGenerateResponse) = object : ExternalApiProvider {
-        override val name = "fake"
+        override val name = PROVIDER
         override fun supports(model: String) = model == MODEL
         override fun generate(model: String, request: ExternalApiGenerateRequest) = behavior()
     }
 
-    private fun success() = ExternalApiGenerateResponse(
+    private fun success(usage: ProviderUsage? = null) = ExternalApiGenerateResponse(
+        usage = usage,
         result = listOf(
             ExternalApiGenerateResult(
                 image = image,
@@ -68,20 +76,27 @@ class TaskWorkerTest @Autowired constructor(
         ),
     )
 
-    private fun workerWith(provider: ExternalApiProvider) = TaskWorker(
+    private fun workerWith(
+        provider: ExternalApiProvider,
+        fileStorage: FileStorage = storage,
+        recorder: ProviderCallRecorder = callRecorder,
+    ) = TaskWorker(
         taskRepository = taskRepository,
         jobRepository = jobRepository,
         providerRegistry = ProviderRegistry(listOf(provider)),
-        requestFactory = ProviderRequestFactory(),
-        fileStorage = storage,
+        fileStorage = fileStorage,
         stateWriter = stateWriter,
+        callRecorder = recorder,
     )
 
-    private fun newTask(model: String = MODEL): Pair<GenerationJob, GenerationJobTask> {
+    private fun newTask(
+        model: String = MODEL,
+        size: ImageSize = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
+    ): Pair<GenerationJob, GenerationJobTask> {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = UUID.randomUUID(),
-                option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+                option = TextToImageOption("고양이", size),
                 model = model,
                 taskCount = 1,
             ),
@@ -218,7 +233,155 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(2, taskRepository.findById(task.id!!).get().attemptCount)
     }
 
+    @Test
+    fun `호출 한 번이 지출 한 줄로 남는다`() {
+        val (job, task) = newTask()
+        val usage = ProviderUsage(raw = mapOf("total_tokens" to 4200))
+
+        workerWith(provider { success(usage) }).process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.succeeded)
+        assertEquals(PROVIDER, call.provider)
+        assertEquals(MODEL, call.model)
+        assertEquals(job.uuid, call.jobUuid)
+        // 소유자를 여기 복사해 둬야 지출 조회가 Job 을 조인하지 않는다.
+        assertEquals(job.ownerUserUuid, call.ownerUserUuid)
+        assertNotNull(call.usageRaw)
+
+        // 단가표가 아직 없다. 모르는 것을 0 으로 적지 않는다.
+        assertNull(call.cost)
+    }
+
+    /**
+     * 지출 가시성의 핵심이다. 타임아웃은 저쪽에서 이미 만들어 과금한 뒤 우리만 못 받은 경우가 있어
+     * **가장 설명이 필요한 지출**인데, 성공 경로에만 기록을 붙이면 이것이 통째로 사라진다.
+     */
+    @Test
+    fun `실패한 호출도 지출로 남는다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { throw ExternalApiException(retryable = false, message = "504 시간 초과") })
+            .process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertFalse(call.succeeded)
+        assertEquals("504 시간 초과", call.failureReason)
+        assertNull(call.usageRaw, "실패했는데 사용량이 있다")
+    }
+
+    /**
+     * 재시도마다 따로 과금되므로 행도 따로 쌓여야 한다.
+     * 한 Task 에 한 행으로 접으면 합계가 실제 청구서보다 적어진다.
+     */
+    @Test
+    fun `재시도하면 지출이 시도마다 쌓인다`() {
+        val (_, task) = newTask()
+        var attempts = 0
+        val worker = workerWith(
+            provider {
+                attempts += 1
+                if (attempts == 1) throw ExternalApiException(retryable = true, message = "일시적 오류")
+                success()
+            },
+        )
+
+        worker.process(task.id!!)
+        stateWriter.claim(limit = 1)
+        worker.process(task.id!!)
+
+        val calls = callRepository.findAllByTaskUuid(task.uuid)
+        assertEquals(2, calls.size, "재시도가 앞 시도의 지출을 덮었다")
+        assertEquals(listOf(false, true), calls.map { it.succeeded })
+    }
+
+    /**
+     * 과금이 걸리는 축은 요청에 적힌 `16:9 @ 2k` 가 아니라 그것을 푼 픽셀이다.
+     * 그 값은 Job 어디에도 없으므로 이 행이 갖지 않으면 나중에 되살릴 수 없다.
+     */
+    @Test
+    fun `지출에는 실제로 보낸 픽셀이 남는다`() {
+        val (_, task) = newTask(size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K))
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        val request = assertIs<ImageRequest>(call.request)
+        assertEquals(2048, request.width)
+        assertEquals(1152, request.height)
+        assertEquals("auto", request.quality)
+    }
+
+    /**
+     * 다른 테스트의 Provider 는 즉시 답해서 지연이 늘 0 이다 —
+     * 그래서 **항상 0 을 적는 버그가 있어도 전부 통과한다.** 이 테스트만 그것을 막는다.
+     */
+    @Test
+    fun `지연은 Provider 가 답하기까지 걸린 시간이다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { Thread.sleep(SLOW_MS); success() }).process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.latencyMs >= THRESHOLD_MS, "지연을 재지 않는다: ${call.latencyMs}ms")
+    }
+
+    /**
+     * 측정 구간을 Provider 호출로 좁혀 둔 이유를 고정한다.
+     *
+     * 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다 —
+     * 느려진 것이 저쪽인지 우리 보관소인지 구분되지 않는다.
+     */
+    @Test
+    fun `지연에 보관 시간은 섞이지 않는다`() {
+        val (_, task) = newTask()
+        val slowStorage = object : FileStorage {
+            override fun put(key: String, content: ByteArray, contentType: String) = Thread.sleep(SLOW_MS)
+            override fun read(key: String): ByteArray? = null
+        }
+
+        workerWith(provider { success() }, fileStorage = slowStorage).process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.latencyMs < THRESHOLD_MS, "보관 시간이 Provider 지연에 섞였다: ${call.latencyMs}ms")
+    }
+
+
+    /**
+     * 기록이 실패하면 그 호출의 토큰 수는 **영영 사라진다** — 응답은 한 번뿐이다.
+     * 그래서 실패 로그가 마지막 사본이 되고, 거기에 원자료가 없으면 아무것도 복원할 수 없다.
+     */
+    @Test
+    fun `기록이 실패해도 Task 는 죽지 않고 원자료는 로그로 남는다`() {
+        val (_, task) = newTask()
+        val raw = mapOf("total_tokens" to 210, "output_tokens" to 196)
+        var seen: RecordProviderCallCommand? = null
+        val brokenRecorder = object : ProviderCallRecorder {
+            override fun record(command: RecordProviderCallCommand): UUID {
+                seen = command
+                throw IllegalStateException("원장에 적지 못했다")
+            }
+        }
+
+        workerWith(provider { success(ProviderUsage(raw = raw)) }, recorder = brokenRecorder)
+            .process(task.id!!)
+
+        // 돈은 이미 나갔다. 여기서 Task 를 실패시키면 재시도가 또 쓴다.
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        // 로그에 실릴 커맨드가 원자료를 들고 있어야 한다. toString 이 그것을 내보낸다.
+        assertEquals(raw, assertNotNull(seen).usageRaw)
+        assertTrue(seen.toString().contains("total_tokens"), "마지막 사본에 토큰이 없다")
+    }
+
     private companion object {
         const val MODEL = "fake-image-1"
+        const val PROVIDER = "fake"
+
+        /**
+         * 재는지 안 재는지만 가리면 되므로 짧게 둔다. 다만 둘의 간격은 넉넉히 벌린다 —
+         * 붙여 두면 CI 가 느리거나 GC 가 끼었을 때 간헐적으로 실패한다.
+         */
+        const val SLOW_MS = 200L
+        const val THRESHOLD_MS = 100
     }
 }

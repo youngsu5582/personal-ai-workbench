@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 
 class ProviderRequestFactoryTest {
 
-    private val factory = ProviderRequestFactory()
+    private val factory = ProviderRequestFactory
 
     private fun sizeOf(ratio: AspectRatio, resolution: Resolution): String {
         val request = factory.from(TextToImageOption("고양이", ImageSize.ByRatio(ratio, resolution)))

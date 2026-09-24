@@ -10,7 +10,9 @@ import org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPat
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
 import org.springframework.test.web.client.response.MockRestResponseCreators.withStatus
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
+import org.springframework.test.web.client.response.MockRestResponseCreators.withException
 import org.springframework.web.client.RestClient
+import java.net.SocketTimeoutException
 import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -23,7 +25,10 @@ import kotlin.test.assertTrue
  * 번역만 검증한다. HTTP 자체는 [OpenAIImageClientTest] 가 본다.
  *
  * 여기서 보는 것은 셋이다 — 모델이 올바른 경로로 가는가, 포트 어휘가 OpenAI 어휘로 옮겨지는가,
- * OpenAI 실패가 [ExternalApiException] 으로 바뀌는가.
+ * **모든** 실패가 [ExternalApiException] 으로 바뀌는가.
+ *
+ * 마지막 항목이 계약이다. 다른 종류의 예외가 하나라도 새면 부르는 쪽이 잡지 못해
+ * Task 가 RUNNING 에 영원히 남고 그 호출의 지출도 기록되지 않는다.
  */
 class OpenAIProviderTest {
 
@@ -139,6 +144,88 @@ class OpenAIProviderTest {
         return assertFailsWith<ExternalApiException> {
             OpenAIProvider(OpenAIImageClient(builder.build())).generate("gpt-image-2", request())
         }.retryable
+    }
+
+
+    /**
+     * 타임아웃은 상태 코드가 없어 [OpenAIException] 으로 걸리지 않는다.
+     *
+     * 저쪽은 이미 만들어 과금했는데 우리만 못 받은 경우가 여기 섞여 있어,
+     * 이 경로가 새면 **가장 설명이 필요한 지출**이 기록에서 사라진다.
+     */
+    @Test
+    fun `응답을 받지 못한 실패도 포트 예외로 바뀐다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withException(SocketTimeoutException("Read timed out")))
+
+        val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
+
+        assertTrue(ex.retryable, "응답을 못 받은 것은 다시 해볼 만하다")
+        assertTrue(ex.message!!.contains("응답 없음"), "원인이 메시지에서 사라졌다: ${ex.message}")
+    }
+
+    /**
+     * 무엇이 샐지 미리 알 수 없으므로 종류로 막지 않고 전부 막는다.
+     *
+     * 여기서는 200 인데 본문이 JSON 이 아닌 경우로 찌른다 — 상태 코드도 정상이고 I/O 도 정상이라
+     * 앞의 두 분기에 걸리지 않는다. 이 계약이 없으면 이런 응답 하나가 Task 를 영영 멈춘다.
+     */
+    @Test
+    fun `설명되지 않는 예외도 경계를 넘지 못한다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess("이건 JSON 이 아니다", MediaType.APPLICATION_JSON))
+
+        val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
+
+        // 원인을 모르는 채로 세 번 부르면 돈만 세 번 나간다.
+        assertFalse(ex.retryable, "모르는 실패를 다시 시도하게 뒀다")
+        assertTrue(ex.message!!.contains("알 수 없는 오류"), "메시지가 원인을 감췄다: ${ex.message}")
+    }
+
+
+    /**
+     * **호출이 성공한 뒤**에 나는 실패다. 응답은 200 이고 돈은 이미 나갔는데 우리가 못 읽는 경우.
+     *
+     * 이 경로가 새면 부르는 쪽이 못 잡아 Task 가 RUNNING 에 영원히 남고, 그 호출의 지출도
+     * 기록되지 않는다 — 지출을 빠짐없이 적으려는 이 기능의 목적이 정확히 여기서 깨진다.
+     */
+    @Test
+    fun `깨진 base64 도 포트 예외로 바뀐다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess("""{"created":1,"data":[{"b64_json":"!!!이건 base64 가 아니다!!!"}]}""", MediaType.APPLICATION_JSON))
+
+        val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
+
+        // 우리가 예상하고 던진 것이 아니라 포괄 catch 가 받은 것이다 — 원인을 모르니 재시도하지 않는다.
+        assertFalse(ex.retryable, "모르는 실패를 다시 시도하게 뒀다")
+        assertTrue(ex.message!!.contains("알 수 없는 오류"), "원인이 메시지에서 사라졌다: ${ex.message}")
+    }
+
+
+    /**
+     * 우리가 **사실로 판단해** 던진 예외는 포괄 catch 에 삼켜지면 안 된다.
+     *
+     * try 가 메서드 전체를 덮으므로, 되던지지 않으면 여기서 정한 `retryable = true` 가
+     * 포괄 catch 의 `false` 로 뒤집힌다. 그러면 다시 해볼 만한 실패를 한 번에 포기한다.
+     */
+    @Test
+    fun `우리가 던진 판단은 재시도 여부가 뒤집히지 않는다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess("""{"created":1,"data":[]}""", MediaType.APPLICATION_JSON))
+
+        val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
+
+        assertTrue(ex.retryable, "우리가 정한 재시도 여부가 덮였다")
+        assertEquals("응답에 이미지가 없다", ex.message)
+    }
+
+    /** 바이트가 비면 `ImageMetadata` 의 불변식에 걸린다. 그것도 경계를 넘으면 안 된다. */
+    @Test
+    fun `빈 이미지도 포트 예외로 바뀐다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess("""{"created":1,"data":[{"b64_json":""}]}""", MediaType.APPLICATION_JSON))
+
+        assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
     }
 
     private companion object {
