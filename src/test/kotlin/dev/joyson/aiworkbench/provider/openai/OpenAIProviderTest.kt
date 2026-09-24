@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.provider.openai
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageQuality
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -114,8 +115,21 @@ class OpenAIProviderTest {
 
     @Test
     fun `429 는 재시도 대상이고 400 은 아니다`() {
-        assertTrue(retryableFor(HttpStatus.TOO_MANY_REQUESTS))
-        assertFalse(retryableFor(HttpStatus.BAD_REQUEST))
+        assertTrue(failureFor(HttpStatus.TOO_MANY_REQUESTS).retryable)
+        assertFalse(failureFor(HttpStatus.BAD_REQUEST).retryable)
+    }
+
+    /**
+     * 과금 판정이 이 번역에 달려 있다.
+     *
+     * 429 와 5xx 는 `retryable` 이 같아서, 재시도 여부만 보면 **둘을 뒤바꿔도 드러나지 않는다.**
+     * 한쪽은 아무것도 만들지 않았고 다른 쪽은 저쪽에서 뭔가 하다 실패한 것이라 뜻이 다르다.
+     */
+    @Test
+    fun `상태 코드를 과금을 가를 수 있는 종류로 옮긴다`() {
+        assertEquals(FailureKind.THROTTLED, failureFor(HttpStatus.TOO_MANY_REQUESTS).kind)
+        assertEquals(FailureKind.PROVIDER_ERROR, failureFor(HttpStatus.INTERNAL_SERVER_ERROR).kind)
+        assertEquals(FailureKind.REJECTED, failureFor(HttpStatus.BAD_REQUEST).kind)
     }
 
     @Test
@@ -126,13 +140,15 @@ class OpenAIProviderTest {
         val ex = assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
 
         assertTrue(ex.retryable)
+        // 200 을 받았다는 것은 저쪽이 요청을 처리했다는 뜻이라, 과금 여부를 0 으로 단정하면 안 된다.
+        assertEquals(FailureKind.PROVIDER_ERROR, ex.kind)
     }
 
     /**
      * 한 테스트에서 호출을 여러 번 하려면 서버를 매번 새로 만들어야 한다 —
      * `MockRestServiceServer` 는 요청이 한 번 나간 뒤에는 기대를 더 등록하지 못한다.
      */
-    private fun retryableFor(status: HttpStatus): Boolean {
+    private fun failureFor(status: HttpStatus): ExternalApiException {
         val builder = RestClient.builder().baseUrl(BASE_URL)
         val server = MockRestServiceServer.bindTo(builder).build()
         server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
@@ -143,7 +159,7 @@ class OpenAIProviderTest {
 
         return assertFailsWith<ExternalApiException> {
             OpenAIProvider(OpenAIImageClient(builder.build())).generate("gpt-image-2", request())
-        }.retryable
+        }
     }
 
 

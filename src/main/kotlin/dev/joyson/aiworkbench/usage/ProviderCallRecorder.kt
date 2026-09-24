@@ -43,6 +43,12 @@ data class RecordProviderCallCommand(
     val succeeded: Boolean,
     val failureReason: String? = null,
 
+    /**
+     * **어떻게** 실패했는가. 사유 문자열과 따로 두는 이유는 그것이 사람이 읽는 글이고
+     * 이것이 나중에 과금 여부를 판정할 기계가 읽는 값이기 때문이다.
+     */
+    val failureKind: FailureKind? = null,
+
     /** Provider 호출만의 시간. 보관 지연이 섞이면 Provider 성능 비교가 안 된다. */
     val latencyMs: Int,
 

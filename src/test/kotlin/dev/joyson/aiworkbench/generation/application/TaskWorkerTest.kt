@@ -16,6 +16,7 @@ import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
 import dev.joyson.aiworkbench.provider.ExternalApiException
+import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
@@ -24,6 +25,7 @@ import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.usage.FailureKind as RecordedFailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
@@ -175,7 +177,7 @@ class TaskWorkerTest @Autowired constructor(
     fun `다시 해볼 만한 실패는 큐로 돌아가고 Job 은 열려 있다`() {
         val (job, task) = newTask()
 
-        workerWith(provider { throw ExternalApiException(retryable = true, message = "429") })
+        workerWith(provider { throw ExternalApiException(FailureKind.THROTTLED, "429") })
             .process(task.id!!)
 
         assertEquals(TaskStatus.PENDING, taskRepository.findById(task.id!!).get().status)
@@ -187,7 +189,7 @@ class TaskWorkerTest @Autowired constructor(
     fun `다시 해도 소용없는 실패는 그 자리에서 닫힌다`() {
         val (job, task) = newTask()
 
-        workerWith(provider { throw ExternalApiException(retryable = false, message = "400 잘못된 요청") })
+        workerWith(provider { throw ExternalApiException(FailureKind.REJECTED, "400 잘못된 요청") })
             .process(task.id!!)
 
         val failed = taskRepository.findById(task.id!!).get()
@@ -213,7 +215,7 @@ class TaskWorkerTest @Autowired constructor(
         val worker = workerWith(
             provider {
                 attempts += 1
-                if (attempts == 1) throw ExternalApiException(retryable = true, message = "일시적 오류")
+                if (attempts == 1) throw ExternalApiException(FailureKind.PROVIDER_ERROR, "일시적 오류")
                 success()
             },
         )
@@ -261,12 +263,14 @@ class TaskWorkerTest @Autowired constructor(
     fun `실패한 호출도 지출로 남는다`() {
         val (_, task) = newTask()
 
-        workerWith(provider { throw ExternalApiException(retryable = false, message = "504 시간 초과") })
+        workerWith(provider { throw ExternalApiException(FailureKind.NO_RESPONSE, "[openai 응답 없음] Read timed out") })
             .process(task.id!!)
 
         val call = callRepository.findAllByTaskUuid(task.uuid).single()
         assertFalse(call.succeeded)
-        assertEquals("504 시간 초과", call.failureReason)
+        assertEquals("[openai 응답 없음] Read timed out", call.failureReason)
+        // 사유 문자열이 아니라 **이 값**으로 나중에 과금 여부를 판정한다.
+        assertEquals(RecordedFailureKind.NO_RESPONSE, call.failureKind)
         assertNull(call.usageRaw, "실패했는데 사용량이 있다")
     }
 
@@ -281,7 +285,7 @@ class TaskWorkerTest @Autowired constructor(
         val worker = workerWith(
             provider {
                 attempts += 1
-                if (attempts == 1) throw ExternalApiException(retryable = true, message = "일시적 오류")
+                if (attempts == 1) throw ExternalApiException(FailureKind.PROVIDER_ERROR, "일시적 오류")
                 success()
             },
         )
@@ -371,6 +375,28 @@ class TaskWorkerTest @Autowired constructor(
         // 로그에 실릴 커맨드가 원자료를 들고 있어야 한다. toString 이 그것을 내보낸다.
         assertEquals(raw, assertNotNull(seen).usageRaw)
         assertTrue(seen.toString().contains("total_tokens"), "마지막 사본에 토큰이 없다")
+    }
+
+
+    /**
+     * 종류가 사유 문자열이 아니라 **값으로** 흘러가는지 본다.
+     *
+     * 이게 끊기면 Phase 2 가 과금 여부를 판정할 근거를 잃고, 다시 메시지를 파싱하게 된다.
+     */
+    @Test
+    fun `실패 종류가 기록까지 흘러간다`() {
+        val cases = listOf(
+            FailureKind.THROTTLED to RecordedFailureKind.THROTTLED,
+            FailureKind.NO_RESPONSE to RecordedFailureKind.NO_RESPONSE,
+            FailureKind.UNKNOWN to RecordedFailureKind.UNKNOWN,
+        )
+
+        cases.forEach { (thrown, expected) ->
+            val (_, task) = newTask()
+            workerWith(provider { throw ExternalApiException(thrown, "사유") }).process(task.id!!)
+
+            assertEquals(expected, callRepository.findAllByTaskUuid(task.uuid).single().failureKind)
+        }
     }
 
     private companion object {

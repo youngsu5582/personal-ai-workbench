@@ -69,8 +69,9 @@ class OpenAIImageClient(
 /**
  * OpenAI 호출 실패.
  *
- * 상태 코드를 그대로 들고 있는 이유는 **재시도 판단이 호출자의 몫**이기 때문이다.
- * 429·5xx 는 다시 시도할 만하고 4xx 는 아닌데, 그 정책은 전송이 정할 일이 아니다.
+ * 상태 코드를 **해석하지 않고 그대로** 들고 있다. 429 와 5xx 를 가르는 일은
+ * `FailureKind` 로 옮기는 어댑터가 한 곳에서 한다 — 전송이 같은 판단을 따로 내리면
+ * 둘이 어긋날 수 있고, 어긋나도 알아차릴 방법이 없다.
  */
 class OpenAIException(
     val status: HttpStatusCode,
@@ -81,9 +82,4 @@ class OpenAIException(
      * `message` 를 이 값으로 덮으면 상태 코드가 로그와 상위 예외에서 사라진다.
      */
     val detail: String,
-) : RuntimeException("[$status] $detail") {
-
-    /** 다시 시도해볼 만한 실패인가. 판단 재료일 뿐, 재시도 여부는 호출자가 정한다. */
-    val retryable: Boolean
-        get() = status.value() == 429 || status.is5xxServerError
-}
+) : RuntimeException("[$status] $detail")
