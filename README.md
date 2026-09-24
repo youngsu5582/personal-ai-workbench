@@ -189,7 +189,24 @@ aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
 
 키 모양은 `users/{ownerUuid}/blobs/{ab}/{cd}/{sha256}.png` 다 — 자리를 내용이 정하므로 같은 바이트는 한 자리를 쓴다.
 
-로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다.
+### 5. 다운로드가 달라진다
+
+`GET /api/files/{uuid}` 는 주소도 인가도 그대로지만, **응답이 달라진다.**
+
+| 보관소 | 응답 | 바이트가 지나는 길 |
+|---|---|---|
+| `local` | `200` + 이미지 | 보관소 → **앱** → 클라이언트 |
+| `s3` | `302` + `Location` | 보관소 → 클라이언트 (**앱을 안 거친다**) |
+
+```bash
+curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:8080/api/files/<uuid>
+# HTTP/1.1 302
+# Location: http://localhost:3900/workbench/users/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
+```
+
+발급된 주소는 **그 자체가 통행증**이다. 그래서 소유권 확인은 발급 **전에** 끝나고(남의 파일이면 404), 수명이 짧다(`workbench.storage.presigned-url-ttl`, 기본 5분). 서명 없이 같은 객체를 부르면 보관소가 거부한다.
+
+로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다. **클라이언트는 아무것도 안 바꾼다.**
 
 ## 도메인 문서
 

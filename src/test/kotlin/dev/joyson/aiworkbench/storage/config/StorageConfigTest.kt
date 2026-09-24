@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.storage.config
 
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.storage.local.LocalFileStorage
 import dev.joyson.aiworkbench.storage.s3.S3FileStorage
 import org.assertj.core.api.Assertions.assertThat
@@ -79,6 +80,27 @@ class StorageConfigTest {
     fun `s3 를 고르면 bucket 이 없을 때 기동에서 잡힌다`() {
         runner.withPropertyValues("workbench.storage.provider=s3").run { context ->
             assertThat(context).hasFailed()
+        }
+    }
+
+    @Test
+    fun `로컬은 주소를 발급할 수 없어 발급자가 없다`() {
+        // 포트를 나눠 둔 이유가 이것이다 — 못 하는 구현이 있을 때 "발급자가 없다" 로 표현된다.
+        //
+        // `doesNotHaveBean` 으로 보지 않는다. `@Bean` 이 null 을 돌려주면 스프링은 NullBean 이라는
+        // 자리를 남겨서 "타입은 있는데 값이 없는" 상태가 된다. 소비자가 실제로 받는 것을 확인한다.
+        runner.run { context ->
+            assertThat(context.getBeanProvider(PresignedUrlIssuer::class.java).getIfAvailable()).isNull()
+        }
+    }
+
+    @Test
+    fun `s3 를 고르면 발급자가 함께 선다`() {
+        runner.withPropertyValues(
+            "workbench.storage.provider=s3",
+            "workbench.storage.s3.bucket=workbench",
+        ).run { context ->
+            assertThat(context).hasSingleBean(PresignedUrlIssuer::class.java)
         }
     }
 
