@@ -16,5 +16,25 @@ services:
       timeout: 5s
       retries: 10
 
+  # 평소엔 뜨지 않는다. `COMPOSE_PROFILES=s3 docker compose up -d` 일 때만 붙는다.
+  # 보관소 기본값이 local 이라 대부분의 개발에는 필요 없고, 늘 띄우면 포트와 메모리를 그냥 먹는다.
+  # 홈서버처럼 항상 켜두고 싶은 곳은 환경에 COMPOSE_PROFILES=s3 를 박아두면 된다.
+  #
+  # 최초 1회는 손으로 layout 을 잡아줘야 한다 — README 의 "S3 호환 보관소로 돌려보기" 참고.
+  # 이미지에 셸이 없어서 init 컨테이너로 명령을 엮을 수 없다. 대신 평생 한 번이다.
+  garage:
+    image: dxflrs/garage:v2.4.1
+    container_name: personal-ai-workbench-garage
+    profiles: ["s3"]
+    ports:
+      # S3 API. Garage 에는 웹 콘솔이 없다 — 객체를 눈으로 보려면 `mc` 나 AWS CLI 를 쓴다.
+      - "3900:3900"
+    volumes:
+      - ./docker/garage.toml:/etc/garage.toml:ro
+      - personal-ai-workbench-garage-meta:/var/lib/garage/meta
+      - personal-ai-workbench-garage-data:/var/lib/garage/data
+
 volumes:
   personal-ai-workbench-postgres:
+  personal-ai-workbench-garage-meta:
+  personal-ai-workbench-garage-data:

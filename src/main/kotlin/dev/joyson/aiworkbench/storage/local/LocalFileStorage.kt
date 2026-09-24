@@ -14,7 +14,8 @@ import kotlin.io.path.writeBytes
  * 로컬 디스크에 파일로 둔다.
  *
  * 개발과 1대 운영에서 쓴다. 여러 대로 띄우는 순간 한 대가 쓴 파일을 다른 대가 못 읽으므로
- * 그때가 원격 보관소로 바꿀 시점이다 — 바꿀 때 건드릴 곳은 이 클래스 하나다.
+ * 그때가 원격 보관소로 바꿀 시점이고, 바꾸는 일은 `workbench.storage.provider` 값 하나다 —
+ * 코드는 건드리지 않는다.
  */
 class LocalFileStorage(
     private val root: Path,
@@ -54,6 +55,13 @@ class LocalFileStorage(
         return resolved
     }
 
+    /**
+     * root 를 미리 만든다. [put] 이 어차피 부모 디렉토리를 만들어서 **동작상으로는 중복이다.**
+     *
+     * 그럼에도 두는 이유는 둘이다 — 띄우자마자 결과물이 어디로 갈지 눈에 보이고,
+     * "이 빈이 만들어졌다" 를 밖에서 관찰할 수 있는 유일한 지점이다.
+     * `StorageConfigTest` 가 이것으로 "고르지 않은 구현은 아예 만들지 않는다" 를 확인한다.
+     */
     init {
         Files.createDirectories(root)
     }

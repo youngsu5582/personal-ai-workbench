@@ -23,6 +23,8 @@ repositories {
 dependencyManagement {
 	imports {
 		mavenBom("org.springframework.modulith:spring-modulith-bom:2.1.1")
+		// Boot BOM 이 AWS SDK 를 관리하지 않는다. 안 걸면 모듈마다 버전이 갈린다.
+		mavenBom("software.amazon.awssdk:bom:2.55.1")
 	}
 }
 
@@ -41,6 +43,9 @@ dependencies {
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	runtimeOnly("org.postgresql:postgresql")
+	implementation("software.amazon.awssdk:s3")
+	// s3 모듈은 HTTP 구현체를 전이 의존으로 갖지 않는다. 없으면 컴파일은 되고 클라이언트를 만들 때 터진다.
+	implementation("software.amazon.awssdk:url-connection-client")
 	// 코드 생성이 마이그레이션 SQL 을 직접 읽는다. 빌드에 DB 가 필요 없다.
 	jooqGenerator("org.jooq:jooq-meta-extensions")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
