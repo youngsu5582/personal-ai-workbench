@@ -20,6 +20,18 @@ import java.util.UUID
  *
  * Task 와 1:N 이다. Provider 가 호출 한 번으로 여러 장을 주면 Task 는 1개고 GeneratedFile 이 여러 개다.
  */
+/**
+ * 받는 쪽이 저장할 이름.
+ *
+ * 보관소 키와 **무관하게** 짓는다 — 키는 내용 주소(해시)라 거기엔 뜻이 없다.
+ * uuid 를 쓰는 것은 받는 사람이 요청한 주소와 파일명이 같아지기 때문이다.
+ *
+ * 두 경로가 이 이름을 쓴다(직접 스트리밍, 서명 주소의 Content-Disposition).
+ * 규칙이 갈리면 같은 파일이 경로에 따라 다른 이름으로 저장된다.
+ */
+fun downloadFileNameOf(fileUuid: UUID, mimeType: String): String =
+    "$fileUuid.${MimeTypes.extensionOf(mimeType)}"
+
 @Entity
 @Table(
     name = "generated_files",

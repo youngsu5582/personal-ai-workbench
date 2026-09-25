@@ -181,6 +181,26 @@ STORAGE_S3_PATH_STYLE_ACCESS=true
 
 ### 4. 확인
 
+```bash
+BASE_URL=http://localhost:8080 ./scripts/file.sh --job <job-uuid>
+```
+
+보관소에 따라 응답이 갈리는 것을 그대로 보여준다.
+
+```
+  파일 4e1d2d4e-…
+     앱 응답    302 → http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     내려받기   HTTP 200  2,277,138 bytes  image/png
+     무결성     sha256 일치 (5c7d9395689f04a7…)
+     토큰 없이  HTTP 401
+     previewUrl http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     헤더 없이  HTTP 200  2,277,138 bytes  image/png
+```
+
+마지막 두 줄이 `<img src>` 가 되는지를 답한다 — **헤더 없이 200** 이면 그려진다. `local` 로 띄우면 `앱 응답 200`, `previewUrl 없음` 이 나온다.
+
+무결성 줄은 키가 내용 주소라서 공짜로 얻는 것이다. 파일명이 곧 sha256 이므로 받은 바이트와 대조하면 끝난다.
+
 Garage 에는 웹 콘솔이 없다. 객체는 `mc` 나 AWS CLI 로 본다.
 
 ```bash
@@ -203,6 +223,13 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 # HTTP/1.1 302
 # Location: http://localhost:3900/workbench/users/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
 ```
+
+목록(`GET /api/jobs/{uuid}`)의 파일마다 `previewUrl` 도 함께 온다. 이건 **서명된 절대 주소**라 `<img src>` 에 그대로 넣으면 그려진다 — `url` 은 `Authorization` 헤더가 필요해서 `<img>` 로는 못 쓴다.
+
+| 필드 | 수명 | 쓰임 |
+|---|---|---|
+| `url` | 안 죽는다 | 저장·북마크·스크립트. 302 로 서명 주소에 넘긴다 |
+| `previewUrl` | 짧다(기본 15분) | `<img src>` 로 바로 그린다. 로컬 디스크면 `null` |
 
 발급된 주소는 **그 자체가 통행증**이다. 그래서 소유권 확인은 발급 **전에** 끝나고(남의 파일이면 404), 수명이 짧다(`workbench.storage.presigned-url-ttl`, 기본 5분). 서명 없이 같은 객체를 부르면 보관소가 거부한다.
 

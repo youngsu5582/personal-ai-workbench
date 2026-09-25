@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.application
 
-import dev.joyson.aiworkbench.generation.domain.MimeTypes
+import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
+import dev.joyson.aiworkbench.generation.infrastructure.FileLocation
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileFinder
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
@@ -45,26 +46,24 @@ class GeneratedFileReader(
      * `@Transactional` 을 걸지 않는다. 조회가 단건이라 Spring Data 가 스스로 열고 닫는데,
      * 여기서 열면 **보관소 접근까지 그 안에 들어온다.** 네트워크 왕복하는 동안 DB 커넥션을 잡을 이유가 없다.
      *
-     * 발급자가 있으면 **바이트를 읽지 않는다.** 그게 이 경로의 전부다 —
-     * 수 MB 가 앱 힙에 올라왔다 내려가는 일이 사라진다.
+     * 두 길을 순서대로 시도한다 — **보관소가 직접 내줄 수 있으면 그쪽이 낫다.**
+     * 발급자가 있으면 바이트를 읽지 않아, 수 MB 가 앱 힙에 올라왔다 내려가는 일이 사라진다.
      */
     fun download(fileUuid: UUID, ownerUuid: UUID): FileDownload? {
+        // 인가는 여기 한 곳뿐이다. 아래 두 길은 이미 확인된 위치만 받는다.
         val location = generatedFileFinder.findOwned(fileUuid, ownerUuid) ?: return null
+        val fileName = downloadFileNameOf(fileUuid, location.mimeType)
 
-        // 브라우저가 저장할 때 쓰는 이름. 보관소 키와 무관하게 짓는다 —
-        // 키는 내용 기반(해시)이라 거기엔 확장자도 뜻도 없다.
-        // uuid 를 쓰는 것은 받는 사람이 요청한 주소와 파일명이 같아지기 때문이다.
-        val fileName = "$fileUuid.${MimeTypes.extensionOf(location.mimeType)}"
-
-        presignedUrlIssuer?.let {
-            return FileDownload.Redirect(it.issue(location.storageKey, fileName))
-        }
-
-        val content = fileStorage.read(location.storageKey) ?: return null
-        return FileDownload.Streamed(
-            content = content,
-            contentType = location.mimeType,
-            fileName = fileName,
-        )
+        return redirectTo(location, fileName) ?: streamFrom(location, fileName)
     }
+
+    /** 보관소가 주소에 서명할 수 있을 때. 바이트를 읽지 않는다. */
+    private fun redirectTo(location: FileLocation, fileName: String): FileDownload.Redirect? =
+        presignedUrlIssuer?.let { FileDownload.Redirect(it.issue(location.storageKey, fileName)) }
+
+    /** 서명할 수 없을 때. 행은 있는데 보관소에 없으면 없는 것으로 답한다. */
+    private fun streamFrom(location: FileLocation, fileName: String): FileDownload.Streamed? =
+        fileStorage.read(location.storageKey)?.let {
+            FileDownload.Streamed(content = it, contentType = location.mimeType, fileName = fileName)
+        }
 }
