@@ -10,4 +10,12 @@ data class ExternalApiGenerateResponse(
      * 과금도 한 번이다. 그래서 [result] 안이 아니라 밖에 있다.
      */
     val usage: ProviderUsage? = null,
+
+    /**
+     * 이 호출에 **실제로 쓰인** 파라미터. 답해주지 않는 Provider 는 null이다.
+     *
+     * 우리가 보낸 것과 다를 수 있고, 다르면 **과금은 이쪽을 따른다** — 돈은 실제로 만든 것에 붙는다.
+     * 결과물이 아니라 호출의 속성이라 [result] 밖에 있다.
+     */
+    val applied: AppliedParameters? = null,
 )

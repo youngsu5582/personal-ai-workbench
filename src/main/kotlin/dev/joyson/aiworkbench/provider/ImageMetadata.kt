@@ -11,13 +11,13 @@ package dev.joyson.aiworkbench.provider
  */
 data class ImageMetadata(
     /**
-     * 실제로 요청한 픽셀 크기.
+     * 만들어진 픽셀 크기.
      *
      * 사용자가 `ImageSize.ByPixels` 로 정확한 값을 말했는데 Provider 격자에 맞춰 깎였다면
      * 그 사실이 여기로 드러난다. 조용히 다른 크기를 주는 것이 제일 나쁘다.
      *
-     * 주의: 이미지 바이트를 파싱해 얻은 값이 **아니라** 어댑터가 보낸 값이다.
-     * Provider 가 말없이 다른 크기로 만들면 이 값은 틀린다.
+     * 이미지 바이트를 파싱해 얻은 값이 **아니다.** Provider 가 실제로 쓴 값을 답하면 그것이고,
+     * 답하지 않으면 우리가 보낸 값이다 — 뒤쪽은 저쪽이 말없이 다르게 만들면 틀릴 수 있다.
      */
     val width: Int,
     val height: Int,

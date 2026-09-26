@@ -44,14 +44,26 @@ data class OpenAIImageResponse(
      * 그래서 이 필드에는 **OpenAI 의 필드명이 그대로** 들어 있다. 우리 포맷이 아니다.
      */
     val usage: Map<String, Any?>? = null,
+
+    /**
+     * 이 호출에 **실제로 쓰인** 값들. 우리가 보낸 것과 다를 수 있다.
+     *
+     * `background` 는 보내지 않아도 돌아온다 — 저쪽이 기본값을 적용한 결과다.
+     * 과금은 요청이 아니라 이쪽을 따라야 하므로 선언해서 받는다.
+     */
+    val size: String? = null,
+    val quality: String? = null,
+    val background: String? = null,
+    @param:JsonProperty("output_format")
+    @get:JsonProperty("output_format")
+    val outputFormat: String? = null,
 ) {
     /**
      * 위에 선언하지 않은 최상위 필드가 여기 담긴다. **그 레벨에서 매핑되지 않은 것만** 온다 —
-     * `created`·`data`·`usage` 는 선언돼 있으니 절대 여기 오지 않고,
-     * 이미지 바이트는 `data` 안이라 구조적으로 섞일 수 없다.
+     * 위에 선언된 것은 절대 여기 오지 않고, 이미지 바이트는 `data` 안이라 구조적으로 섞일 수 없다.
      *
-     * 버리더라도 **버렸다는 사실은 알아야** 한다. OpenAI 가 실제로 만든 크기·품질을 응답에 돌려준다면
-     * 그건 우리가 보낸 값보다 정확한 과금 근거인데, 선언이 없으면 온 줄도 모르고 사라진다.
+     * 버리더라도 **버렸다는 사실은 알아야** 한다. `size`·`quality`·`background`·`output_format`
+     * 이 이렇게 드러났다 — 온 줄도 모르는 것과, 이름이 로그에 떠서 승격하는 것의 차이다.
      */
     @get:JsonIgnore
     val unknown: UnknownFields = UnknownFields()
@@ -71,7 +83,30 @@ data class OpenAIGeneratedImage(
     @param:JsonProperty("revised_prompt")
     @get:JsonProperty("revised_prompt")
     val revisedPrompt: String? = null,
-)
+
+    /** OpenAI 가 이 결과물에 붙인 식별자. 청구서·지원 문의와 대조할 때 쓴다. */
+    @param:JsonProperty("generation_id")
+    @get:JsonProperty("generation_id")
+    val generationId: String? = null,
+) {
+    /**
+     * 결과물 하나 안에서 선언하지 않은 필드.
+     *
+     * 최상위에만 달면 **여기는 안 덮인다** — 표가 타입마다 따로라 원소 안의 미지 필드는
+     * 이쪽 갈고리가 받아야 한다. `b64_json` 은 선언돼 있으니 여기 오지 않는다.
+     *
+     * 다만 여기는 **이미지가 사는 동네**라, 저쪽이 썸네일이나 마스크를 새 필드로 넣으면
+     * 그 바이트가 이 Map 에 들어앉는다. 로그는 [UnknownFields.toString] 이 잘라서 지키지만
+     * 메모리는 지키지 못한다. `n > 1` 을 켜는 날 장수만큼 곱해지므로 그때 다시 볼 자리다.
+     */
+    @get:JsonIgnore
+    val unknown: UnknownFields = UnknownFields()
+
+    @JsonAnySetter
+    fun capture(name: String, value: Any?) {
+        unknown.put(name, value)
+    }
+}
 
 /** OpenAI 의 에러 응답 봉투. `{"error": {...}}` */
 data class OpenAIErrorEnvelope(val error: OpenAIError? = null)

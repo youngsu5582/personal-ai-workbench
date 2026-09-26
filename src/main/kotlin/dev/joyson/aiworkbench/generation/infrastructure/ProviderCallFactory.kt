@@ -2,12 +2,14 @@ package dev.joyson.aiworkbench.generation.infrastructure
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.CostUnit
 import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
+import dev.joyson.aiworkbench.usage.ProviderRequest
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import dev.joyson.aiworkbench.usage.ReportedUnit
 import java.time.Instant
@@ -31,12 +33,17 @@ object ProviderCallFactory {
         latencyMs: Int,
         calledAt: Instant,
         usage: ProviderUsage?,
-    ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).copy(
-        succeeded = true,
-        usageRaw = usage?.raw?.takeIf { it.isNotEmpty() },
-        reportedAmount = usage?.reportedCost?.amount,
-        reportedUnit = usage?.reportedCost?.unit?.let(::unitOf),
-    )
+        applied: AppliedParameters?,
+    ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).let { sent ->
+        sent.copy(
+            succeeded = true,
+            // 저쪽이 실제로 쓴 값을 안다면 그쪽이 맞다 — 돈은 요청이 아니라 만들어진 것에 붙는다.
+            request = applied?.let { overlay(sent.request, it) } ?: sent.request,
+            usageRaw = usage?.raw?.takeIf { it.isNotEmpty() },
+            reportedAmount = usage?.reportedCost?.amount,
+            reportedUnit = usage?.reportedCost?.unit?.let(::unitOf),
+        )
+    }
 
     fun failed(
         job: GenerationJob,
@@ -94,6 +101,28 @@ object ProviderCallFactory {
         ProviderFailureKind.PROVIDER_ERROR -> FailureKind.PROVIDER_ERROR
         ProviderFailureKind.NO_RESPONSE -> FailureKind.NO_RESPONSE
         ProviderFailureKind.UNKNOWN -> FailureKind.UNKNOWN
+    }
+
+    /**
+     * 저쪽이 답한 실제 값을 보낸 값 위에 덮는다.
+     *
+     * **통째로 갈아끼우지 않는다.** [AppliedParameters] 의 자리들은 저쪽이 답하지 않으면 null 인데,
+     * 그대로 옮기면 우리가 보내서 **알고 있던 값이 모른다는 표시로 바뀐다.** 원장에서 그 둘은
+     * 같은 모양이 아니어야 한다 — 하나는 사실이고 하나는 공백이다.
+     *
+     * 크기는 늘 덮는다. 저쪽이 답하지 않으면 애초에 보낸 값이 거기 들어 있다.
+     */
+    private fun overlay(sent: ProviderRequest?, applied: AppliedParameters): ProviderRequest = when (sent) {
+        is ImageRequest -> ImageRequest(
+            width = applied.width,
+            height = applied.height,
+            quality = applied.quality ?: sent.quality,
+            background = applied.background ?: sent.background,
+            outputFormat = applied.outputFormat ?: sent.outputFormat,
+        )
+
+        // base 가 늘 ImageRequest 를 넣으므로 여기는 닿지 않는다. 종류가 늘면 컴파일러가 알려준다.
+        null -> ImageRequest(width = applied.width, height = applied.height, quality = applied.quality)
     }
 
     /**
