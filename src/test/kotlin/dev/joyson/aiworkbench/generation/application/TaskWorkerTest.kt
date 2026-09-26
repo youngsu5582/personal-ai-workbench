@@ -15,6 +15,7 @@ import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
+import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -68,17 +69,23 @@ class TaskWorkerTest @Autowired constructor(
         override fun generate(model: String, request: ExternalApiGenerateRequest) = behavior()
     }
 
-    private fun success(usage: ProviderUsage? = null, revisedPrompt: String? = null) =
-        ExternalApiGenerateResponse(
-            usage = usage,
-            result = listOf(
-                ExternalApiGenerateResult(
-                    image = image,
-                    metadata = ImageMetadata(1024, 1024, "image/png", image.size),
-                    revisedPrompt = revisedPrompt,
-                ),
+    private fun success(
+        usage: ProviderUsage? = null,
+        revisedPrompt: String? = null,
+        applied: AppliedParameters? = null,
+        providerId: String? = null,
+    ) = ExternalApiGenerateResponse(
+        usage = usage,
+        applied = applied,
+        result = listOf(
+            ExternalApiGenerateResult(
+                image = image,
+                metadata = ImageMetadata(1024, 1024, "image/png", image.size),
+                revisedPrompt = revisedPrompt,
+                providerId = providerId,
             ),
-        )
+        ),
+    )
 
     private fun workerWith(
         provider: ExternalApiProvider,
@@ -352,7 +359,6 @@ class TaskWorkerTest @Autowired constructor(
         assertTrue(call.latencyMs < THRESHOLD_MS, "보관 시간이 Provider 지연에 섞였다: ${call.latencyMs}ms")
     }
 
-
     /**
      * 기록이 실패하면 그 호출의 토큰 수는 **영영 사라진다** — 응답은 한 번뿐이다.
      * 그래서 실패 로그가 마지막 사본이 되고, 거기에 원자료가 없으면 아무것도 복원할 수 없다.
@@ -378,7 +384,6 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(raw, assertNotNull(seen).usageRaw)
         assertTrue(seen.toString().contains("total_tokens"), "마지막 사본에 토큰이 없다")
     }
-
 
     /**
      * 종류가 사유 문자열이 아니라 **값으로** 흘러가는지 본다.
@@ -427,6 +432,73 @@ class TaskWorkerTest @Autowired constructor(
 
         // 아무것도 안 알려주면 칸 자체가 비어 있다 — 빈 객체를 남기지 않는다.
         assertNull(generatedFileRepository.findAllByTaskId(task.id!!).single().providerInfo)
+    }
+
+    /**
+     * 이 기능의 주장은 **과금이 실제로 쓰인 값을 따른다** 는 것이다.
+     * 어댑터가 실제 값을 알아내도 원장까지 안 닿으면 그 주장이 성립하지 않는다.
+     */
+    @Test
+    fun `저쪽이 실제로 쓴 값이 지출 원장까지 닿는다`() {
+        // 16:9 @2k 를 요청하지만 저쪽은 1024x1024 로 만들었다고 답한다.
+        val (_, task) = newTask(size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K))
+        val applied = AppliedParameters(
+            width = 1024,
+            height = 1024,
+            quality = "low",
+            background = "opaque",
+            outputFormat = "png",
+        )
+
+        workerWith(provider { success(applied = applied) }).process(task.id!!)
+
+        val request = assertIs<ImageRequest>(callRepository.findAllByTaskUuid(task.uuid).single().request)
+        assertEquals(1024, request.width, "요청한 2048 이 아니라 실제 만들어진 값이어야 한다")
+        assertEquals("low", request.quality)
+        // 우리가 보내지 않은 값도 남는다 — 단가 축인지 아직 모른다.
+        assertEquals("opaque", request.background)
+    }
+
+    /** 안 답해주는 Provider 도 있다. 그때는 보낸 값이 우리가 가진 전부다. */
+    @Test
+    fun `저쪽이 말하지 않으면 보낸 값이 남는다`() {
+        val (_, task) = newTask(size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K))
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        val request = assertIs<ImageRequest>(callRepository.findAllByTaskUuid(task.uuid).single().request)
+        assertEquals(2048, request.width)
+        assertNull(request.background)
+    }
+
+    /**
+     * 저쪽이 일부만 답하는 경우다.
+     *
+     * 답한 자리는 저쪽이 맞지만, **답하지 않은 자리까지 비우면 안 된다** — 우리가 보내서
+     * 알고 있던 값이 모른다는 표시로 바뀐다. 원장에서 사실과 공백은 같은 모양이면 안 된다.
+     */
+    @Test
+    fun `저쪽이 답하지 않은 자리에는 보낸 값이 남는다`() {
+        val (_, task) = newTask(size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K))
+        // 크기만 답하고 품질은 말하지 않는 Provider 다.
+        val applied = AppliedParameters(width = 1024, height = 1024)
+
+        workerWith(provider { success(applied = applied) }).process(task.id!!)
+
+        val request = assertIs<ImageRequest>(callRepository.findAllByTaskUuid(task.uuid).single().request)
+        assertEquals(1024, request.width, "답한 자리는 저쪽이 맞다")
+        assertNotNull(request.quality, "답하지 않았다고 우리가 보낸 품질까지 지우면 안 된다")
+    }
+
+    /** 저쪽 청구서와 대조할 유일한 끈이다. 안 적으면 다시 알 길이 없다. */
+    @Test
+    fun `Provider 식별자가 결과물에 남는다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { success(providerId = "gen-abc") }).process(task.id!!)
+
+        val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
+        assertEquals("gen-abc", assertNotNull(file.providerInfo).providerId)
     }
 
     private companion object {

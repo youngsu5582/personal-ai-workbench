@@ -87,7 +87,7 @@ class TaskWorker(
 
         // 보관보다 **먼저** 적는다. 돈은 이미 나갔고 그 사실은 뒤에 무엇이 실패하든 남아야 한다.
         // 파일을 상태보다 먼저 쓰는 것과 같은 순서 — 되돌릴 수 없는 일이 먼저 기록된다.
-        record(ProviderCallFactory.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+        record(ProviderCallFactory.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
 
         val stored = try {
             store(job, response)
@@ -176,7 +176,10 @@ class TaskWorker(
             ),
             // 포트가 이미 갈라 둔 것을 저장하면서 합치지 않는다. 바이트에서 나오는 것과
             // 저쪽이 말해줘야만 아는 것은 같은 칸에 있으면 안 된다.
-            providerInfo = ProviderInfo(revisedPrompt = result.revisedPrompt).takeIf { !it.isEmpty },
+            providerInfo = ProviderInfo(
+                revisedPrompt = result.revisedPrompt,
+                providerId = result.providerId,
+            ).takeIf { !it.isEmpty },
         )
     }
 }

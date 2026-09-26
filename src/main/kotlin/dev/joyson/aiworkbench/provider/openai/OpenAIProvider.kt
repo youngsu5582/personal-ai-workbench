@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.provider.openai
 
+import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -125,21 +126,25 @@ class OpenAIProvider(
         request: ExternalApiGenerateRequest,
         response: OpenAIImageResponse,
     ): ExternalApiGenerateResponse {
+        val applied = appliedOf(request, response)
         val decoder = Base64.getDecoder()
         return ExternalApiGenerateResponse(
             // OpenAI 는 토큰만 말하고 비용은 말하지 않는다. 달러로 바꾸는 것은 단가를 아는 쪽의 일이다.
             usage = response.usage?.let { ProviderUsage(raw = it) },
+            applied = applied,
             result = response.data.map {
                 val image = decoder.decode(it.b64Json)
                 ExternalApiGenerateResult(
                     image = image,
                     metadata = ImageMetadata(
-                        width = request.width,
-                        height = request.height,
-                        mimeType = "image/$OUTPUT_FORMAT",
+                        // 우리가 보낸 값이 아니라 저쪽이 실제로 만든 값이다.
+                        width = applied.width,
+                        height = applied.height,
+                        mimeType = "image/${applied.outputFormat ?: OUTPUT_FORMAT}",
                         fileSize = image.size,
                     ),
                     revisedPrompt = it.revisedPrompt,
+                    providerId = it.generationId,
                 )
             },
         )
@@ -158,6 +163,47 @@ class OpenAIProvider(
         status.is4xxClientError -> FailureKind.REJECTED
         // 2xx·3xx 로 여기 오는 건 설명되지 않는다. 모르는 채로 재시도하지 않는다.
         else -> FailureKind.UNKNOWN
+    }
+
+    /**
+     * `1024x1024` 를 픽셀 둘로 푼다. 모양이 다르면 null — 못 읽는 것은 예외가 아니라 모르는 것이다.
+     *
+     * 저쪽이 언제든 표기를 바꿀 수 있어서, 못 읽었다고 호출을 실패시키지 않는다.
+     * 그때는 우리가 보낸 값으로 물러선다.
+     */
+    private fun pixelsOf(size: String?): Pair<Int, Int>? {
+        val parts = size?.split("x")?.takeIf { it.size == 2 } ?: return null
+        val width = parts[0].trim().toIntOrNull() ?: return null
+        val height = parts[1].trim().toIntOrNull() ?: return null
+        return if (width > 0 && height > 0) width to height else null
+    }
+
+    /**
+     * 응답이 말한 실제 값을 모은다. 안 말한 것은 보낸 값으로 채운다.
+     *
+     * 크기가 다르면 경고를 남긴다. **조용히 다른 크기를 주는 것이 제일 나쁘다** —
+     * 과금은 저쪽이 만든 것에 붙는데 우리 기록은 요청한 것을 말하고 있으면 둘이 어긋난다.
+     */
+    private fun appliedOf(
+        request: ExternalApiGenerateRequest,
+        response: OpenAIImageResponse,
+    ): AppliedParameters {
+        val pixels = pixelsOf(response.size)
+        if (pixels != null && (pixels.first != request.width || pixels.second != request.height)) {
+            log.warn(
+                "요청한 크기와 만들어진 크기가 다르다. 요청={}x{} 실제={}x{}",
+                request.width, request.height, pixels.first, pixels.second,
+            )
+        }
+
+        return AppliedParameters(
+            width = pixels?.first ?: request.width,
+            height = pixels?.second ?: request.height,
+            quality = response.quality ?: qualityOf(request.quality),
+            background = response.background,
+            // 우리가 보내는 값이라, 저쪽이 안 답해도 무엇으로 만들어졌는지는 안다.
+            outputFormat = response.outputFormat ?: OUTPUT_FORMAT,
+        )
     }
 
     /**
