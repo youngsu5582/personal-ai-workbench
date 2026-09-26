@@ -44,6 +44,7 @@ class DefaultProviderCallRecorder(
                 request = command.request,
                 succeeded = command.succeeded,
                 failureReason = command.failureReason?.take(COLUMN_LENGTH),
+                failureKind = command.failureKind,
                 // 음수 지연은 나올 수 없지만, 시계가 뒤로 가는 환경에서도 제약에 걸려 죽지 않게 한다.
                 latencyMs = command.latencyMs.coerceAtLeast(0),
                 usageRaw = command.usageRaw,

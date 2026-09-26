@@ -8,7 +8,6 @@ import org.springframework.test.web.client.match.MockRestRequestMatchers.header
 import org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
-import org.springframework.test.web.client.response.MockRestResponseCreators.withServerError
 import org.springframework.test.web.client.response.MockRestResponseCreators.withStatus
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
 import org.springframework.http.HttpStatus
@@ -165,18 +164,7 @@ class OpenAIImageClientTest {
         val ex = assertFailsWith<OpenAIException> { client.generate(OpenAIImageEndpoint.GENERATIONS.path, request) }
 
         assertEquals("Invalid size", ex.detail)
-        assertEquals(false, ex.retryable, "4xx 는 다시 시도할 만하지 않다")
-    }
-
-    /** 재시도 판단은 호출자의 몫이지만, 판단 재료는 전송이 준다. */
-    @Test
-    fun `5xx 와 429 는 재시도 가능으로 표시한다`() {
-        server.expect(requestTo("https://api.openai.com${OpenAIImageEndpoint.GENERATIONS.path}"))
-            .andRespond(withServerError())
-
-        val ex = assertFailsWith<OpenAIException> { client.generate(OpenAIImageEndpoint.GENERATIONS.path, request) }
-
-        assertTrue(ex.retryable)
+        assertEquals(HttpStatus.BAD_REQUEST, ex.status, "상태 코드가 해석되지 않고 그대로 올라와야 한다")
     }
 
     @Test

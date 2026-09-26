@@ -1,10 +1,13 @@
 package dev.joyson.aiworkbench.usage.domain
 
+import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ProviderRequest
 
 import jakarta.persistence.Column
 import jakarta.persistence.Embedded
+import jakarta.persistence.EnumType
 import jakarta.persistence.Entity
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -81,6 +84,11 @@ class ProviderCall(
 
     @Column(name = "failure_reason", updatable = false)
     val failureReason: String? = null,
+
+    /** 사유 문자열과 따로 둔다. 나중에 **과금 여부를 판정**할 때 기계가 읽는 값이다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_kind", length = 32, updatable = false)
+    val failureKind: FailureKind? = null,
 
     @Column(name = "latency_ms", nullable = false, updatable = false)
     val latencyMs: Int,

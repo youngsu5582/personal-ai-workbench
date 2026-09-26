@@ -74,7 +74,12 @@ class TaskWorker(
             val reason = e.message ?: "Provider 호출이 실패했다"
             // 실패한 호출도 적는다. 타임아웃은 우리만 못 받았을 뿐 저쪽에서는 만들어졌고 과금됐을 수 있다.
             // 여기서 안 적으면 가장 설명이 필요한 지출이 기록에서 사라진다.
-            record(ProviderCallFactory.failed(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, reason))
+            record(
+                ProviderCallFactory.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, reason, e.kind,
+                ),
+            )
             stateWriter.fail(taskId, reason, e.retryable)
             return
         }

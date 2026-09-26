@@ -5,10 +5,12 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatusCode
 import org.springframework.web.client.ResourceAccessException
 import java.util.Base64
 
@@ -40,7 +42,7 @@ class OpenAIProvider(
     ): ExternalApiGenerateResponse = try {
         // supports 를 건너뛰고 부를 수 있으므로 여기서도 확인한다. 다시 보내도 달라지지 않으니 재시도 대상이 아니다.
         val target = OpenAIImageModel.find(model)
-            ?: throw ExternalApiException(retryable = false, message = "다루지 않는 모델이다: $model")
+            ?: throw ExternalApiException(FailureKind.REJECTED, "다루지 않는 모델이다: $model")
 
         val response = client.generate(
             path = OpenAIImageEndpoint.GENERATIONS.path,
@@ -64,7 +66,8 @@ class OpenAIProvider(
 
         if (response.data.isEmpty()) {
             // 200 인데 이미지가 없는 건 설명되지 않는 상태다. 일시적일 수 있으니 재시도 대상으로 둔다.
-            throw ExternalApiException(retryable = true, message = "응답에 이미지가 없다")
+            // 저쪽이 설명되지 않는 응답을 준 것이라 다시 받으면 멀쩡할 수 있다.
+            throw ExternalApiException(FailureKind.PROVIDER_ERROR, "응답에 이미지가 없다")
         }
 
         assemble(request, response)
@@ -77,7 +80,7 @@ class OpenAIProvider(
         // 상태 코드를 메시지에 남긴다 — 어느 Provider 의 몇 번 실패였는지가 로그에서 사라지면
         // 재시도 판단은 되어도 원인 추적이 안 된다.
         throw ExternalApiException(
-            retryable = e.retryable,
+            kind = kindOf(e.status),
             message = "[$PROVIDER_NAME ${e.status}] ${e.detail}",
             cause = e,
         )
@@ -88,7 +91,7 @@ class OpenAIProvider(
         // 재시도가 두 번 내는 것이 될 수 있다. 그래도 포기하면 낸 돈만큼을 못 받고,
         // 시도 상한이 막아주며, 이제는 시도마다 기록이 남아 그 낭비가 눈에 보인다.
         throw ExternalApiException(
-            retryable = true,
+            kind = FailureKind.NO_RESPONSE,
             message = "[$PROVIDER_NAME 응답 없음] ${e.message}",
             cause = e,
         )
@@ -104,7 +107,7 @@ class OpenAIProvider(
         // 스택트레이스는 여기서만 남길 수 있다. 밖으로 나가면 사유 문자열 255자로 잘린다.
         log.error("설명되지 않는 오류다. model={}", model, e)
         throw ExternalApiException(
-            retryable = false,
+            kind = FailureKind.UNKNOWN,
             message = "[$PROVIDER_NAME 알 수 없는 오류] ${e.message}",
             cause = e,
         )
@@ -133,6 +136,21 @@ class OpenAIProvider(
                 )
             },
         )
+    }
+
+    /**
+     * 상태 코드를 의미로 옮긴다.
+     *
+     * 과금 판정이 여기서 갈린다. 429 와 5xx 는 둘 다 "다시 해볼 만하다" 지만
+     * 전자는 아무것도 만들지 않았고 후자는 저쪽에서 뭔가 하다 실패한 것이라, 한 종류로 묶으면
+     * 나중에 "돈이 나갔나" 를 이 값으로 답할 수 없다.
+     */
+    private fun kindOf(status: HttpStatusCode): FailureKind = when {
+        status.value() == 429 -> FailureKind.THROTTLED
+        status.is5xxServerError -> FailureKind.PROVIDER_ERROR
+        status.is4xxClientError -> FailureKind.REJECTED
+        // 2xx·3xx 로 여기 오는 건 설명되지 않는다. 모르는 채로 재시도하지 않는다.
+        else -> FailureKind.UNKNOWN
     }
 
     /**

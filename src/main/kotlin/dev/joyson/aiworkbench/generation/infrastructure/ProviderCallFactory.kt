@@ -3,8 +3,10 @@ package dev.joyson.aiworkbench.generation.infrastructure
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.provider.CostUnit
+import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import dev.joyson.aiworkbench.usage.ReportedUnit
@@ -44,9 +46,11 @@ object ProviderCallFactory {
         latencyMs: Int,
         calledAt: Instant,
         failureReason: String,
+        failureKind: ProviderFailureKind,
     ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).copy(
         succeeded = false,
         failureReason = failureReason,
+        failureKind = kindOf(failureKind),
     )
 
     private fun base(
@@ -73,6 +77,24 @@ object ProviderCallFactory {
         latencyMs = latencyMs,
         calledAt = calledAt,
     )
+
+    /**
+     * 실패 종류를 우리 이름으로 옮긴다.
+     *
+     * 두 모듈이 같은 이름의 enum 을 갖고 있어 import 별칭이 필요하다. 이름이 같은 것은
+     * 뜻이 같기 때문이고, 그래도 타입을 나눠 둔 것은 **저장되는 모양은 저장하는 모듈이 소유**하기
+     * 때문이다. 이 파일이 둘을 잇는 유일한 자리다.
+     *
+     * `valueOf(name)` 로 줄이지 않는 이유는 [unitOf] 와 같다 — 한쪽에 값이 늘면
+     * 런타임에 터지는 대신 컴파일러가 알려주게 한다.
+     */
+    private fun kindOf(kind: ProviderFailureKind): FailureKind = when (kind) {
+        ProviderFailureKind.REJECTED -> FailureKind.REJECTED
+        ProviderFailureKind.THROTTLED -> FailureKind.THROTTLED
+        ProviderFailureKind.PROVIDER_ERROR -> FailureKind.PROVIDER_ERROR
+        ProviderFailureKind.NO_RESPONSE -> FailureKind.NO_RESPONSE
+        ProviderFailureKind.UNKNOWN -> FailureKind.UNKNOWN
+    }
 
     /**
      * 단위를 우리 이름으로 옮긴다.
