@@ -64,6 +64,13 @@ class OpenAIProvider(
             log.warn("OpenAI 가 우리가 모르는 필드를 보냈다. model={} 필드={}", model, response.unknown)
         }
 
+        val unknownInImages = response.data.map { it.unknown }.filter { it.isNotEmpty }
+        if (unknownInImages.isNotEmpty()) {
+            // 최상위 갈고리는 결과물 안을 못 본다. 거기서 버리는 것도 이름은 남겨야 한다.
+            // 리스트를 그대로 넘긴다 — 원소마다 toString 이 값을 잘라서 낸다.
+            log.warn("OpenAI 가 결과물에 우리가 모르는 필드를 보냈다. model={} 필드={}", model, unknownInImages)
+        }
+
         if (response.data.isEmpty()) {
             // 200 인데 이미지가 없는 건 설명되지 않는 상태다. 일시적일 수 있으니 재시도 대상으로 둔다.
             // 저쪽이 설명되지 않는 응답을 준 것이라 다시 받으면 멀쩡할 수 있다.
