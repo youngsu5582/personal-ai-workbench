@@ -10,6 +10,18 @@ package dev.joyson.aiworkbench.storage
  * 빈 **이름**이 곧 보관소 이름이다. 구현을 늘리는 일이 `@Bean("이름")` 한 줄이 되고,
  * 고르는 코드는 그대로다.
  */
-fun interface FileStorageFactory {
+interface FileStorageFactory {
+
     fun create(): FileStorage
+
+    /**
+     * 기동 로그에 실릴 한 줄. **무엇을 어디에 쓰는지**를 말한다.
+     *
+     * 고르는 코드와 마찬가지로 **여기도 구현이 늘 때 고칠 자리가 없어야 한다.**
+     * 로그를 한곳에서 `when (provider)` 로 만들면 보관소를 더할 때마다 그 분기를 고치게 되고,
+     * 빠뜨리면 "알 수 없는 이름" 이 찍힌 채로 돈다.
+     *
+     * **비밀은 값이 아니라 여부만 적는다.** 로그는 남의 눈에 띄기 쉬운 자리다.
+     */
+    fun describe(): String
 }

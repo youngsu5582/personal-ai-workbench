@@ -66,6 +66,19 @@ class S3FileStorage(
             is AwsServiceException -> e.isThrottlingException || e.statusCode() >= 500
             else -> true
         }
-        return FileStorageException(retryable = retryable, message = message, cause = e)
+        return FileStorageException(retryable = retryable, message = "$message (${describe(e)})", cause = e)
+    }
+
+    /**
+     * 실패를 한 줄로 구분할 수 있게 적는다.
+     *
+     * `cause` 에 다 들어 있지만, **이 메시지가 task 의 실패 사유로 DB 에 남고 로그에 찍히는 유일한 값**이다.
+     * 여기 안 적으면 "객체를 쓰지 못했다" 만 남아, 버킷이 없는 건지 자격증명이 틀린 건지
+     * 연결이 안 되는 건지 구분할 수 없다 — 설정 실수가 가장 흔한 실패인데 그걸 못 가린다.
+     */
+    private fun describe(e: SdkException): String = when (e) {
+        is AwsServiceException -> "${e.awsErrorDetails()?.errorCode() ?: "?"} ${e.statusCode()}"
+        // 연결 자체가 안 된 경우다. 상태 코드가 없다.
+        else -> e.javaClass.simpleName
     }
 }
