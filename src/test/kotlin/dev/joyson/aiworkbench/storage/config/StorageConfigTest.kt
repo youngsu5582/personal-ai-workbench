@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.storage.config
 
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.PresignedUploadIssuer
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.storage.local.LocalFileStorage
 import dev.joyson.aiworkbench.storage.s3.S3FileStorage
@@ -101,6 +102,25 @@ class StorageConfigTest {
             "workbench.storage.s3.bucket=workbench",
         ).run { context ->
             assertThat(context).hasSingleBean(PresignedUrlIssuer::class.java)
+        }
+    }
+
+    @Test
+    fun `로컬은 올릴 주소도 발급할 수 없다`() {
+        // 읽기와 같은 이유다. 발급자가 없으면 업로드 경로가 열리지 않는다.
+        runner.run { context ->
+            assertThat(context.getBeanProvider(PresignedUploadIssuer::class.java).getIfAvailable()).isNull()
+        }
+    }
+
+    @Test
+    fun `s3 를 고르면 업로드 발급자도 함께 선다`() {
+        // 둘을 따로 고르지만 같은 이름으로 찾으므로 어긋날 수 없다.
+        runner.withPropertyValues(
+            "workbench.storage.provider=s3",
+            "workbench.storage.s3.bucket=workbench",
+        ).run { context ->
+            assertThat(context).hasSingleBean(PresignedUploadIssuer::class.java)
         }
     }
 
