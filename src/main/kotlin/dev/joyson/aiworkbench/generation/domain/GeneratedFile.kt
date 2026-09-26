@@ -56,9 +56,20 @@ class GeneratedFile(
     @Column(name = "storage_key", nullable = false, updatable = false)
     val storageKey: String,
 
+    /** 이 파일이 **무엇인가**. 바이트를 보면 알 수 있는 것만 담는다. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, updatable = false)
     val metadata: FileMetadata,
+
+    /**
+     * 이 결과물에 대해 **저쪽이 추가로 알려준 것**. 아무것도 안 알려주면 null 이다.
+     *
+     * [metadata] 와 나누는 기준은 바이트에서 나오는가다. 한 칸에 섞으면 영상이 들어올 때
+     * metadata 만 바뀌어야 하는데 이 값들까지 같이 흔들린다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "provider_info", updatable = false)
+    val providerInfo: ProviderInfo? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),

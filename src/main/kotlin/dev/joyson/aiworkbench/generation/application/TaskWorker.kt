@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.Sha256
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
@@ -173,6 +174,9 @@ class TaskWorker(
                 mimeType = result.metadata.mimeType,
                 fileSize = result.metadata.fileSize,
             ),
+            // 포트가 이미 갈라 둔 것을 저장하면서 합치지 않는다. 바이트에서 나오는 것과
+            // 저쪽이 말해줘야만 아는 것은 같은 칸에 있으면 안 된다.
+            providerInfo = ProviderInfo(revisedPrompt = result.revisedPrompt).takeIf { !it.isEmpty },
         )
     }
 }

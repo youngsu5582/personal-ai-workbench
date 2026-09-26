@@ -71,7 +71,25 @@ data class OpenAIGeneratedImage(
     @param:JsonProperty("revised_prompt")
     @get:JsonProperty("revised_prompt")
     val revisedPrompt: String? = null,
-)
+) {
+    /**
+     * 결과물 하나 안에서 선언하지 않은 필드.
+     *
+     * 최상위에만 달면 **여기는 안 덮인다** — 표가 타입마다 따로라 원소 안의 미지 필드는
+     * 이쪽 갈고리가 받아야 한다. `b64_json` 은 선언돼 있으니 여기 오지 않는다.
+     *
+     * 다만 여기는 **이미지가 사는 동네**라, 저쪽이 썸네일이나 마스크를 새 필드로 넣으면
+     * 그 바이트가 이 Map 에 들어앉는다. 로그는 [UnknownFields.toString] 이 잘라서 지키지만
+     * 메모리는 지키지 못한다. `n > 1` 을 켜는 날 장수만큼 곱해지므로 그때 다시 볼 자리다.
+     */
+    @get:JsonIgnore
+    val unknown: UnknownFields = UnknownFields()
+
+    @JsonAnySetter
+    fun capture(name: String, value: Any?) {
+        unknown.put(name, value)
+    }
+}
 
 /** OpenAI 의 에러 응답 봉투. `{"error": {...}}` */
 data class OpenAIErrorEnvelope(val error: OpenAIError? = null)

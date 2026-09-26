@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
+import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
@@ -18,6 +19,8 @@ data class StoredFile(
     val uuid: UUID,
     val storageKey: String,
     val metadata: FileMetadata,
+    /** 저쪽이 아무것도 알려주지 않으면 null 이다. */
+    val providerInfo: ProviderInfo? = null,
 )
 
 /**
@@ -72,6 +75,7 @@ class TaskStateWriter(
                     taskId = taskId,
                     storageKey = it.storageKey,
                     metadata = it.metadata,
+                    providerInfo = it.providerInfo,
                 )
             },
         )

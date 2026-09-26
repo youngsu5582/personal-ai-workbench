@@ -68,15 +68,17 @@ class TaskWorkerTest @Autowired constructor(
         override fun generate(model: String, request: ExternalApiGenerateRequest) = behavior()
     }
 
-    private fun success(usage: ProviderUsage? = null) = ExternalApiGenerateResponse(
-        usage = usage,
-        result = listOf(
-            ExternalApiGenerateResult(
-                image = image,
-                metadata = ImageMetadata(1024, 1024, "image/png", image.size),
+    private fun success(usage: ProviderUsage? = null, revisedPrompt: String? = null) =
+        ExternalApiGenerateResponse(
+            usage = usage,
+            result = listOf(
+                ExternalApiGenerateResult(
+                    image = image,
+                    metadata = ImageMetadata(1024, 1024, "image/png", image.size),
+                    revisedPrompt = revisedPrompt,
+                ),
             ),
-        ),
-    )
+        )
 
     private fun workerWith(
         provider: ExternalApiProvider,
@@ -397,6 +399,34 @@ class TaskWorkerTest @Autowired constructor(
 
             assertEquals(expected, callRepository.findAllByTaskUuid(task.uuid).single().failureKind)
         }
+    }
+
+    /**
+     * 포트에서 저장까지 값이 끊기지 않는지 본다.
+     *
+     * 우리가 보낸 문장이 아니라 **이것이 실제 입력**이라, 끊기면 결과가 기대와 다른 이유를
+     * 영영 설명할 수 없다.
+     */
+    @Test
+    fun `모델이 다시 쓴 프롬프트가 저장까지 닿는다`() {
+        val (_, task) = newTask()
+        val revised = "창밖을 보는 고양이, 오후의 부드러운 빛, 얕은 피사계 심도"
+
+        workerWith(provider { success(revisedPrompt = revised) }).process(task.id!!)
+
+        val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
+        assertEquals(revised, assertNotNull(file.providerInfo).revisedPrompt)
+    }
+
+    /** 안 주는 Provider 도 있다. 없다고 저장이 깨지면 안 된다. */
+    @Test
+    fun `다시 쓴 프롬프트가 없어도 저장된다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        // 아무것도 안 알려주면 칸 자체가 비어 있다 — 빈 객체를 남기지 않는다.
+        assertNull(generatedFileRepository.findAllByTaskId(task.id!!).single().providerInfo)
     }
 
     private companion object {
