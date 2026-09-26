@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -13,6 +14,11 @@ class GenerationJobReader(
     private val generationJobRepository: GenerationJobRepository,
     private val generationJobTaskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
+    /**
+     * 보관소가 주소에 서명할 수 있을 때만 있다. 없으면 목록의 `previewUrl` 이 전부 `null` 이고,
+     * 받는 쪽은 web 이 만드는 우리 경로로 폴백한다.
+     */
+    private val presignedUrlIssuer: PresignedUrlIssuer?,
 ) {
 
     /**
@@ -38,7 +44,7 @@ class GenerationJobReader(
 
         return job.toView(
             progress = GenerationJobProgress.of(job.taskCount, tasks),
-            tasks = tasks.map { it.toView(filesByTaskId[it.id].orEmpty()) },
+            tasks = tasks.map { it.toView(filesByTaskId[it.id].orEmpty(), presignedUrlIssuer) },
         )
     }
 }

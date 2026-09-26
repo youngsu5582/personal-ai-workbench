@@ -37,8 +37,22 @@ data class TaskResponse(
 
 data class FileResponse(
     val uuid: UUID,
-    /** 받는 쪽은 이 값을 **불투명하게** 다룬다. 오브젝트 스토어로 바뀌면 서명된 절대 URL 이 된다. */
+    /**
+     * **오래 사는** 주소. 받는 쪽은 이 값을 불투명하게 다룬다.
+     *
+     * 저장·북마크·스크립트처럼 나중에 눌러도 동작해야 하는 길이다.
+     * 보관소가 서명할 수 있으면 이 주소가 302 로 서명 주소에 넘긴다.
+     */
     val url: String,
+    /**
+     * **바로 그릴** 주소. 보관소가 서명할 수 없으면 `null`.
+     *
+     * `<img src>` 는 `Authorization` 헤더를 실을 수 없어서 [url] 로는 못 그린다.
+     * 이 값은 서명이 통행증이라 헤더가 필요 없고, 요청이 우리 앱이 아니라 보관소로 바로 간다.
+     *
+     * **수명이 짧다.** 캐시하거나 오래 들고 있으면 만료된다 — 그때는 [url] 을 쓴다.
+     */
+    val previewUrl: String?,
     val width: Int,
     val height: Int,
     val mimeType: String,
@@ -65,6 +79,7 @@ private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(
     uuid = uuid,
     url = GeneratedFileController.pathOf(uuid),
+    previewUrl = previewUrl,
     width = metadata.width,
     height = metadata.height,
     mimeType = metadata.mimeType,

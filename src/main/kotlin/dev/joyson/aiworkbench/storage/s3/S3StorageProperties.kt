@@ -17,7 +17,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class S3StorageProperties(
     val bucket: String? = null,
     val region: String = "us-east-1",
-    /** AWS 가 아닌 곳(Garage·R2 등)을 가리킬 때 채운다. 비우면 AWS 기본 엔드포인트로 간다. */
+    /**
+     * AWS 가 아닌 곳(Garage·R2 등)을 가리킬 때 채운다. 비우면 AWS 기본 엔드포인트로 간다.
+     *
+     * **클라이언트가 볼 수 있는 주소여야 한다.** 서명 주소가 이 값으로 만들어져 그대로 밖에 나간다.
+     * 내부망 이름을 넣으면 앱은 잘 붙는데 브라우저는 그 주소를 못 열어,
+     * 302 와 `previewUrl` 이 **조용히** 깨진다. 앱과 클라이언트의 경로가 갈리는 배치라면
+     * 발급 전용 공개 주소를 따로 둬야 한다.
+     */
     val endpoint: String? = null,
     /**
      * 비워두면 SDK 의 기본 탐색(환경변수·인스턴스 역할 등)에 맡긴다.

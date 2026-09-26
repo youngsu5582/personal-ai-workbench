@@ -176,6 +176,9 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks[0].status") { value("SUCCEEDED") }
             jsonPath("$.tasks[0].files.length()") { value(1) }
             jsonPath("$.tasks[0].files[0].url") { exists() }
+            // 테스트 환경은 로컬 디스크라 서명할 수 없다. 이 값이 null 이라는 것이
+            // "받는 쪽은 url 로 폴백해야 한다" 는 계약이다.
+            jsonPath("$.tasks[0].files[0].previewUrl") { doesNotExist() }
             jsonPath("$.tasks[0].files[0].width") { value(1024) }
 
             // 실패한 자리가 목록에서 사라지지 않는다 — 이것이 파일만 평평하게 담지 않는 이유다.
