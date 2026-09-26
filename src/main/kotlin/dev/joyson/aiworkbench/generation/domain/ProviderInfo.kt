@@ -25,6 +25,16 @@ data class ProviderInfo(
      */
     val revisedPrompt: String? = null,
 
+    /**
+     * Provider 가 이 결과물에 붙인 식별자.
+     *
+     * 저쪽 청구서·지원 문의와 대조할 때 쓴다. 우리 uuid 는 저쪽이 모르고, 저쪽 id 는
+     * 안 적으면 다시 알 길이 없다 — 응답은 한 번뿐이다.
+     *
+     * `generation_job_tasks.provider_task_id` 가 아니라 여기 둔다 — 그 자리는 폴링용 **작업**
+     * 식별자고 이것은 **결과물** 식별자다.
+     */
+    val providerId: String? = null,
 ) {
     /**
      * 아무것도 안 담긴 객체를 행에 남기지 않기 위해 쓴다. 빈 칸과 "없다" 는 다른 뜻이어야 한다.
@@ -33,5 +43,5 @@ data class ProviderInfo(
      * 선언에 없는 필드라 역직렬화가 통째로 실패한다. 파생값은 저장하지 않는다.
      */
     @get:JsonIgnore
-    val isEmpty: Boolean get() = revisedPrompt == null
+    val isEmpty: Boolean get() = revisedPrompt == null && providerId == null
 }

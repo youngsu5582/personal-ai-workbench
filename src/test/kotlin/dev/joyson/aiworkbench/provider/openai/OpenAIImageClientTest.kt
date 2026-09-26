@@ -132,15 +132,17 @@ class OpenAIImageClientTest {
 
         val response = client.generate(OpenAIImageEndpoint.GENERATIONS.path, request)
 
-        // 선언하지 않은 것만 들어온다.
-        assertEquals(setOf("size", "quality", "앞으로_생길_필드"), response.unknown.names)
-        assertEquals("1024x1024", response.unknown.asMap()["size"])
+        // 선언하지 않은 것만 들어온다. size·quality 는 선언돼 있으니 자기 자리로 간다.
+        assertEquals(setOf("앞으로_생길_필드"), response.unknown.names)
+        assertEquals("1024x1024", response.size)
+        assertEquals("high", response.quality)
 
         // 선언한 것은 자기 자리로 간다 — unknown 에 중복으로 담기지 않는다.
         assertEquals(1L, response.created)
         assertEquals("AAAA", response.data.single().b64Json)
         assertEquals("210", response.usage?.get("total_tokens").toString())
         assertFalse(response.unknown.names.contains("data"), "이미지가 unknown 으로 샜다")
+        assertFalse(response.unknown.names.contains("size"), "선언한 것이 unknown 으로 샜다")
         assertFalse(response.unknown.names.contains("usage"))
     }
 

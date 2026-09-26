@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.provider.openai
 
+import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -19,7 +20,7 @@ import java.util.Base64
  *
  * 이 클래스가 하는 일은 **번역 네 가지**뿐이다.
  *   1. 모델 이름 → 세대와 경로 ([OpenAIImageModel])
- *   2. 표준 옵션(비율·해상도) → OpenAI 의 `size` 문자열
+ *   2. 픽셀 크기 → OpenAI 의 `size` 표기 ([OpenAISize])
  *   3. **모든** 실패 → [ExternalApiException] (재시도 가능 여부만 사실로 옮긴다)
  *   4. OpenAI 의 `usage` → [ProviderUsage] (해석하지 않고 그대로 싣는다)
  *
@@ -51,7 +52,7 @@ class OpenAIProvider(
                 prompt = request.prompt,
                 // 호출 1건이 이미지 1장이다. 장수는 Task 개수로 나뉘어 들어온다.
                 n = 1,
-                size = "${request.width}x${request.height}",
+                size = OpenAISize(request.width, request.height).notation,
                 quality = qualityOf(request.quality),
                 outputFormat = OUTPUT_FORMAT,
             ),
@@ -125,21 +126,25 @@ class OpenAIProvider(
         request: ExternalApiGenerateRequest,
         response: OpenAIImageResponse,
     ): ExternalApiGenerateResponse {
+        val applied = appliedOf(request, response)
         val decoder = Base64.getDecoder()
         return ExternalApiGenerateResponse(
             // OpenAI 는 토큰만 말하고 비용은 말하지 않는다. 달러로 바꾸는 것은 단가를 아는 쪽의 일이다.
             usage = response.usage?.let { ProviderUsage(raw = it) },
+            applied = applied,
             result = response.data.map {
                 val image = decoder.decode(it.b64Json)
                 ExternalApiGenerateResult(
                     image = image,
                     metadata = ImageMetadata(
-                        width = request.width,
-                        height = request.height,
-                        mimeType = "image/$OUTPUT_FORMAT",
+                        // 우리가 보낸 값이 아니라 저쪽이 실제로 만든 값이다.
+                        width = applied.width,
+                        height = applied.height,
+                        mimeType = "image/${applied.outputFormat ?: OUTPUT_FORMAT}",
                         fileSize = image.size,
                     ),
                     revisedPrompt = it.revisedPrompt,
+                    providerId = it.generationId,
                 )
             },
         )
@@ -158,6 +163,34 @@ class OpenAIProvider(
         status.is4xxClientError -> FailureKind.REJECTED
         // 2xx·3xx 로 여기 오는 건 설명되지 않는다. 모르는 채로 재시도하지 않는다.
         else -> FailureKind.UNKNOWN
+    }
+
+    /**
+     * 응답이 말한 실제 값을 모은다. 안 말한 것은 보낸 값으로 채운다.
+     *
+     * 크기가 다르면 경고를 남긴다. **조용히 다른 크기를 주는 것이 제일 나쁘다** —
+     * 과금은 저쪽이 만든 것에 붙는데 우리 기록은 요청한 것을 말하고 있으면 둘이 어긋난다.
+     */
+    private fun appliedOf(
+        request: ExternalApiGenerateRequest,
+        response: OpenAIImageResponse,
+    ): AppliedParameters {
+        val sent = OpenAISize(request.width, request.height)
+        val made = OpenAISize.parseOrNull(response.size)
+        if (made != null && made != sent) {
+            log.warn("요청한 크기와 만들어진 크기가 다르다. 요청={} 실제={}", sent.notation, made.notation)
+        }
+
+        // 못 읽었으면 보낸 값으로 물러선다.
+        val size = made ?: sent
+        return AppliedParameters(
+            width = size.width,
+            height = size.height,
+            quality = response.quality ?: qualityOf(request.quality),
+            background = response.background,
+            // 우리가 보내는 값이라, 저쪽이 안 답해도 무엇으로 만들어졌는지는 안다.
+            outputFormat = response.outputFormat ?: OUTPUT_FORMAT,
+        )
     }
 
     /**

@@ -19,6 +19,8 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertNotNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -162,7 +164,6 @@ class OpenAIProviderTest {
         }
     }
 
-
     /**
      * 타임아웃은 상태 코드가 없어 [OpenAIException] 으로 걸리지 않는다.
      *
@@ -198,7 +199,6 @@ class OpenAIProviderTest {
         assertTrue(ex.message!!.contains("알 수 없는 오류"), "메시지가 원인을 감췄다: ${ex.message}")
     }
 
-
     /**
      * **호출이 성공한 뒤**에 나는 실패다. 응답은 200 이고 돈은 이미 나갔는데 우리가 못 읽는 경우.
      *
@@ -216,7 +216,6 @@ class OpenAIProviderTest {
         assertFalse(ex.retryable, "모르는 실패를 다시 시도하게 뒀다")
         assertTrue(ex.message!!.contains("알 수 없는 오류"), "원인이 메시지에서 사라졌다: ${ex.message}")
     }
-
 
     /**
      * 우리가 **사실로 판단해** 던진 예외는 포괄 catch 에 삼켜지면 안 된다.
@@ -242,6 +241,71 @@ class OpenAIProviderTest {
             .andRespond(withSuccess("""{"created":1,"data":[{"b64_json":""}]}""", MediaType.APPLICATION_JSON))
 
         assertFailsWith<ExternalApiException> { provider.generate("gpt-image-2", request()) }
+    }
+
+    /**
+     * 저쪽이 실제로 쓴 값이 요청과 다를 수 있다. 과금은 만들어진 것에 붙으므로 응답 쪽이 맞다.
+     *
+     * `background` 는 우리가 보내지 않아도 돌아온다 — 저쪽이 기본값을 적용한 결과다.
+     */
+    @Test
+    fun `응답이 말한 실제 값을 쓴다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(
+                withSuccess(
+                    """{"created":1,"data":[{"b64_json":"${Base64.getEncoder().encodeToString(image)}",
+                       "generation_id":"gen-abc"}],
+                       "size":"1024x1024","quality":"low","background":"opaque","output_format":"png"}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        // 2048x1152 를 요청했는데 저쪽은 1024x1024 로 만들었다.
+        val response = provider.generate("gpt-image-2", request(width = 2048, height = 1152))
+
+        val applied = assertNotNull(response.applied)
+        assertEquals(1024, applied.width)
+        assertEquals("low", applied.quality)
+        assertEquals("opaque", applied.background, "우리가 안 보낸 값도 받아야 한다")
+
+        // 결과물 메타도 요청값이 아니라 실제값을 쓴다.
+        assertEquals(1024, response.result.single().metadata.width)
+        assertEquals("gen-abc", response.result.single().providerId)
+    }
+
+    /** 안 답해주는 Provider 도 있다. 그때는 보낸 값이 우리가 가진 전부다. */
+    @Test
+    fun `응답이 말하지 않으면 보낸 값을 쓴다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
+
+        val applied = assertNotNull(provider.generate("gpt-image-2", request()).applied)
+
+        assertEquals(1024, applied.width)
+        // 우리가 보내는 값이라, 저쪽이 안 답해도 무엇으로 만들어졌는지는 안다.
+        assertEquals("png", applied.outputFormat)
+        // 보내지도 않았고 답해주지도 않았다. 지어내지 않는다.
+        assertNull(applied.background)
+    }
+
+    /**
+     * 저쪽이 언제든 표기를 바꿀 수 있다. 못 읽었다고 호출을 실패시키지 않고 보낸 값으로 물러선다.
+     */
+    @Test
+    fun `크기 표기를 못 읽어도 호출이 죽지 않는다`() {
+        server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(
+                withSuccess(
+                    """{"created":1,"data":[{"b64_json":"${Base64.getEncoder().encodeToString(image)}"}],
+                       "size":"알 수 없는 표기"}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val applied = assertNotNull(provider.generate("gpt-image-2", request(width = 2048, height = 1152)).applied)
+
+        assertEquals(2048, applied.width, "못 읽었으면 보낸 값으로 물러서야 한다")
+        assertEquals(1152, applied.height)
     }
 
     private companion object {
