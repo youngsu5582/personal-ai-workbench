@@ -1,11 +1,17 @@
 package dev.joyson.aiworkbench.provider.openai
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageQuality
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.test.web.client.ExpectedCount
 import org.springframework.test.web.client.MockRestServiceServer
 import org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
@@ -306,6 +312,38 @@ class OpenAIProviderTest {
 
         assertEquals(2048, applied.width, "못 읽었으면 보낸 값으로 물러서야 한다")
         assertEquals(1152, applied.height)
+    }
+
+    /**
+     * 미지 필드는 **상태**라, 매번 찍으면 그 종류의 호출이 전부 같은 줄을 낸다.
+     *
+     * 도배 자체보다 나쁜 것은 사람이 이 WARN 을 무시하게 되는 것이다 — 그러면 다음에
+     * 진짜 새 이름이 와도 안 보인다. 이 로그를 둔 목적이 거기서 무너진다.
+     */
+    @Test
+    fun `모르는 필드는 처음 한 번만 알린다`() {
+        val logger = LoggerFactory.getLogger(OpenAIProvider::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+
+        try {
+            server.expect(ExpectedCount.twice(), requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
+                .andRespond(
+                    withSuccess(
+                        """{"created":1,"data":[{"b64_json":"${Base64.getEncoder().encodeToString(image)}"}],
+                           "앞으로_생길_필드":"값"}""",
+                        MediaType.APPLICATION_JSON,
+                    ),
+                )
+
+            repeat(2) { provider.generate("gpt-image-2", request()) }
+        } finally {
+            logger.detachAppender(appender)
+        }
+
+        val warns = appender.list.filter { it.level == Level.WARN }
+        assertEquals(1, warns.size, "같은 이름을 두 번 알렸다 — 호출마다 나면 로그가 덮인다")
+        assertTrue(warns.single().formattedMessage.contains("앞으로_생길_필드"), "어떤 이름인지가 로그에 없다")
     }
 
     private companion object {
