@@ -36,6 +36,14 @@ data class ImageRequest(
     val width: Int,
     val height: Int,
     val quality: String? = null,
+
+    /**
+     * 우리가 보내지 않아도 Provider 가 기본값을 적용해 답해주는 값들.
+     *
+     * 단가 축인지 아직 모른다. 모르는 채로 버리면 나중에 되살릴 수 없고, JSON 이라 자리 값도 없다.
+     */
+    val background: String? = null,
+    val outputFormat: String? = null,
 ) : ProviderRequest {
     init {
         require(width > 0 && height > 0) { "가로·세로는 양수여야 한다" }

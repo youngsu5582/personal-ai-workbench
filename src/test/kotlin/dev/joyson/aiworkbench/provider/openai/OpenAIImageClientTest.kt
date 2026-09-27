@@ -132,15 +132,17 @@ class OpenAIImageClientTest {
 
         val response = client.generate(OpenAIImageEndpoint.GENERATIONS.path, request)
 
-        // 선언하지 않은 것만 들어온다.
-        assertEquals(setOf("size", "quality", "앞으로_생길_필드"), response.unknown.names)
-        assertEquals("1024x1024", response.unknown.asMap()["size"])
+        // 선언하지 않은 것만 들어온다. size·quality 는 선언돼 있으니 자기 자리로 간다.
+        assertEquals(setOf("앞으로_생길_필드"), response.unknown.names)
+        assertEquals("1024x1024", response.size)
+        assertEquals("high", response.quality)
 
         // 선언한 것은 자기 자리로 간다 — unknown 에 중복으로 담기지 않는다.
         assertEquals(1L, response.created)
         assertEquals("AAAA", response.data.single().b64Json)
         assertEquals("210", response.usage?.get("total_tokens").toString())
         assertFalse(response.unknown.names.contains("data"), "이미지가 unknown 으로 샜다")
+        assertFalse(response.unknown.names.contains("size"), "선언한 것이 unknown 으로 샜다")
         assertFalse(response.unknown.names.contains("usage"))
     }
 
@@ -151,6 +153,30 @@ class OpenAIImageClientTest {
             .andRespond(withSuccess("""{"created":1,"data":[{"b64_json":"AAAA"}]}""", MediaType.APPLICATION_JSON))
 
         assertTrue(client.generate(OpenAIImageEndpoint.GENERATIONS.path, request).unknown.isEmpty)
+    }
+
+    /**
+     * 최상위 갈고리는 결과물 **안**을 못 본다 — 표가 타입마다 따로이기 때문이다.
+     * 여기 갈고리가 없으면 `data[]` 원소의 미지 필드는 온 줄도 모르고 사라진다.
+     */
+    @Test
+    fun `결과물 안의 모르는 필드도 따로 받는다`() {
+        server.expect(requestTo("https://api.openai.com${OpenAIImageEndpoint.GENERATIONS.path}"))
+            .andRespond(
+                withSuccess(
+                    """{"created":1,"data":[{"b64_json":"AAAA","revised_prompt":"다듬은 문구",
+                       "앞으로_생길_필드":{"a":1}}]}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val image = client.generate(OpenAIImageEndpoint.GENERATIONS.path, request).data.single()
+
+        assertEquals(setOf("앞으로_생길_필드"), image.unknown.names)
+        // 선언한 것은 자기 자리로 간다 — 이미지가 unknown 으로 샐 수 없다.
+        assertEquals("AAAA", image.b64Json)
+        assertEquals("다듬은 문구", image.revisedPrompt)
+        assertFalse(image.unknown.names.contains("b64_json"), "이미지가 unknown 으로 샜다")
     }
 
     @Test
