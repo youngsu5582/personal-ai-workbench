@@ -10,10 +10,12 @@ import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.provider.UnknownFields
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatusCode
 import org.springframework.web.client.ResourceAccessException
 import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 표준 요청을 OpenAI 의 어휘로 옮기는 어댑터.
@@ -58,19 +60,11 @@ class OpenAIProvider(
             ),
         )
 
-        if (response.unknown.isNotEmpty) {
-            // 지금은 버리지만 버렸다는 사실은 남긴다. 여기 뜨는 이름이 단가의 축이면
-            // 그때 컬럼이나 jsonb 로 승격한다 — 온 줄도 모르는 것과는 다르다.
-            // 객체를 그대로 넘긴다. 자르는 일은 toString 이 하므로 여기서 기억할 것이 없다.
-            log.warn("OpenAI 가 우리가 모르는 필드를 보냈다. model={} 필드={}", model, response.unknown)
-        }
-
-        val unknownInImages = response.data.map { it.unknown }.filter { it.isNotEmpty }
-        if (unknownInImages.isNotEmpty()) {
-            // 최상위 갈고리는 결과물 안을 못 본다. 거기서 버리는 것도 이름은 남겨야 한다.
-            // 리스트를 그대로 넘긴다 — 원소마다 toString 이 값을 잘라서 낸다.
-            log.warn("OpenAI 가 결과물에 우리가 모르는 필드를 보냈다. model={} 필드={}", model, unknownInImages)
-        }
+        // 지금은 버리지만 버렸다는 사실은 남긴다. 여기 뜨는 이름이 단가의 축이면
+        // 그때 컬럼이나 jsonb 로 승격한다 — 온 줄도 모르는 것과는 다르다.
+        warnUnknownOnce(model, "응답에", response.unknown)
+        // 최상위 갈고리는 결과물 안을 못 본다. 거기서 버리는 것도 이름은 남겨야 한다.
+        response.data.forEach { warnUnknownOnce(model, "결과물에", it.unknown) }
 
         if (response.data.isEmpty()) {
             // 200 인데 이미지가 없는 건 설명되지 않는 상태다. 일시적일 수 있으니 재시도 대상으로 둔다.
@@ -148,6 +142,32 @@ class OpenAIProvider(
                 )
             },
         )
+    }
+
+    /**
+     * 이미 알린 미지 필드. `위치:이름` 으로 센다 — 승격할 때 그 필드를 둘 DTO 가 위치로 갈린다.
+     *
+     * 미지 필드는 **사건이 아니라 상태**다. 저쪽이 필드를 하나 늘리면 우리가 그것을 선언할 때까지
+     * 모든 응답에 들어 있어서, 매번 찍으면 100% 의 호출이 같은 줄을 낸다. 로그가 덮이는 것보다
+     * 나쁜 것은 사람이 이 WARN 을 무시하게 되는 것이다 — 그러면 다음에 진짜 새 이름이 와도 안 보인다.
+     *
+     * 프로세스마다 다시 센다. 뜰 때 한 번 더 알리는 것은 낭비가 아니라 노린 것이다 —
+     * 배포 직후가 저쪽 응답이 달라졌는지 볼 자리다. 그래서 프로세스 밖에 두지 않는다.
+     */
+    private val reportedUnknowns = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * 처음 보는 이름이 있을 때만 남긴다.
+     *
+     * 값은 함께 낸다 — 승격할지 정하려면 모양을 봐야 한다. 자르는 일은 `UnknownFields.toString` 이
+     * 하므로 여기서 기억할 것이 없다.
+     */
+    private fun warnUnknownOnce(model: String, where: String, fields: UnknownFields) {
+        val fresh = fields.names.filterNot { "$where:$it" in reportedUnknowns }
+        if (fresh.isEmpty()) return
+
+        fresh.forEach { reportedUnknowns.add("$where:$it") }
+        log.warn("OpenAI 가 {} 우리가 모르는 필드를 보냈다. model={} 처음 본 이름={} 값={}", where, model, fresh, fields)
     }
 
     /**
