@@ -74,6 +74,26 @@ DB JSON 컬럼과 API 에 나가는 enum 은 `@get:JsonValue` 로 표기를 정�
 마이그레이션은 PostgreSQL 문법이라 H2 를 쓰는 테스트에서는 돌지 않는다.
 `SchemaMigrationTest` 하나만 Testcontainers 로 진짜 PostgreSQL 에 걸어 엔티티와 대조한다.
 
+## 작업 도구
+
+저장소를 다루는 명령은 `.claude/scripts/` 에 둔다.
+최상위 `scripts/` 는 **뜬 서버를 두드려 보는** 자리라 성격이 다르다.
+
+### 테스트는 `.claude/scripts/test.sh` 로 돌린다
+
+`./gradlew test` 를 파이프로 넘기면 종료 코드가 **마지막 명령의 것**이 된다.
+컴파일이 깨져도 0 이 되고, 그때 `build/test-results/` 에는 **직전 실행의 결과가 남아 있어**
+집계하면 통과처럼 보인다. 실패를 통과로 읽는 길이 둘 다 열린다.
+
+스크립트는 돌리기 전에 결과를 지우고, 종료 코드를 그대로 돌려주고,
+집계에 **결과 파일의 시각**을 함께 찍는다 — 지금 시각과 어긋나면 이번 실행의 숫자가 아니다.
+
+### 워크트리는 `.claude/scripts/worktree.sh` 로 만든다
+
+`git worktree add -b <새브랜치> <경로> <base>` 는 **base 를 upstream 으로 잡는다.**
+그 상태의 `[ahead N]` 은 "main 에 올렸다" 로 읽힌다.
+`.env` 는 gitignore 라 새 워크트리에 따라오지 않는데, 앱 기동과 live 테스트에는 필요하다.
+
 ## 커밋
 
 - `feat:` · `fix:` · `docs:` · `chore:` 접두사 + 한글 제목
