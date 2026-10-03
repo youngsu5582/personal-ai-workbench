@@ -3,12 +3,15 @@ package dev.joyson.aiworkbench.storage.config
 import dev.joyson.aiworkbench.StartupSummary
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageFactory
+import dev.joyson.aiworkbench.storage.PresignedUploadIssuer
+import dev.joyson.aiworkbench.storage.PresignedUploadIssuerFactory
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuerFactory
 import dev.joyson.aiworkbench.storage.local.LocalFileStorage
 import dev.joyson.aiworkbench.storage.local.LocalStorageProperties
 import dev.joyson.aiworkbench.storage.s3.S3Clients
 import dev.joyson.aiworkbench.storage.s3.S3FileStorage
+import dev.joyson.aiworkbench.storage.s3.S3PresignedUploadIssuer
 import dev.joyson.aiworkbench.storage.s3.S3PresignedUrlIssuer
 import dev.joyson.aiworkbench.storage.s3.S3StorageProperties
 import dev.joyson.aiworkbench.storage.s3.S3StorageProperties.Companion.orNull
@@ -96,6 +99,26 @@ class StorageConfig {
     }
 
     /**
+     * 읽기와 **같은 수명**을 쓴다.
+     *
+     * 쓰기 주소는 전송이 끝날 때까지 살아 있어야 해서 더 길어야 할 수도 있다. 그럼에도 값을 나누지
+     * 않는 이유는 [StorageProperties.presignedUrlTtl] 의 KDoc 과 같다 — 둘로 나누면 "왜 다르지" 를
+     * 계속 설명해야 한다. 느린 회선에서 실제로 짧아 실패하면 그때 나눈다.
+     */
+    @Bean
+    fun s3PresignedUploadIssuerFactory(
+        properties: S3StorageProperties,
+        storageProperties: StorageProperties,
+    ) = object : PresignedUploadIssuerFactory {
+        override val provider = "s3"
+        override fun create() = S3PresignedUploadIssuer(
+            presigner = S3Clients.presigner(properties),
+            bucket = requireBucket(properties),
+            ttl = storageProperties.presignedUrlTtl,
+        )
+    }
+
+    /**
      * 발급자는 **없을 수 있다.** 로컬 디스크는 주소에 서명할 수 없다.
      *
      * [fileStorage] 와 달리 못 고르는 것이 정상이므로 기동을 실패시키지 않고 `null` 을 준다.
@@ -109,6 +132,19 @@ class StorageConfig {
         factories: List<PresignedUrlIssuerFactory>,
         properties: StorageProperties,
     ): PresignedUrlIssuer? =
+        factories.firstOrNull { it.provider == properties.provider }?.create()
+
+    /**
+     * 업로드 발급자도 **없을 수 있다.** 고르는 방법과 이유는 [presignedUrlIssuer] 와 같다.
+     *
+     * 둘을 따로 고르는 이유는 포트가 따로이기 때문이다 — 읽기만 서명할 수 있고 쓰기는 못 하는
+     * 보관소가 나올 수 있고, 그때 이 자리가 그대로 답을 낸다.
+     */
+    @Bean
+    fun presignedUploadIssuer(
+        factories: List<PresignedUploadIssuerFactory>,
+        properties: StorageProperties,
+    ): PresignedUploadIssuer? =
         factories.firstOrNull { it.provider == properties.provider }?.create()
 
     /**
