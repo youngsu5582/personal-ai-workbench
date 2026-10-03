@@ -2,12 +2,12 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
-import dev.joyson.aiworkbench.generation.domain.Sha256
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderCallFactory
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
-import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
+import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ProviderRegistry
@@ -153,11 +153,11 @@ class TaskWorker(
         response: ExternalApiGenerateResponse,
     ): List<StoredFile> = response.result.map { result ->
         // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
-        val key = StorageKeys.generatedFile(
+        val key = BlobKey.of(
             ownerUuid = job.ownerUserUuid,
             digest = Sha256.of(result.image),
             mimeType = result.metadata.mimeType,
-        )
+        ).value
         fileStorage.put(key, result.image, result.metadata.mimeType)
 
         // 행의 식별자는 따로 둔다. digest 에서 파생시키면 같은 바이트를 가진 두 행이

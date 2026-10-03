@@ -58,7 +58,8 @@ class GeneratedFile(
      * 보관소에서의 위치.
      *
      * **내용으로 정해진다** — 바이트의 SHA-256 이 키의 본체다. 그래서 같은 바이트를 가진 다른 행과
-     * 이 값을 **공유할 수 있다.** 유니크 제약을 걸지 않는 근거는 [dev.joyson.aiworkbench.generation.infrastructure.StorageKeys] 에 있다.
+     * 이 값을 **공유할 수 있다.** 키 규칙은 [dev.joyson.aiworkbench.storage.BlobKey] 에 있다.
+     * 파일 행은 작업 결과 하나를 가리키므로, 같은 blob 을 참조하는 여러 행을 허용한다.
      *
      * digest 를 따로 컬럼으로 두지 않는 이유도 여기 있다 — 키 안에 있어
      * `substringAfterLast('/').substringBefore('.')` 로 되돌릴 수 있다.

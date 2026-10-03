@@ -1,4 +1,4 @@
-package dev.joyson.aiworkbench.generation.domain
+package dev.joyson.aiworkbench.storage
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
