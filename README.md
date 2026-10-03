@@ -235,6 +235,38 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 
 로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다. **클라이언트는 아무것도 안 바꾼다.**
 
+## 직접 업로드 URL 발급
+
+S3 호환 보관소에서는 Bearer 토큰으로 `POST /api/uploads`를 호출한다.
+
+```http
+POST /api/uploads
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"contentType":"image/png","contentLength":1024}
+```
+
+`200 OK` 응답:
+
+```json
+{
+  "uuid": "<upload-uuid>",
+  "url": "http://<storage>/<bucket>/users/<owner>/uploads/<upload-uuid>?<signature>",
+  "method": "PUT",
+  "headers": {"Content-Type": "image/png", "Content-Length": "1024"}
+}
+```
+
+반환된 URL로 파일 바이트를 PUT한다. 앱의 Bearer 토큰은 보관소에 보내지 않는다.
+형식과 크기는 서명에 포함돼 실제 요청과 같아야 한다. 브라우저에서는 `Content-Length`를
+직접 설정하지 않고 `File`/`Blob`을 본문으로 보내 브라우저가 계산하게 한다.
+PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인증은 401,
+직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
+
+현재는 URL 발급까지만 제공한다. 완료 검증과 생성 입력 등록은 아직 제공하지 않는다.
+설계와 현재 구현 범위는 [`docs/architecture/direct-upload.md`](docs/architecture/direct-upload.md)에 정리한다.
+
 ## 도메인 문서
 
 구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](docs/domain/domain-model.md)에 정리한다.
