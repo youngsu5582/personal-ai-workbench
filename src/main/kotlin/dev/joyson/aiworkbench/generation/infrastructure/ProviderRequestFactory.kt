@@ -18,7 +18,7 @@ import dev.joyson.aiworkbench.provider.ImageQuality
  *
  * 상태도 의존도 없는 순수 번역이라 빈이 아니라 `object` 다. 주입해도 갈아끼울 것이 없고
  * — 이 저장소는 목 라이브러리를 쓰지 않아 순수 함수에는 대역을 만들 것조차 없다 —
- * 부르는 쪽 생성자만 길어진다. `StorageKeys` 와 같은 자리다.
+ * 부르는 쪽 생성자만 길어진다.
  */
 object ProviderRequestFactory {
 

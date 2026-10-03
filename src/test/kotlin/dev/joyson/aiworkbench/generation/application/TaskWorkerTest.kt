@@ -5,7 +5,7 @@ import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
-import dev.joyson.aiworkbench.generation.domain.Sha256
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
@@ -14,7 +14,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
-import dev.joyson.aiworkbench.generation.infrastructure.StorageKeys
+import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -117,7 +117,7 @@ class TaskWorkerTest @Autowired constructor(
         val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
         // 자리는 내용이 정하고, 소유자로 먼저 갈린다.
         assertEquals(
-            StorageKeys.generatedFile(job.ownerUserUuid, Sha256.of(image), "image/png"),
+            BlobKey.of(job.ownerUserUuid, Sha256.of(image), "image/png").value,
             file.storageKey,
         )
         assertContentEquals(image, storage.read(file.storageKey))
