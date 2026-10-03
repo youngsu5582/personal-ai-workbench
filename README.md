@@ -267,6 +267,48 @@ PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인�
 현재는 URL 발급까지만 제공한다. 완료 검증과 생성 입력 등록은 아직 제공하지 않는다.
 설계와 현재 구현 범위는 [`docs/architecture/direct-upload.md`](docs/architecture/direct-upload.md)에 정리한다.
 
+### 스크립트로 발급 → 업로드 확인
+
+위의 Garage 부트스트랩과 `.env` 보관소 설정을 마친 후 앱을 실행한다.
+`curl`과 `python3`가 필요하다. 이미지 파일 경로는 명령을 실행하는 디렉터리 기준이다.
+
+```bash
+./scripts/upload.sh ./image.png
+BASE_URL=http://localhost:8099 ./scripts/upload.sh './images/my photo.jpg'
+```
+
+기본 인증은 `dev-token.sh`를 사용하므로, 먼저 한 번 로그인해 DB에 사용자를 등록한다.
+특정 사용자는 `USER_UUID`로 지정하고, 이미 가진 토큰은 `ACCESS_TOKEN` 환경변수로 전달할 수 있다.
+파일 헤더로 PNG·JPEG·WebP를 판별하고 크기를 확인한 뒤, `POST /api/uploads` 응답의 주소로
+파일을 직접 PUT한다. 발급 UUID·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
+Bearer 토큰은 앱에만 보낸다.
+
+### 샘플 페이지에서 발급 → 업로드 확인
+
+브라우저가 앱과 다른 origin의 보관소로 PUT하려면 **보관소 버킷의 CORS** 설정이 필요하다.
+앱에 CORS를 추가하는 것으로는 해결되지 않는다.
+[Garage도 PutBucketCors를 지원한다](https://github.com/deuxfleurs-org/garage/blob/main-v2/doc/book/reference-manual/s3-compatibility.md).
+
+```bash
+# 로컬 Garage에서는 설정에 사용하는 키에 버킷 owner 권한이 필요하다.
+docker compose --profile s3 exec -T garage /garage bucket allow --owner workbench --key app-key
+# AWS CLI·curl과 .env의 STORAGE_S3_* 설정을 사용한다.
+./scripts/upload-cors.sh
+# 앱을 다른 포트로 실행했다면 페이지 origin을 정확히 지정한다.
+./scripts/upload-cors.sh http://localhost:8099
+```
+
+스크립트는 해당 origin의 PUT·Content-Type 허용 규칙을 추가한다. 동일 origin의 샘플 규칙만
+갱신하고 다른 기존 규칙은 유지한다. 와일드카드 origin은 허용하지 않는다.
+브라우저 preflight가 보내는 소문자 `content-type`을 허용하며, 설정 적용 후 실제 OPTIONS
+요청까지 성공해야 스크립트가 성공으로 종료한다. 이 확인은 파일 PUT 권한·전송 성공과는 별개다.
+
+앱의 `http://localhost:8080/`에서 Google 로그인 후 **이미지 직접 업로드** 영역에 파일을 선택하고
+**URL 발급 후 업로드**를 누른다. 발급 단계·전송 진행률·보관소 응답을 확인할 수 있다.
+`Content-Length`는 JavaScript에서 설정하지 않고 브라우저가 `File`의 크기로 계산한다.
+화면의 이미지는 선택한 원본 미리보기이며, 업로드 성공은 보관소의 PUT 수락을 의미한다.
+네트워크 오류가 나면 페이지 origin과 CORS 설정, 브라우저에서 접근 가능한 보관소 주소를 확인한다.
+
 ## 도메인 문서
 
 구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](docs/domain/domain-model.md)에 정리한다.
