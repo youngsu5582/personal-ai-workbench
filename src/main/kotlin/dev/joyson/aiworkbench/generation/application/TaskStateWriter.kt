@@ -5,11 +5,10 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
-import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import org.slf4j.LoggerFactory
-import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -46,7 +45,7 @@ class TaskStateWriter(
     @Transactional
     fun claim(limit: Int): List<Long> {
         val claimed = taskRepository
-            .findByStatusOrderByIdAsc(TaskStatus.PENDING, PageRequest.of(0, limit))
+            .findOldestByStatus(TaskStatus.PENDING, limit)
             .onEach { it.transitionTo(TaskStatus.RUNNING) }
         if (claimed.isEmpty()) return emptyList()
 
@@ -66,7 +65,7 @@ class TaskStateWriter(
      */
     @Transactional
     fun succeed(taskId: Long, files: List<StoredFile>) {
-        val task = taskRepository.findById(taskId).orElse(null) ?: return
+        val task = taskRepository.findByIdOrNull(taskId) ?: return
 
         generatedFileRepository.saveAll(
             files.map {
@@ -91,7 +90,7 @@ class TaskStateWriter(
      */
     @Transactional
     fun fail(taskId: Long, reason: String, retryable: Boolean) {
-        val task = taskRepository.findById(taskId).orElse(null) ?: return
+        val task = taskRepository.findByIdOrNull(taskId) ?: return
 
         task.transitionTo(TaskStatus.FAILED, failureReason = reason)
 

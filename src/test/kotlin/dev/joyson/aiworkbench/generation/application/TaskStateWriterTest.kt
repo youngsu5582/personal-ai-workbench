@@ -10,9 +10,9 @@ import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
-import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Import
@@ -30,9 +30,9 @@ import kotlin.test.assertTrue
  */
 class TaskStateWriterTest @Autowired constructor(
     private val writer: TaskStateWriter,
-    private val jobRepository: GenerationJobRepository,
-    private val taskRepository: GenerationJobTaskRepository,
-    private val generatedFileRepository: GeneratedFileRepository,
+    private val jobRepository: JpaGenerationJobRepository,
+    private val taskRepository: JpaGenerationJobTaskRepository,
+    private val generatedFileRepository: JpaGeneratedFileRepository,
 ) : IntegrationTest() {
 
     private fun newJob(taskCount: Int = 2): Pair<Long, List<Long>> {

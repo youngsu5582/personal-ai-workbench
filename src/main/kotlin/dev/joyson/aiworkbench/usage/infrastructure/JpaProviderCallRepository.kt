@@ -1,22 +1,22 @@
 package dev.joyson.aiworkbench.usage.infrastructure
 
+import dev.joyson.aiworkbench.usage.domain.ModelUsageRow
 import dev.joyson.aiworkbench.usage.domain.ProviderCall
+import dev.joyson.aiworkbench.usage.domain.ProviderCallRepository
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import java.math.BigDecimal
 import java.time.Instant
 import java.util.UUID
 
-interface ProviderCallRepository : JpaRepository<ProviderCall, Long> {
+/** [ProviderCallRepository] 의 구현. 실제 클래스는 Spring Data 가 만든다. */
+interface JpaProviderCallRepository : JpaRepository<ProviderCall, Long>, ProviderCallRepository {
 
     fun findAllByTaskUuid(taskUuid: UUID): List<ProviderCall>
 
     fun findAllByJobUuid(jobUuid: UUID): List<ProviderCall>
 
     /**
-     * 기간 안의 지출을 모델별로 접는다.
-     *
      * 세는 일을 DB 에 시킨다 — 행을 다 끌어와 메모리에서 접으면 `usageRaw` 까지 딸려 온다.
      * 집계에 쓰지도 않을 JSON 을 행마다 역직렬화할 이유가 없다.
      *
@@ -25,6 +25,8 @@ interface ProviderCallRepository : JpaRepository<ProviderCall, Long> {
      *
      * `count(c.cost.usd)` 는 **null 이 아닌 행만** 센다. 이 값이 [ModelUsageRow.calls] 보다 작으면
      * 비용 합계가 전체를 말하지 않는다는 뜻이고, 그 사실은 응답까지 그대로 올라가야 한다.
+     *
+     * 별칭 이름이 곧 [ModelUsageRow] 의 프로퍼티 이름이다.
      */
     @Query(
         """
@@ -42,23 +44,9 @@ interface ProviderCallRepository : JpaRepository<ProviderCall, Long> {
         order by c.model asc
         """,
     )
-    fun summarizeByModel(
+    override fun summarizeByModel(
         @Param("owner") owner: UUID,
         @Param("from") from: Instant,
         @Param("to") to: Instant,
     ): List<ModelUsageRow>
-}
-
-/** [ProviderCallRepository.summarizeByModel] 의 한 줄. 별칭 이름이 곧 이 프로퍼티 이름이다. */
-interface ModelUsageRow {
-    val provider: String
-    val model: String
-    val calls: Long
-    val succeededCalls: Long
-
-    /** 비용을 아는 호출 수. [calls] 보다 작으면 [costUsd] 는 전체가 아니다. */
-    val costKnownCalls: Long
-
-    /** 아는 것만 더한 값. 하나도 모르면 null 이다. */
-    val costUsd: BigDecimal?
 }

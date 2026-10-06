@@ -3,8 +3,8 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID

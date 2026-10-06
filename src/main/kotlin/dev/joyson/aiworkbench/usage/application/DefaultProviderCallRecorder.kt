@@ -5,7 +5,7 @@ import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import dev.joyson.aiworkbench.usage.domain.CalculatedCost
 import dev.joyson.aiworkbench.usage.domain.ProviderCall
 import dev.joyson.aiworkbench.usage.domain.ReportedCost
-import dev.joyson.aiworkbench.usage.infrastructure.ProviderCallRepository
+import dev.joyson.aiworkbench.usage.domain.ProviderCallRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID

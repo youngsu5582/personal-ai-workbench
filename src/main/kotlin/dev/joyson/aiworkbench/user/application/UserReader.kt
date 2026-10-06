@@ -1,8 +1,8 @@
 package dev.joyson.aiworkbench.user.application
 
 import dev.joyson.aiworkbench.user.UserView
-import dev.joyson.aiworkbench.user.infrastructure.UserIdentityRepository
-import dev.joyson.aiworkbench.user.infrastructure.UserRepository
+import dev.joyson.aiworkbench.user.domain.UserIdentityRepository
+import dev.joyson.aiworkbench.user.domain.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.*

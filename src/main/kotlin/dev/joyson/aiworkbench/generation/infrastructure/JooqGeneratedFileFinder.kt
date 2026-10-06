@@ -3,6 +3,8 @@ package dev.joyson.aiworkbench.generation.infrastructure
 import dev.joyson.jooq.tables.references.GENERATED_FILES
 import dev.joyson.jooq.tables.references.GENERATION_JOBS
 import dev.joyson.jooq.tables.references.GENERATION_JOB_TASKS
+import dev.joyson.aiworkbench.generation.domain.FileLocation
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL
@@ -10,14 +12,8 @@ import org.jooq.impl.SQLDataType
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
-/** 내려보내는 데 필요한 것만. 엔티티를 통째로 읽을 이유가 없다. */
-data class FileLocation(
-    val storageKey: String,
-    val mimeType: String,
-)
-
 /**
- * 파일을 **소유자와 함께** 찾는다.
+ * [GeneratedFileFinder] 의 구현.
  *
  * JPA 리포지토리가 아니라 jOOQ 인 이유가 둘 있다.
  *
@@ -29,9 +25,9 @@ data class FileLocation(
  * 역직렬화해야 하는데, 필요한 건 문자열 하나다. 여기서는 DB 가 꺼내 준다.
  */
 @Repository
-class GeneratedFileFinder(
+class JooqGeneratedFileFinder(
     private val dsl: DSLContext,
-) {
+) : GeneratedFileFinder {
 
     /**
      * JSON 컬럼에서 형식만 꺼낸다.
@@ -43,7 +39,7 @@ class GeneratedFileFinder(
     private val mimeType: Field<String> =
         DSL.field("{0} ->> 'mimeType'", SQLDataType.VARCHAR, GENERATED_FILES.METADATA)
 
-    fun findOwned(fileUuid: UUID, ownerUuid: UUID): FileLocation? =
+    override fun findOwned(fileUuid: UUID, ownerUuid: UUID): FileLocation? =
         dsl.select(GENERATED_FILES.STORAGE_KEY, mimeType)
             .from(GENERATED_FILES)
             .join(GENERATION_JOB_TASKS).on(GENERATION_JOB_TASKS.ID.eq(GENERATED_FILES.TASK_ID))

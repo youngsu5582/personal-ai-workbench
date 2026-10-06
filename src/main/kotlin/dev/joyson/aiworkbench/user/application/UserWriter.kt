@@ -4,8 +4,8 @@ import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserView
 import dev.joyson.aiworkbench.user.domain.User
 import dev.joyson.aiworkbench.user.domain.UserIdentity
-import dev.joyson.aiworkbench.user.infrastructure.UserIdentityRepository
-import dev.joyson.aiworkbench.user.infrastructure.UserRepository
+import dev.joyson.aiworkbench.user.domain.UserIdentityRepository
+import dev.joyson.aiworkbench.user.domain.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -81,8 +81,7 @@ class UserWriter(
             "연결되지 않은 provider 다: $issuer"
         }
 
-        userIdentityRepository.delete(target)
-        userIdentityRepository.flush()
+        userIdentityRepository.remove(target)
         log.info("외부 인증 주체를 해제했다: uuid={} issuer={}", user.uuid, normalized)
         return user.toView()
     }
@@ -99,6 +98,6 @@ class UserWriter(
     }
 
     private fun requireUser(userId: Long): User =
-        userRepository.findById(userId).orElseThrow { IllegalArgumentException("없는 사용자다: $userId") }
+        userRepository.findByIdOrNull(userId) ?: throw IllegalArgumentException("없는 사용자다: $userId")
 
 }

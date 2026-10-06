@@ -1,6 +1,6 @@
 package dev.joyson.aiworkbench.usage.application
 
-import dev.joyson.aiworkbench.usage.infrastructure.ProviderCallRepository
+import dev.joyson.aiworkbench.usage.domain.ProviderCallRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal

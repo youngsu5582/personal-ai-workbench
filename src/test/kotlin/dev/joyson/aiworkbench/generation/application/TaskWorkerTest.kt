@@ -14,10 +14,10 @@ import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
-import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.FileSourceFinder
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
@@ -37,7 +37,7 @@ import dev.joyson.aiworkbench.usage.FailureKind as RecordedFailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
-import dev.joyson.aiworkbench.usage.infrastructure.ProviderCallRepository
+import dev.joyson.aiworkbench.usage.infrastructure.JpaProviderCallRepository
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -55,11 +55,11 @@ import kotlin.test.assertTrue
  */
 class TaskWorkerTest @Autowired constructor(
     private val stateWriter: TaskStateWriter,
-    private val jobRepository: GenerationJobRepository,
-    private val taskRepository: GenerationJobTaskRepository,
-    private val generatedFileRepository: GeneratedFileRepository,
+    private val jobRepository: JpaGenerationJobRepository,
+    private val taskRepository: JpaGenerationJobTaskRepository,
+    private val generatedFileRepository: JpaGeneratedFileRepository,
     private val callRecorder: ProviderCallRecorder,
-    private val callRepository: ProviderCallRepository,
+    private val callRepository: JpaProviderCallRepository,
     private val fileSourceFinder: FileSourceFinder,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)

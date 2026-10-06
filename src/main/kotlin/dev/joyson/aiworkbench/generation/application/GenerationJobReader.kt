@@ -1,9 +1,9 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
-import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

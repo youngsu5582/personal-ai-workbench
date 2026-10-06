@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.generation.application
 
-import dev.joyson.aiworkbench.generation.infrastructure.FileLocation
-import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileFinder
+import dev.joyson.aiworkbench.generation.domain.FileLocation
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.mockito.Mockito.mock
