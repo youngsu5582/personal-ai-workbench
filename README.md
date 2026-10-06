@@ -240,6 +240,19 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 본인이 생성한 결과 파일의 UUID를 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
 `sources[].uuid`는 생성 결과 파일의 UUID이며, 업로드 URL 발급 응답의 UUID는 아직 사용할 수 없다.
 
+실행 중인 서버에는 다음 스크립트로 요청한다. 입력 UUID는 `GET /api/jobs/{uuid}` 응답의
+`tasks[].files[].uuid`에서 확인한다.
+
+```bash
+./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘"
+./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘" 2 gpt-image-2
+RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <생성-결과파일-uuid> "수채화로"
+```
+
+기본 모델은 `gpt-image-2`, 작업 수는 1, 크기는 `1:1 / 1k`, 품질은 `auto`다.
+`BASE_URL`, `USER_UUID`를 지정할 수 있고, `ACCESS_TOKEN`이 없으면 `dev-token.sh`로 인증한다.
+접수 후 출력되는 `job.sh` 명령으로 진행 상황을 조회한다.
+
 ```http
 POST /api/jobs
 Authorization: Bearer <token>
