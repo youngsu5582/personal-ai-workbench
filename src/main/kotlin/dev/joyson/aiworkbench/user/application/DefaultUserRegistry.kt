@@ -18,7 +18,7 @@ import java.util.UUID
 @Service
 class DefaultUserRegistry(
     private val userWriter: UserWriter,
-    private val userReader: UserReader,
+    private val userService: UserService,
 ) : UserRegistry {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -29,13 +29,13 @@ class DefaultUserRegistry(
         return try {
             userWriter.register(command)
         } catch (e: DataIntegrityViolationException) {
-            userReader.findByIdentity(command.issuer, command.subject)
+            userService.findByIdentity(command.issuer, command.subject)
                 ?: throw e
         }
     }
 
     fun linkIdentity(userId: Long, command: RegisterIdentityCommand): UserView {
-        val alreadyLinked = userReader.findByIdentity(command.issuer, command.subject)
+        val alreadyLinked = userService.findByIdentity(command.issuer, command.subject)
         if (alreadyLinked != null) {
             require(alreadyLinked.id == userId) { "이 외부 계정은 이미 다른 사용자에게 연결되어 있다" }
             return alreadyLinked
@@ -45,6 +45,6 @@ class DefaultUserRegistry(
 
     fun unlinkIdentity(userId: Long, issuer: String): UserView = userWriter.unlink(userId, issuer)
 
-    override fun findByUuid(uuid: UUID): UserView? = userReader.findByUuid(uuid)
+    override fun findByUuid(uuid: UUID): UserView? = userService.findByUuid(uuid)
 
 }

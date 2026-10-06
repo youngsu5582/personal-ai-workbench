@@ -15,7 +15,7 @@ import java.util.UUID
 /**
  * 소유권을 확인한 참조를 바이트 또는 읽기 주소로 푼다.
  *
- * [GeneratedFileReader] 와 같은 모양이다 — 조회는 finder 에, 읽기는 보관소에 맡기고
+ * [GeneratedFileService] 와 같은 모양이다 — 조회는 finder 에, 읽기는 보관소에 맡기고
  * 둘을 잇기만 한다. `@Transactional` 을 걸지 않는 이유도 같다: 보관소 읽기가 그 안에 들어온다.
  *
  * 찾지 못하면 **예외를 던진다.** finder 가 `null` 을 답하는 것과 어긋나 보이지만, 그 규칙의 근거는

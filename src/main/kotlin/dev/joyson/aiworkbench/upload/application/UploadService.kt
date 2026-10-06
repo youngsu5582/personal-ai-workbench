@@ -8,7 +8,7 @@ import java.net.URI
 import java.util.UUID
 
 @Service
-class UploadUrlIssuer(
+class UploadService(
     private val presignedUploadIssuer: PresignedUploadIssuer?,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)

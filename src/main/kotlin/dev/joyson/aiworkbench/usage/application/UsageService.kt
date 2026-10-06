@@ -14,7 +14,7 @@ import java.util.UUID
  * 합계만 보여주면 "0 달러를 썼다" 고 읽힌다. 모르는 것을 0 으로 보여주는 것이 제일 나쁘다.
  */
 @Service
-class UsageReader(
+class UsageService(
     private val repository: ProviderCallRepository,
 ) {
 

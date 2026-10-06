@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.upload.api
 
 import dev.joyson.aiworkbench.ownership.OwnerContext
-import dev.joyson.aiworkbench.upload.application.UploadUrlIssuer
+import dev.joyson.aiworkbench.upload.application.UploadService
 import dev.joyson.aiworkbench.upload.domain.UploadSpec
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
@@ -22,12 +22,12 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/uploads")
 class UploadController(
-    private val uploadUrlIssuer: UploadUrlIssuer,
+    private val uploadService: UploadService,
 ) {
     @PostMapping
     fun issue(owner: OwnerContext, @Valid @RequestBody request: UploadRequest): ResponseEntity<*> {
         val spec = request.toSpec()
-        val upload = uploadUrlIssuer.issue(owner.uuid, spec)
+        val upload = uploadService.issue(owner.uuid, spec)
             ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, "현재 보관소는 직접 업로드를 지원하지 않는다"),
             )

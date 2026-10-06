@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
 @Service
-class UserReader(
+class UserService(
     private val userRepository: UserRepository,
     private val userIdentityRepository: UserIdentityRepository,
 ) {

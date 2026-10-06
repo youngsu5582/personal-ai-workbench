@@ -19,7 +19,7 @@ class GenerationJobWriter(
 
     /**
      * Job 과 Task 를 만든다. **받아도 되는 요청인지는 여기서 묻지 않는다** —
-     * 그 판단은 [GenerationJobSubmitter] 가 하고, 이 클래스는 쓰기와 트랜잭션만 맡는다.
+     * 그 판단은 [GenerationJobService] 가 하고, 이 클래스는 쓰기와 트랜잭션만 맡는다.
      */
     @Transactional
     fun create(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {

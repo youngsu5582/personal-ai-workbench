@@ -4,7 +4,7 @@ import java.util.UUID
 import dev.joyson.aiworkbench.SharedTestConfig
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
-import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
+import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
 import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
@@ -40,8 +40,8 @@ import kotlin.test.assertFailsWith
  *
  * 앞으로 크레딧 차감·요금제 한도가 들어올 곳이라, 그 규칙들의 테스트도 여기 쌓인다.
  */
-class GenerationJobSubmitterTest @Autowired constructor(
-    private val submitter: GenerationJobSubmitter,
+class GenerationJobServiceTest @Autowired constructor(
+    private val service: GenerationJobService,
     private val jobRepository: JpaGenerationJobRepository,
     private val taskRepository: JpaGenerationJobTaskRepository,
     private val generatedFileRepository: JpaGeneratedFileRepository,
@@ -55,7 +55,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
 
     @Test
     fun `다룰 수 있는 모델이면 접수하고 Task 까지 만든다`() {
-        val view = submitter.submit(ownerUuid = UUID.randomUUID(), command = command())
+        val view = service.submit(ownerUuid = UUID.randomUUID(), command = command())
 
         assertEquals(1, jobRepository.count())
         assertEquals(2, taskRepository.count())
@@ -69,7 +69,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
     @Test
     fun `다룰 Provider 가 없는 모델은 접수되지 않는다`() {
         assertFailsWith<UnsupportedModelException> {
-            submitter.submit(ownerUuid = UUID.randomUUID(), command = command(model = "존재하지-않는-모델"))
+            service.submit(ownerUuid = UUID.randomUUID(), command = command(model = "존재하지-않는-모델"))
         }
 
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.
@@ -84,7 +84,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
     @Test
     fun `고칠 이미지가 없으면 접수되지 않는다`() {
         assertFailsWith<UnknownFileSourceException> {
-            submitter.submit(ownerUuid = UUID.randomUUID(), command = editCommand())
+            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand())
         }
 
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.
@@ -96,7 +96,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
     fun `내가 만든 이미지를 가리키면 접수된다`() {
         val me = UUID.randomUUID()
 
-        val view = submitter.submit(ownerUuid = me, command = editCommand(sourceUuid = fileOwnedBy(me)))
+        val view = service.submit(ownerUuid = me, command = editCommand(sourceUuid = fileOwnedBy(me)))
 
         assertEquals(1, view.progress.total)
     }
@@ -107,7 +107,7 @@ class GenerationJobSubmitterTest @Autowired constructor(
         val theirFile = fileOwnedBy(UUID.randomUUID())
 
         assertFailsWith<UnknownFileSourceException> {
-            submitter.submit(ownerUuid = UUID.randomUUID(), command = editCommand(sourceUuid = theirFile))
+            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(sourceUuid = theirFile))
         }
     }
 

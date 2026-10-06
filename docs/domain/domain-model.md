@@ -173,7 +173,7 @@ Controller가 Provider API를 직접 호출하지 않는다. MCP도 Controller�
 
 - `User` / `UserIdentity` (1:N, `UNIQUE(issuer, subject)`)
 - `UserRegistry` — user 모듈의 공개 경계. 실제 소비자가 있는 것만 노출한다
-- 읽기/쓰기 분리 — `UserReader` / `UserWriter`, 매핑은 리포지토리에 의존하지 않는 순수 함수
+- 읽기/쓰기 분리 — `UserService` / `UserWriter`, 매핑은 리포지토리에 의존하지 않는 순수 함수
 - `user/api/MeController` — 자기 데이터의 HTTP 표면은 자기 모듈이 가진다
 - Google OIDC 로그인, JIT provisioning, 이메일 allowlist
 - 자체 access token 발급(HS256)과 Bearer 검증, `AuthErrorCode`로 거부 사유 일원화

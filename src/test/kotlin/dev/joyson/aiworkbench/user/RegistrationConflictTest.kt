@@ -2,7 +2,7 @@ package dev.joyson.aiworkbench.user
 
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.user.application.DefaultUserRegistry
-import dev.joyson.aiworkbench.user.application.UserReader
+import dev.joyson.aiworkbench.user.application.UserService
 import dev.joyson.aiworkbench.user.application.UserWriter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest

@@ -33,7 +33,7 @@ sealed interface FileDownload {
 }
 
 @Service
-class GeneratedFileReader(
+class GeneratedFileService(
     private val generatedFileFinder: GeneratedFileFinder,
     private val fileStorage: FileStorage,
     /** 보관소가 주소에 서명할 수 있을 때만 있다. 로컬 디스크는 못 한다. */
