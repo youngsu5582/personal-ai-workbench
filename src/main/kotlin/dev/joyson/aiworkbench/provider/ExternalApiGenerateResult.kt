@@ -18,6 +18,16 @@ class ExternalApiGenerateResult(
     val metadata: ImageMetadata,
     /** Provider 가 프롬프트를 고쳐 썼다면 그 내용. 없으면 null. */
     val revisedPrompt: String? = null,
+
+    /**
+     * Provider 가 이 결과물에 붙인 식별자. 없으면 null.
+     *
+     * 저쪽 청구서·지원 문의와 대조할 때 쓴다. 우리 uuid 는 저쪽이 모르고, 저쪽 id 는 우리가
+     * 안 적으면 다시 알 길이 없다 — 응답은 한 번뿐이다.
+     *
+     * 호출 단위가 아니라 결과물 단위다. 한 호출이 여러 장을 내면 장마다 따로 온다.
+     */
+    val providerId: String? = null,
 ) {
     init {
         // 메타데이터가 바이트와 어긋나면 나중에 DB 의 크기와 보관소의 실제 파일이 달라진다.
