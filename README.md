@@ -237,8 +237,9 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 
 ## 이미지 투 이미지
 
-본인이 생성한 결과 파일의 UUID를 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
-`sources[].uuid`는 생성 결과 파일의 UUID이며, 업로드 URL 발급 응답의 UUID는 아직 사용할 수 없다.
+본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
+`sources[]`는 `{"type": "generated", "uuid": <결과 파일 UUID>}` 또는 `{"type": "uploaded", "uuid": <업로드 UUID>}`다.
+올린 파일은 처음 입력으로 쓰일 때 형식을 확인하며, 맞지 않으면 400이다.
 
 실행 중인 서버에는 다음 스크립트로 요청한다. 입력 UUID는 `GET /api/jobs/{uuid}` 응답의
 `tasks[].files[].uuid`에서 확인한다.
@@ -313,8 +314,8 @@ Content-Type: application/json
 PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인증은 401,
 직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
 
-현재는 URL 발급까지만 제공한다. 완료 검증과 생성 입력 등록은 아직 제공하지 않는다.
-설계와 현재 구현 범위는 [`docs/architecture/direct-upload.md`](docs/architecture/direct-upload.md)에 정리한다.
+올린 파일은 `SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드 UUID> "<프롬프트>"`로 i2i 입력에 쓴다.
+설계와 그 이유는 [`docs/architecture/direct-upload.md`](docs/architecture/direct-upload.md)에 정리한다.
 
 ### 스크립트로 발급 → 업로드 확인
 
