@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.infrastructure
 
+import dev.joyson.aiworkbench.generation.application.ResolvedFile
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
