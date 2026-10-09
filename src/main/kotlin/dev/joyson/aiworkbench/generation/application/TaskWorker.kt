@@ -6,8 +6,6 @@ import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
-import dev.joyson.aiworkbench.generation.infrastructure.ProviderCallFactory
-import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -78,7 +76,7 @@ class TaskWorker(
             return
         }
 
-        val request = ProviderRequestFactory.from(job.option, images)
+        val request = ProviderRequestMapper.from(job.option, images)
 
         // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
         // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.
@@ -91,7 +89,7 @@ class TaskWorker(
             // 실패한 호출도 적는다. 타임아웃은 우리만 못 받았을 뿐 저쪽에서는 만들어졌고 과금됐을 수 있다.
             // 여기서 안 적으면 가장 설명이 필요한 지출이 기록에서 사라진다.
             record(
-                ProviderCallFactory.failed(
+                ProviderCallMapper.failed(
                     job, task, provider.name, request,
                     callMark.elapsedMillis(), calledAt, reason, e.kind,
                 ),
@@ -102,7 +100,7 @@ class TaskWorker(
 
         // 보관보다 **먼저** 적는다. 돈은 이미 나갔고 그 사실은 뒤에 무엇이 실패하든 남아야 한다.
         // 파일을 상태보다 먼저 쓰는 것과 같은 순서 — 되돌릴 수 없는 일이 먼저 기록된다.
-        record(ProviderCallFactory.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
 
         val stored = try {
             store(job, response)

@@ -134,19 +134,19 @@ userRepository.save(user)
 ```text
 generation/
 ├── api/
-│   ├── GenerationJobController.kt
-│   └── GenerationJobResponse.kt
+│   ├── GenerationJobController.kt     ← Service 만 부른다
+│   └── GenerationJobResponses.kt
 ├── application/
-│   ├── CreateGenerationJobService.kt
-│   └── GetGenerationJobService.kt
+│   ├── GenerationJobService.kt        ← 컨트롤러가 부르는 진입점. 애그리거트당 하나
+│   └── GenerationJobWriter.kt         ← 그 아래 부품
 ├── domain/
 │   ├── GenerationJob.kt
-│   ├── JobStatus.kt
-│   └── ImageGenerationProvider.kt
+│   └── GenerationJobRepository.kt     ← 포트. interface
 └── infrastructure/
-    ├── JpaGenerationJobRepository.kt
-    └── DirectHttpImageGenerationProvider.kt
+    └── JpaGenerationJobRepository.kt  ← 포트 구현. {기술}{포트}
 ```
+
+어디에 무엇을 두고 어떻게 이름 짓는지는 `.claude/conventions.json` 이 정하고, 테스트와 Mod 가 그것을 강제한다.
 
 각 디렉터리의 책임은 다음과 같다.
 
