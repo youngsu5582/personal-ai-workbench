@@ -56,9 +56,16 @@ while :; do
 done
 
 # Task 를 자리째 보여준다. 실패한 자리도 목록에 남는다.
-printf '%s' "$PAYLOAD" | BASE_URL="$BASE_URL" python3 -c '
-import json, os, sys
+# 파일마다 그대로 복사해 받을 수 있는 명령을 붙인다. 받으려면 토큰이 필요하다 —
+# 서명된 URL 과 달리 매 요청마다 소유권을 확인한다.
+# -L 은 보관소가 302 로 넘기는 경우를 위해서다. curl 은 다른 호스트로 넘어갈 때
+# Authorization 을 떼므로 서명 주소와 충돌하지 않는다.
+printf '%s' "$PAYLOAD" | BASE_URL="$BASE_URL" USER_UUID="${USER_UUID:-}" python3 -c '
+import json, os, shlex, sys
 base = os.environ["BASE_URL"]
+token = "./scripts/dev-token.sh"
+if os.environ["USER_UUID"]:
+    token += " " + shlex.quote(os.environ["USER_UUID"])
 job = json.loads(sys.stdin.read())
 print()
 for task in job.get("tasks", []):
@@ -67,10 +74,11 @@ for task in job.get("tasks", []):
         head += "  ({})".format(task["failureReason"])
     print(head)
     for f in task.get("files", []):
-        print("     {}{}  {}x{}  {:,} bytes".format(
-            base, f["url"], f["width"], f["height"], f["fileSize"]))
+        url = base + f["url"]
+        # 서버의 MimeTypes.extensionOf 와 같은 규칙이다.
+        _, slash, ext = f["mimeType"].rpartition("/")
+        ext = (ext if slash else "") or "bin"
+        print("     {}  {}x{}  {:,} bytes".format(url, f["width"], f["height"], f["fileSize"]))
+        print("     curl -L -H \"Authorization: Bearer $({})\" -o {} {}".format(
+            token, shlex.quote("{}.{}".format(f["uuid"], ext)), shlex.quote(url)))
 '
-
-# 받으려면 토큰이 필요하다. 서명된 URL 과 달리 매 요청마다 소유권을 확인한다.
-echo
-echo "  내려받기:  curl -H \"Authorization: Bearer \$(./scripts/dev-token.sh)\" -o out.png <url>"
