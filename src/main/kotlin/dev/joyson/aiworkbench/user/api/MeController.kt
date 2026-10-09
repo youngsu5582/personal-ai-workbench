@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.user.api
 
 import dev.joyson.aiworkbench.ownership.OwnerContext
-import dev.joyson.aiworkbench.user.application.UserReader
+import dev.joyson.aiworkbench.user.application.UserService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
@@ -15,11 +15,11 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 class MeController(
-    private val userReader: UserReader,
+    private val userService: UserService,
 ) {
     @GetMapping("/api/me")
     fun me(owner: OwnerContext): ResponseEntity<MeResponse> {
-        val user = userReader.findByUuid(owner.uuid)
+        val user = userService.findByUuid(owner.uuid)
             ?: return ResponseEntity.notFound().build()
 
         return ResponseEntity.ok(
@@ -28,7 +28,7 @@ class MeController(
                 displayName = user.displayName,
                 active = user.active,
                 // 로그인 수단 목록은 이 화면만 필요로 한다. 그래서 UserView 에 끼워 넣지 않고 따로 부른다.
-                identities = userReader.findIdentities(user.id).map {
+                identities = userService.findIdentities(user.id).map {
                     IdentitySummary(issuer = it.issuer, subject = it.subject, email = it.email)
                 },
             ),

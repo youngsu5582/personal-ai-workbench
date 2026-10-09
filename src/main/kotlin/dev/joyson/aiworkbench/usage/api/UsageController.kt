@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.usage.api
 
 import dev.joyson.aiworkbench.ownership.OwnerContext
-import dev.joyson.aiworkbench.usage.application.UsageReader
+import dev.joyson.aiworkbench.usage.application.UsageService
 import dev.joyson.aiworkbench.usage.application.UsageSummaryView
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
@@ -22,7 +22,7 @@ import java.time.temporal.ChronoUnit
  */
 @RestController
 class UsageController(
-    private val usageReader: UsageReader,
+    private val usageService: UsageService,
 ) {
 
     /**
@@ -46,7 +46,7 @@ class UsageController(
             return ResponseEntity.badRequest().build()
         }
 
-        return ResponseEntity.ok(usageReader.summarize(owner.uuid, start, end).toResponse())
+        return ResponseEntity.ok(usageService.summarize(owner.uuid, start, end).toResponse())
     }
 
     private fun startOfMonth(at: Instant): Instant =

@@ -10,8 +10,8 @@ import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
+import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Import
@@ -21,8 +21,8 @@ import kotlin.test.assertEquals
 
 class GenerationJobWriterTest @Autowired constructor(
     private val writer: GenerationJobWriter,
-    private val jobRepository: GenerationJobRepository,
-    private val taskRepository: GenerationJobTaskRepository,
+    private val jobRepository: JpaGenerationJobRepository,
+    private val taskRepository: JpaGenerationJobTaskRepository,
 ) : IntegrationTest() {
 
     private fun command(taskCount: Int) = GenerationCommand(

@@ -1,19 +1,29 @@
 package dev.joyson.aiworkbench.generation.infrastructure
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import org.springframework.data.jpa.repository.JpaRepository
-import java.util.UUID
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
-interface GenerationJobRepository : JpaRepository<GenerationJob, Long> {
-
-    fun findByUuid(uuid: UUID): GenerationJob?
+/**
+ * [GenerationJobRepository] 의 구현. 실제 클래스는 Spring Data 가 만든다.
+ *
+ * 포트의 메서드 중 이름만으로 쿼리가 되는 것(`findByUuid`)은 여기 다시 적지 않는다.
+ * 테스트는 이 타입을 받아 포트에 없는 `JpaRepository` 메서드까지 쓴다.
+ */
+interface JpaGenerationJobRepository : JpaRepository<GenerationJob, Long>, GenerationJobRepository {
 
     /**
-     * 남은 Task 가 없으면 Job 을 닫는다. 이미 닫혔거나 남은 Task 가 있으면 아무것도 하지 않는다.
+     * 포트가 `findById` 라는 이름을 쓰지 못하는 이유: 상속한 `findById` 가 `Optional` 을 돌려줘
+     * 같은 이름으로 `GenerationJob?` 을 선언하면 충돌한다.
      *
+     * 몸체에서 `findByIdOrNull` 을 부르면 안 된다 — 멤버가 Spring Data 의 확장 함수를 가려 자기 자신을 부른다.
+     */
+    override fun findByIdOrNull(id: Long): GenerationJob? = findById(id).orElse(null)
+
+    /**
      * 엔티티를 읽어 고치지 않고 **조건부 UPDATE** 한 방으로 하는 이유는 경쟁 때문이다.
      * 마지막 Task 들이 거의 동시에 끝나면 여러 워커가 같은 판정을 동시에 하는데,
      * 읽고-판단하고-쓰는 사이에 다른 워커의 커밋이 끼어들면 둘 다 "아직 남았다" 로 보고
@@ -28,8 +38,6 @@ interface GenerationJobRepository : JpaRepository<GenerationJob, Long> {
      *
      * `flushAutomatically` 는 붙이지 않는다. Hibernate 는 네이티브 쿼리의 대상 테이블을
      * 알 수 없으면 세션 전체를 flush 하므로, 바뀐 Task 상태는 이미 나간 뒤다.
-     *
-     * @return 실제로 닫은 행 수. 0 이면 다른 워커가 이미 닫았거나 아직 끝나지 않았다는 뜻이다.
      */
     @Modifying(clearAutomatically = true)
     @Query(
@@ -45,5 +53,5 @@ interface GenerationJobRepository : JpaRepository<GenerationJob, Long> {
         """,
         nativeQuery = true,
     )
-    fun closeIfAllTasksFinished(@Param("jobId") jobId: Long): Int
+    override fun closeIfAllTasksFinished(@Param("jobId") jobId: Long): Int
 }

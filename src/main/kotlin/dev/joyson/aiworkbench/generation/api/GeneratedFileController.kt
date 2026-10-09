@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.FileDownload
-import dev.joyson.aiworkbench.generation.application.GeneratedFileReader
+import dev.joyson.aiworkbench.generation.application.GeneratedFileService
 import dev.joyson.aiworkbench.ownership.OwnerContext
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
@@ -28,12 +28,12 @@ import java.util.UUID
 @RestController
 @RequestMapping(GeneratedFileController.BASE_PATH)
 class GeneratedFileController(
-    private val generatedFileReader: GeneratedFileReader,
+    private val generatedFileService: GeneratedFileService,
 ) {
 
     @GetMapping("/{uuid}")
     fun download(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<*> =
-        when (val download = generatedFileReader.download(uuid, owner.uuid)) {
+        when (val download = generatedFileService.download(uuid, owner.uuid)) {
             null -> ResponseEntity.notFound().build<Void>()
 
             // 302 다. 301 이면 브라우저가 캐시하는데, 그 주소는 곧 만료된다.

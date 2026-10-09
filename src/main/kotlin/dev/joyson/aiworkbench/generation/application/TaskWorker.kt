@@ -4,8 +4,8 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.storage.Sha256
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderCallFactory
 import dev.joyson.aiworkbench.generation.infrastructure.ProviderRequestFactory
 import dev.joyson.aiworkbench.storage.BlobKey
@@ -48,8 +48,8 @@ class TaskWorker(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun process(taskId: Long) {
-        val task = taskRepository.findById(taskId).orElse(null) ?: return
-        val job = jobRepository.findById(task.jobId).orElse(null) ?: run {
+        val task = taskRepository.findByIdOrNull(taskId) ?: return
+        val job = jobRepository.findByIdOrNull(task.jobId) ?: run {
             // Task 는 있는데 Job 이 없는 건 설명되지 않는 상태다. 다시 해도 같으므로 닫는다.
             stateWriter.fail(taskId, "job 을 찾을 수 없다: ${task.jobId}", retryable = false)
             return

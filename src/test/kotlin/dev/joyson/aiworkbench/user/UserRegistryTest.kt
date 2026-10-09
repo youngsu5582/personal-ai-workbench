@@ -2,7 +2,7 @@ package dev.joyson.aiworkbench.user
 
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.user.application.DefaultUserRegistry
-import dev.joyson.aiworkbench.user.application.UserReader
+import dev.joyson.aiworkbench.user.application.UserService
 import dev.joyson.aiworkbench.user.application.UserWriter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
@@ -22,7 +22,7 @@ class UserRegistryTest @Autowired constructor(
     // 공개 인터페이스가 아니라 구현을 주입한다.
     // link/unlink 는 아직 공개 경계에 없고 구현에만 있기 때문이다.
     private val userRegistry: DefaultUserRegistry,
-    private val userReader: UserReader,
+    private val userService: UserService,
 ) : IntegrationTest() {
 
     private fun command(issuer: String, subject: String, name: String = "Joyson", email: String? = "joyson@example.com") =
@@ -34,8 +34,8 @@ class UserRegistryTest @Autowired constructor(
 
         assertEquals("Joyson", user.displayName)
         assertTrue(user.active)
-        assertEquals(1, userReader.findIdentities(user.id).size)
-        assertEquals(GOOGLE, userReader.findIdentities(user.id).single().issuer)
+        assertEquals(1, userService.findIdentities(user.id).size)
+        assertEquals(GOOGLE, userService.findIdentities(user.id).single().issuer)
     }
 
     @Test
@@ -45,7 +45,7 @@ class UserRegistryTest @Autowired constructor(
 
         assertEquals(first.id, second.id)
         assertEquals(first.uuid, second.uuid)
-        assertEquals(1, userReader.findIdentities(second.id).size)
+        assertEquals(1, userService.findIdentities(second.id).size)
         // provider 가 다른 이름을 줘도 표시 이름은 그대로다.
         // 매번 덮어쓰면 여러 provider 를 연결했을 때 마지막 로그인 쪽으로 계속 뒤집힌다.
         assertEquals("Joyson", second.displayName)
@@ -76,7 +76,7 @@ class UserRegistryTest @Autowired constructor(
         val linked = userRegistry.linkIdentity(user.id, command(GITHUB, "9876"))
 
         assertEquals(user.id, linked.id)
-        assertEquals(setOf(GOOGLE, GITHUB), userReader.findIdentities(linked.id).map { it.issuer }.toSet())
+        assertEquals(setOf(GOOGLE, GITHUB), userService.findIdentities(linked.id).map { it.issuer }.toSet())
     }
 
     @Test
@@ -136,7 +136,7 @@ class UserRegistryTest @Autowired constructor(
 
         val remaining = userRegistry.unlinkIdentity(user.id, GITHUB)
 
-        assertEquals(listOf(GOOGLE), userReader.findIdentities(remaining.id).map { it.issuer })
+        assertEquals(listOf(GOOGLE), userService.findIdentities(remaining.id).map { it.issuer })
     }
 
     /**
@@ -159,7 +159,7 @@ class UserRegistryTest @Autowired constructor(
 
         val updated = userRegistry.resolveOrRegister(command(GOOGLE, "sub-1", email = "new@example.com"))
 
-        assertEquals("new@example.com", userReader.findIdentities(updated.id).single().email)
+        assertEquals("new@example.com", userService.findIdentities(updated.id).single().email)
     }
 
     /** GitHub 처럼 이메일을 비공개로 둔 계정은 userinfo 에 이메일을 주지 않는다. */
@@ -169,7 +169,7 @@ class UserRegistryTest @Autowired constructor(
 
         val afterNullEmail = userRegistry.resolveOrRegister(command(GOOGLE, "sub-1", email = null))
 
-        assertEquals("keep@example.com", userReader.findIdentities(afterNullEmail.id).single().email)
+        assertEquals("keep@example.com", userService.findIdentities(afterNullEmail.id).single().email)
     }
 
     @Test

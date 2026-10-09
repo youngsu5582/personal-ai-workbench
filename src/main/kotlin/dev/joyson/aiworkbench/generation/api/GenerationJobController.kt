@@ -1,8 +1,7 @@
 package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
-import dev.joyson.aiworkbench.generation.application.GenerationJobReader
-import dev.joyson.aiworkbench.generation.application.GenerationJobSubmitter
+import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.ownership.OwnerContext
@@ -23,13 +22,12 @@ import java.util.*
 @RestController
 @RequestMapping("/api/jobs")
 class GenerationJobController(
-    private val generationJobSubmitter: GenerationJobSubmitter,
-    private val generationJobReader: GenerationJobReader,
+    private val generationJobService: GenerationJobService,
 ) {
 
     @PostMapping
     fun generate(owner: OwnerContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
-        val job = generationJobSubmitter.submit(owner.uuid, request.toCommand())
+        val job = generationJobService.submit(owner.uuid, request.toCommand())
         // 접수 확인이므로, 202 반환
         return ResponseEntity.accepted().body(GenerationResponse(job.uuid))
     }
@@ -41,7 +39,7 @@ class GenerationJobController(
      */
     @GetMapping("/{uuid}")
     fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
-        generationJobReader.findOwned(uuid, owner.uuid)
+        generationJobService.findOwned(uuid, owner.uuid)
             ?.let { ResponseEntity.ok(it.toResponse()) }
             ?: ResponseEntity.notFound().build()
 }
