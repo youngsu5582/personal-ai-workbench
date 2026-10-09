@@ -1,0 +1,6 @@
+{
+  "name": "convention-gate",
+  "version": "0.1.0",
+  "description": "저장소의 .claude/conventions.json 규약을 AI 가 Kotlin 파일을 쓰는 순간에 건다",
+  "author": { "name": "youngsu5582" }
+}
