@@ -106,7 +106,7 @@ class FileSourceUnavailableException(
  * 실행 시점에 준비한 입력 파일의 바이트 또는 읽기 주소.
  *
  * 포트의 `ExternalApiFileInput` 과 모양이 같지만 여기서 그것을 만들지 않는다 —
- * 두 어휘를 잇는 책임은 [ProviderRequestFactory] 한 곳에 있고, 포트를 아는 자리가 둘이 되면
+ * 두 어휘를 잇는 책임은 [ProviderRequestMapper] 한 곳에 있고, 포트를 아는 자리가 둘이 되면
  * 포트에 필드가 늘 때 고칠 곳도 둘이 된다.
  *
  * 바이트는 배열의 참조 비교를 피하고, 주소는 toString으로 읽기 권한이 새지 않도록 일반 클래스로 둔다.

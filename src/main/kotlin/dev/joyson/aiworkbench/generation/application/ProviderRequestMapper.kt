@@ -1,6 +1,5 @@
-package dev.joyson.aiworkbench.generation.infrastructure
+package dev.joyson.aiworkbench.generation.application
 
-import dev.joyson.aiworkbench.generation.application.ResolvedFile
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
@@ -23,7 +22,7 @@ import dev.joyson.aiworkbench.provider.ImageQuality
  * — 이 저장소는 목 라이브러리를 쓰지 않아 순수 함수에는 대역을 만들 것조차 없다 —
  * 부르는 쪽 생성자만 길어진다.
  */
-object ProviderRequestFactory {
+object ProviderRequestMapper {
 
     /**
      * @param images 실행 시점에 준비한 입력 바이트 또는 읽기 주소. **준비는 여기서 하지 않는다** —
