@@ -2,10 +2,12 @@ package dev.joyson.aiworkbench.generation.infrastructure
 
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
 
 /**
@@ -22,7 +24,15 @@ import dev.joyson.aiworkbench.provider.ImageQuality
  */
 object ProviderRequestFactory {
 
-    fun from(option: GenerationOption): ExternalApiGenerateRequest = when (option) {
+    /**
+     * @param images 실행 시점에 준비한 입력 바이트 또는 읽기 주소. **준비는 여기서 하지 않는다** —
+     *   매핑 함수가 조회를 시작하면 호출자가 그 비용을 볼 수 없게 된다.
+     *   기본값이 빈 목록이라 입력이 없는 종류를 옮길 때는 부르는 쪽이 달라지지 않는다.
+     */
+    fun from(
+        option: GenerationOption,
+        images: List<ResolvedFile> = emptyList(),
+    ): ExternalApiGenerateRequest = when (option) {
         is TextToImageOption -> {
             val (width, height) = pixelsOf(option.size)
             ExternalApiGenerateRequest(
@@ -32,6 +42,27 @@ object ProviderRequestFactory {
                 quality = qualityOf(option.quality),
             )
         }
+
+        is ImageToImageOption -> {
+            // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 읽어 넘기기를 빠뜨린 것이다.
+            // 그대로 두면 이미지 없는 요청이 조용히 t2i 로 나가 과금된다.
+            require(images.isNotEmpty()) { "고칠 이미지를 읽어 넘기지 않았다" }
+
+            val (width, height) = pixelsOf(option.size)
+            ExternalApiGenerateRequest(
+                prompt = option.prompt,
+                width = width,
+                height = height,
+                quality = qualityOf(option.quality),
+                images = images.map { inputOf(it) },
+            )
+        }
+    }
+
+    /** 준비한 입력 이미지를 포트의 어휘로 옮긴다. */
+    private fun inputOf(image: ResolvedFile): ExternalApiFileInput = when (image) {
+        is ResolvedFile.Bytes -> ExternalApiFileInput.Bytes(image.bytes, image.mimeType, image.filename)
+        is ResolvedFile.Url -> ExternalApiFileInput.Url(image.url, image.mimeType, image.filename)
     }
 
     /**

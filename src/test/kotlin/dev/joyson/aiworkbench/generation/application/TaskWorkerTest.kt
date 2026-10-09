@@ -8,10 +8,14 @@ import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
+import dev.joyson.aiworkbench.generation.domain.option.FileSource
+import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.infrastructure.FileSourceFinder
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
@@ -19,6 +23,9 @@ import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
+import java.net.URI
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
@@ -53,14 +60,21 @@ class TaskWorkerTest @Autowired constructor(
     private val generatedFileRepository: GeneratedFileRepository,
     private val callRecorder: ProviderCallRecorder,
     private val callRepository: ProviderCallRepository,
+    private val fileSourceFinder: FileSourceFinder,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
     /** 키별로 마지막에 쓴 바이트만 남는다 — 실제 보관소의 덮어쓰기와 같다. */
     private val storage = object : FileStorage {
         val written = mutableMapOf<String, ByteArray>()
+
+        /** 입력 이미지를 몇 번 읽었는지. 재시도 비용을 사실로 붙잡아 두는 데 쓴다. */
+        var reads = 0
         override fun put(key: String, content: ByteArray, contentType: String) { written[key] = content }
-        override fun read(key: String): ByteArray? = written[key]
+        override fun read(key: String): ByteArray? {
+            reads += 1
+            return written[key]
+        }
     }
 
     private fun provider(behavior: () -> ExternalApiGenerateResponse) = object : ExternalApiProvider {
@@ -91,10 +105,13 @@ class TaskWorkerTest @Autowired constructor(
         provider: ExternalApiProvider,
         fileStorage: FileStorage = storage,
         recorder: ProviderCallRecorder = callRecorder,
+        presignedUrlIssuer: PresignedUrlIssuer? = null,
     ) = TaskWorker(
         taskRepository = taskRepository,
         jobRepository = jobRepository,
         providerRegistry = ProviderRegistry(listOf(provider)),
+        // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
+        fileSourceResolver = FileSourceResolver(fileSourceFinder, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
         stateWriter = stateWriter,
         callRecorder = recorder,
@@ -103,11 +120,13 @@ class TaskWorkerTest @Autowired constructor(
     private fun newTask(
         model: String = MODEL,
         size: ImageSize = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
+        option: GenerationOption = TextToImageOption("고양이", size),
+        ownerUuid: UUID = UUID.randomUUID(),
     ): Pair<GenerationJob, GenerationJobTask> {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
-                ownerUserUuid = UUID.randomUUID(),
-                option = TextToImageOption("고양이", size),
+                ownerUserUuid = ownerUuid,
+                option = option,
                 model = model,
                 taskCount = 1,
             ),
@@ -500,6 +519,154 @@ class TaskWorkerTest @Autowired constructor(
         val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
         assertEquals("gen-abc", assertNotNull(file.providerInfo).providerId)
     }
+
+    @Test
+    fun `참조한 이미지를 읽어 Provider 에 넘긴다`() {
+        // 입력은 우리가 만든 것뿐이라, 먼저 글에서 하나 만든다.
+        val (first, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+
+        val (_, editTask) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        var captured: ExternalApiGenerateRequest? = null
+
+        workerWith(
+            object : ExternalApiProvider {
+                override val name = PROVIDER
+                override fun supports(model: String) = model == MODEL
+                override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
+                    captured = request
+                    return success()
+                }
+            },
+        ).process(editTask.id!!)
+
+        val images = assertNotNull(captured).images
+        assertEquals(1, images.size)
+        assertContentEquals(image, assertIs<ExternalApiFileInput.Bytes>(images[0]).bytes, "보관소에서 읽은 바이트가 그대로 실려야 한다")
+        assertEquals("image/png", images[0].mimeType)
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(editTask.id!!).get().status)
+    }
+
+    @Test
+    fun `참조한 이미지가 없으면 재시도하지 않는다`() {
+        // 접수 때는 있었지만 그 사이 지워졌을 수 있다. 다시 읽어도 없으므로 그 자리에서 닫는다.
+        val (_, task) = newTask(option = editOption(UUID.randomUUID()))
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(storage.written.isEmpty(), "입력을 못 읽었는데 결과가 남았다")
+    }
+
+    /** 부르지 못했으니 나간 돈도 없다. 지출로 적히면 없는 비용이 집계에 섞인다. */
+    @Test
+    fun `입력을 읽지 못한 실패는 지출로 적히지 않는다`() {
+        val (_, task) = newTask(option = editOption(UUID.randomUUID()))
+
+        workerWith(provider { success() }).process(task.id!!)
+
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty())
+    }
+
+    /** 바이트를 워커가 들고 있지 않다는 사실. 캐시를 넣으면 이 값이 1이 된다. */
+    @Test
+    fun `재시도하면 입력 이미지를 다시 읽는다`() {
+        val (first, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+
+        val (_, editTask) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        var attempts = 0
+        val worker = workerWith(
+            provider {
+                attempts += 1
+                if (attempts == 1) throw ExternalApiException(FailureKind.THROTTLED, "일시적 오류")
+                success()
+            },
+        )
+
+        val before = storage.reads
+        worker.process(editTask.id!!)
+        stateWriter.claim(limit = 1)
+        worker.process(editTask.id!!)
+
+        assertEquals(2, storage.reads - before)
+    }
+
+    @Test
+    fun `입력 주소가 있으면 바이트를 읽지 않고 Provider에 전달하며 재시도마다 새로 발급한다`() {
+        val (first, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val urls = mutableListOf<URI>()
+        var issued = 0
+        val signer = PresignedUrlIssuer { key, filename ->
+            assertEquals(source.storageKey, key)
+            assertEquals("${source.uuid}.png", filename)
+            URI.create("https://storage.test/$key?X-Amz-Signature=attempt-${++issued}")
+        }
+        val provider = object : ExternalApiProvider {
+            override val name = PROVIDER
+            override fun supports(model: String) = model == MODEL
+            override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
+                urls += assertIs<ExternalApiFileInput.Url>(request.images.single()).url
+                if (urls.size == 1) throw ExternalApiException(FailureKind.THROTTLED, "일시적 오류")
+                return success()
+            }
+        }
+        val worker = workerWith(provider, presignedUrlIssuer = signer)
+        val readsBefore = storage.reads
+        worker.process(task.id!!)
+        stateWriter.claim(limit = 1)
+        worker.process(task.id!!)
+
+        assertEquals(readsBefore, storage.reads, "주소를 보낼 때는 보관소 바이트를 앱이 읽지 않는다")
+        assertEquals(2, issued)
+        assertEquals(listOf("X-Amz-Signature=attempt-1", "X-Amz-Signature=attempt-2"), urls.map { it.query })
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertFalse(jobRepository.findById(task.jobId).get().option.toString().contains("X-Amz-Signature"))
+    }
+
+    @Test
+    fun `남의 입력에는 주소를 발급하거나 Provider를 호출하지 않는다`() {
+        val (_, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+        val (_, task) = newTask(option = editOption(source.uuid))
+
+        workerWith(
+            provider { error("Provider를 호출하면 안 된다") },
+            presignedUrlIssuer = PresignedUrlIssuer { _, _ -> error("주소를 발급하면 안 된다") },
+        ).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty())
+    }
+
+    @Test
+    fun `주소 발급 실패는 Provider 호출 없이 재시도 가능한 실패로 기록한다`() {
+        val (first, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+
+        workerWith(
+            provider { error("Provider를 호출하면 안 된다") },
+            presignedUrlIssuer = PresignedUrlIssuer { _, _ -> throw IllegalStateException("secret") },
+        ).process(task.id!!)
+
+        val failed = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.PENDING, failed.status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty())
+    }
+
+    private fun editOption(sourceUuid: UUID) = ImageToImageOption(
+        prompt = "수채화로",
+        sources = listOf(FileSource.Generated(sourceUuid)),
+        size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
+    )
 
     private companion object {
         const val MODEL = "fake-image-1"

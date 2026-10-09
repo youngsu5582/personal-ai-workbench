@@ -40,6 +40,7 @@ class TaskWorker(
     private val taskRepository: GenerationJobTaskRepository,
     private val jobRepository: GenerationJobRepository,
     private val providerRegistry: ProviderRegistry,
+    private val fileSourceResolver: FileSourceResolver,
     private val fileStorage: FileStorage,
     private val stateWriter: TaskStateWriter,
     private val callRecorder: ProviderCallRecorder,
@@ -62,8 +63,22 @@ class TaskWorker(
 
         log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
 
-        val request = ProviderRequestFactory.from(job.option)
         val processMark = TimeSource.Monotonic.markNow()
+
+        // 호출 전에 소유권을 다시 확인하고 바이트 또는 새 읽기 주소를 준비한다.
+        // 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
+        val images = try {
+            fileSourceResolver.resolve(job.ownerUserUuid, job.option)
+        } catch (e: FileSourceUnavailableException) {
+            // 아직 아무것도 부르지 않았다 — 나간 돈이 없으므로 지출도 적지 않는다.
+            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
+            return
+        } catch (e: FileStorageException) {
+            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
+            return
+        }
+
+        val request = ProviderRequestFactory.from(job.option, images)
 
         // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
         // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.

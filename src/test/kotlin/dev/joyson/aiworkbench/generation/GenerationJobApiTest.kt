@@ -19,6 +19,7 @@ import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -112,6 +113,41 @@ class GenerationJobApiTest @Autowired constructor(
         request(body(taskCount = 1), withToken = false).andExpect { status { isUnauthorized() } }
     }
 
+    /**
+     * 없는 참조와 남의 참조는 같은 응답이다 — 구분하면 그 uuid 의 존재가 새어 나간다.
+     * 여기서 막지 않으면 202 로 접수된 뒤 Task 실패로만 드러난다.
+     */
+    @Test
+    fun `존재하지 않는 이미지 참조는 400 이다`() {
+        request(body(1, editOption(sources = generated(UUID.randomUUID()))))
+            .andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `고칠 이미지를 주지 않으면 400 이다`() {
+        request(body(1, editOption(sources = "[]"))).andExpect { status { isBadRequest() } }
+    }
+
+    /** 지금 상한은 1장이고, 그 제한이 접수 단계에서 걸린다는 사실을 고정한다. */
+    @Test
+    fun `고칠 이미지를 두 장 주면 400 이다`() {
+        val two = """[{"type":"generated","uuid":"${UUID.randomUUID()}"},""" +
+            """{"type":"generated","uuid":"${UUID.randomUUID()}"}]"""
+
+        request(body(1, editOption(sources = two))).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `알 수 없는 이미지 참조 종류는 400 이다`() {
+        request(body(1, editOption(sources = """[{"type":"borrowed","uuid":"${UUID.randomUUID()}"}]""")))
+            .andExpect { status { isBadRequest() } }
+    }
+
+    private fun generated(uuid: UUID) = """[{"type":"generated","uuid":"$uuid"}]"""
+
+    private fun editOption(sources: String) =
+        """{"type":"image-to-image","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
+
     /** 애노테이션 인자는 컴파일 타임 상수라 도메인 상수를 참조할 수 없다. 어긋나면 여기서 잡는다. */
     @Test
     fun `요청 제약의 상한이 도메인 상한과 같다`() {
@@ -129,5 +165,5 @@ private object GenerationRequestConstraints {
 }
 
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
-private const val OPTION =
-    """{"type":"text-to-image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
+private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
+private const val OPTION = """{"type":"text-to-image","prompt":"고양이","size":$SIZE}"""
