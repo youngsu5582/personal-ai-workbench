@@ -97,6 +97,8 @@ object ProviderCallMapper {
      */
     private fun kindOf(kind: ProviderFailureKind): FailureKind = when (kind) {
         ProviderFailureKind.REJECTED -> FailureKind.REJECTED
+        // 지출 관점에서는 거절과 같다 — 저쪽은 만들지 않았고 과금도 없다. 다시 보낼지는 워커가 이미 정했다.
+        ProviderFailureKind.INPUT_UNREACHABLE -> FailureKind.REJECTED
         ProviderFailureKind.THROTTLED -> FailureKind.THROTTLED
         ProviderFailureKind.PROVIDER_ERROR -> FailureKind.PROVIDER_ERROR
         ProviderFailureKind.NO_RESPONSE -> FailureKind.NO_RESPONSE

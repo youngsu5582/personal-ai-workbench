@@ -31,6 +31,13 @@ interface UploadedFiles {
      * [fileName] 은 받는 쪽이 저장할 이름이다.
      */
     fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI?
+
+    /**
+     * 입력으로 쓸 수 있다고 판정된 업로드의 바이트. 판정 전이거나 불합격이면, 또는 객체가 없으면 `null` 이다.
+     *
+     * 받는 쪽이 [issueReadUrl] 의 주소를 받아가지 못할 때 대신 싣는다. 보관소를 읽으므로 트랜잭션 밖에서 부른다.
+     */
+    fun readContent(uuid: UUID, ownerUuid: UUID): ByteArray?
 }
 
 /** 입력으로 쓸 수 있다고 판정된 업로드. */

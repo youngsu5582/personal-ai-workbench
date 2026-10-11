@@ -47,24 +47,25 @@ class FileSourceResolver(
     /**
      * 실행 시점에 입력 파일의 바이트 또는 새 읽기 주소를 준비한다.
      *
+     * [inline] 이면 주소를 발급할 수 있어도 바이트로 싣는다 — 받는 쪽이 주소를 받아가지 못했을 때 다시 보내는 길이다.
      * 입력을 요구하지 않는 종류면 빈 목록이다 — 읽을 것이 없지, 못 읽은 것이 아니다.
      */
-    fun resolve(ownerUuid: UUID, option: GenerationOption): List<ResolvedFile> = when (option) {
+    fun resolve(ownerUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
         is TextToImageOption -> emptyList()
-        is ImageToImageOption -> option.sources.map { prepare(it, ownerUuid) }
+        is ImageToImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
     }
 
-    private fun prepare(source: FileSource, ownerUuid: UUID): ResolvedFile = when (source) {
-        is FileSource.Generated -> prepareGenerated(source, ownerUuid)
-        is FileSource.Uploaded -> prepareUploaded(source, ownerUuid)
+    private fun prepare(source: FileSource, ownerUuid: UUID, inline: Boolean): ResolvedFile = when (source) {
+        is FileSource.Generated -> prepareGenerated(source, ownerUuid, inline)
+        is FileSource.Uploaded -> prepareUploaded(source, ownerUuid, inline)
     }
 
-    private fun prepareGenerated(source: FileSource.Generated, ownerUuid: UUID): ResolvedFile {
+    private fun prepareGenerated(source: FileSource.Generated, ownerUuid: UUID, inline: Boolean): ResolvedFile {
         // 없는 것과 남의 것은 동일하게 처리한다.(외부 노출 방지) 주소를 발급하기 전에 확인해야 한다.
         val location = generatedFileFinder.findOwned(source.uuid, ownerUuid) ?: throw notFound(source)
 
         val filename = fileNameOf(source, location.mimeType)
-        presignedUrlIssuer?.let { issuer ->
+        presignedUrlIssuer?.takeUnless { inline }?.let { issuer ->
             // 큐에는 UUID만 저장한다. 실행과 재시도마다 발급해야 대기 중 주소가 만료되지 않는다.
             val url = signing(source) { issuer.issue(location.storageKey, filename) }
             return ResolvedFile.Url(url, location.mimeType, filename)
@@ -87,12 +88,18 @@ class FileSourceResolver(
         )
     }
 
-    /** 올린 파일은 주소로만 넘긴다. 직접 업로드를 받는 보관소는 서명도 하므로 바이트로 읽을 길이 필요 없다. */
-    private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID): ResolvedFile {
-        // 접수에서 판정을 마쳤으므로 여기서는 보관소를 읽지 않는다.
+    /** 올린 파일은 주소로 넘기고, [inline] 이면 바이트로 싣는다. 어느 쪽이든 upload 모듈에 부탁한다. */
+    private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID, inline: Boolean): ResolvedFile {
+        // 접수에서 판정을 마쳤으므로 여기서는 판정하지 않는다.
         val usable = uploadedFiles.findUsable(source.uuid, ownerUuid) ?: throw notFound(source)
-
         val filename = fileNameOf(source, usable.mimeType)
+
+        if (inline) {
+            val bytes = uploadedFiles.readContent(source.uuid, ownerUuid)
+                ?: throw FileSourceUnavailableException(false, "입력 이미지의 내용이 없다: ${source.uuid}")
+            return ResolvedFile.Bytes(bytes, usable.mimeType, filename)
+        }
+
         val url = signing(source) { uploadedFiles.issueReadUrl(source.uuid, ownerUuid, filename) }
             ?: throw FileSourceUnavailableException(false, "입력 이미지 주소를 발급할 수 없다: ${source.uuid}")
         return ResolvedFile.Url(url, usable.mimeType, filename)

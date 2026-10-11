@@ -40,11 +40,17 @@ class DefaultUploadedFiles(
 
     override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI? {
         val issuer = presignedUrlIssuer ?: return null
-        val file = uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid)
-            ?.takeIf { it.status == UploadStatus.READY }
-            ?: return null
+        val file = findReady(uuid, ownerUuid) ?: return null
         return issuer.issue(file.storageKey, fileName)
     }
+
+    override fun readContent(uuid: UUID, ownerUuid: UUID): ByteArray? =
+        findReady(uuid, ownerUuid)?.let { fileStorage.read(it.storageKey) }
+
+    /** 판정을 통과한 것만 내준다. 검증 전 객체에는 어떤 경로로도 닿지 않게 한다. */
+    private fun findReady(uuid: UUID, ownerUuid: UUID): UploadedFile? =
+        uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid)
+            ?.takeIf { it.status == UploadStatus.READY }
 
     private fun judge(file: UploadedFile): UsableUpload? {
         val leading = fileStorage.readRange(file.storageKey, 0L until ImageContentType.SIGNATURE_LENGTH) ?: return null

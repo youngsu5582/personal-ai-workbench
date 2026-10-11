@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import java.net.URI
 import java.util.UUID
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -120,6 +121,19 @@ class UploadedFilesTest @Autowired constructor(
 
         assertNull(withIssuer().issueReadUrl(file.uuid, owner, "${file.uuid}.png"))
         assertEquals(UploadStatus.PENDING, statusOf(file))
+    }
+
+    @Test
+    fun `READY 인 업로드만 바이트를 내준다`() {
+        val ready = pending()
+        fileStorage.put(ready.storageKey, png, "image/png")
+        uploadedFiles.findUsable(ready.uuid, owner)
+        val notJudged = pending()
+        fileStorage.put(notJudged.storageKey, png, "image/png")
+
+        assertContentEquals(png, uploadedFiles.readContent(ready.uuid, owner))
+        assertNull(uploadedFiles.readContent(notJudged.uuid, owner))
+        assertNull(uploadedFiles.readContent(ready.uuid, UUID.randomUUID()))
     }
 
     /** 공통 설정은 로컬 보관소라 서명 발급자가 없다. 주소의 모양만 보면 되므로 가짜를 붙인다. */

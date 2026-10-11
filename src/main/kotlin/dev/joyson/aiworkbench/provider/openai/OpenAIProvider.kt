@@ -13,7 +13,6 @@ import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.provider.UnknownFields
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpStatusCode
 import org.springframework.web.client.ResourceAccessException
 import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
@@ -106,8 +105,8 @@ class OpenAIProvider(
         // 상태 코드를 메시지에 남긴다 — 어느 Provider 의 몇 번 실패였는지가 로그에서 사라지면
         // 재시도 판단은 되어도 원인 추적이 안 된다.
         throw ExternalApiException(
-            kind = kindOf(e.status),
-            message = "[$PROVIDER_NAME ${e.status}] ${e.detail}",
+            kind = kindOf(e),
+            message = "[$PROVIDER_NAME ${e.status}${e.code?.let { " $it" }.orEmpty()}] ${e.detail}",
             cause = e,
         )
     } catch (e: ResourceAccessException) {
@@ -200,11 +199,16 @@ class OpenAIProvider(
      * 과금 판정이 여기서 갈린다. 429 와 5xx 는 둘 다 "다시 해볼 만하다" 지만
      * 전자는 아무것도 만들지 않았고 후자는 저쪽에서 뭔가 하다 실패한 것이라, 한 종류로 묶으면
      * 나중에 "돈이 나갔나" 를 이 값으로 답할 수 없다.
+     *
+     * 입력 주소를 받아가지 못한 4xx 는 따로 가른다. 바이트로 다시 보내면 될 수 있어서다.
+     * 그때 오는 `code` 는 `invalid_value` 로, 다른 잘못된 값에도 쓰이는 이름이라 이것만으로는 가를 수 없다. 그래서 문구로 가른다.
+     * 문구가 바뀌면 [FailureKind.REJECTED] 로 떨어진다 — 다시 보내지 않을 뿐 틀린 판정은 아니다.
      */
-    private fun kindOf(status: HttpStatusCode): FailureKind = when {
-        status.value() == 429 -> FailureKind.THROTTLED
-        status.is5xxServerError -> FailureKind.PROVIDER_ERROR
-        status.is4xxClientError -> FailureKind.REJECTED
+    private fun kindOf(e: OpenAIException): FailureKind = when {
+        e.status.value() == 429 -> FailureKind.THROTTLED
+        e.status.is5xxServerError -> FailureKind.PROVIDER_ERROR
+        e.status.is4xxClientError && e.detail.startsWith(INPUT_DOWNLOAD_FAILED) -> FailureKind.INPUT_UNREACHABLE
+        e.status.is4xxClientError -> FailureKind.REJECTED
         // 2xx·3xx 로 여기 오는 건 설명되지 않는다. 모르는 채로 재시도하지 않는다.
         else -> FailureKind.UNKNOWN
     }
@@ -284,6 +288,9 @@ class OpenAIProvider(
 
     companion object {
         const val PROVIDER_NAME = "openai"
+
+        /** 주소로 넘긴 입력 이미지를 OpenAI 가 받아오지 못했을 때 오는 문구의 앞부분. */
+        private const val INPUT_DOWNLOAD_FAILED = "Error while downloading file"
 
         /** png 로 고정한다. 투명 배경을 지원하는 유일한 형식이고, 저장 포맷 선택은 아직 제품 기능이 아니다. */
         const val OUTPUT_FORMAT = "png"
