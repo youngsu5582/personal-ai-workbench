@@ -6,7 +6,9 @@ import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -39,6 +41,63 @@ class LocalFileStorageTest {
 
         // 실패한 시도의 잔해가 남지 않는다.
         assertContentEquals(byteArrayOf(1, 2, 3), storage.read("a/0.png"))
+    }
+
+    @Test
+    fun `앞부분만 읽고 전체 크기를 함께 안다`() {
+        val content = ByteArray(100) { it.toByte() }
+        storage.put("range/large.bin", content, "application/octet-stream")
+
+        val head = assertNotNull(storage.readRange("range/large.bin", 0L until 12))
+
+        assertEquals(100, head.totalSize)
+        assertContentEquals(content.copyOf(12), head.bytes)
+    }
+
+    @Test
+    fun `요청보다 작은 파일은 있는 만큼 준다`() {
+        storage.put("range/small.png", png, "image/png")
+
+        val head = assertNotNull(storage.readRange("range/small.png", 0L until 12))
+
+        assertEquals(png.size.toLong(), head.totalSize)
+        assertContentEquals(png, head.bytes)
+    }
+
+    @Test
+    fun `가운데 범위만 읽는다`() {
+        val content = ByteArray(100) { it.toByte() }
+        storage.put("range/middle.bin", content, "application/octet-stream")
+
+        val part = assertNotNull(storage.readRange("range/middle.bin", 10L..19L))
+
+        assertEquals(100, part.totalSize)
+        assertContentEquals(content.copyOfRange(10, 20), part.bytes)
+    }
+
+    @Test
+    fun `시작이 끝을 넘으면 빈 바이트와 전체 크기를 준다`() {
+        storage.put("range/short.png", png, "image/png")
+
+        val part = assertNotNull(storage.readRange("range/short.png", 100L..111L))
+
+        assertEquals(png.size.toLong(), part.totalSize)
+        assertEquals(0, part.bytes.size)
+    }
+
+    @Test
+    fun `없는 키를 범위로 읽으면 null 이다`() {
+        assertNull(storage.readRange("없는/키.png", 0L until 12))
+    }
+
+    @Test
+    fun `지운 키는 더 읽히지 않고, 없는 키를 지워도 실패가 아니다`() {
+        storage.put("delete/a.png", png, "image/png")
+
+        storage.delete("delete/a.png")
+        storage.delete("delete/a.png")
+
+        assertNull(storage.read("delete/a.png"))
     }
 
     @Test

@@ -21,7 +21,28 @@ interface FileStorage {
 
     /** [key] 의 내용. 없으면 `null`. */
     fun read(key: String): ByteArray?
+
+    /**
+     * [key] 의 [range] 바이트와 객체 전체 크기. 없으면 `null`.
+     *
+     * 내용 전체를 읽지 않고 일부만 볼 때 쓴다 — 형식은 앞부분의 매직넘버가 말한다.
+     * 범위가 객체 끝을 넘으면 있는 만큼만 주고, 시작부터 넘으면 빈 바이트를 준다.
+     */
+    fun readRange(key: String, range: LongRange): PartialContent?
+
+    /** [key] 를 지운다. 없어도 실패가 아니다. */
+    fun delete(key: String)
 }
+
+/**
+ * 객체의 일부와 전체 크기. HTTP 의 206 Partial Content 가 담는 것과 같다.
+ *
+ * 바이트 배열의 참조 비교를 피하려고 data class 로 두지 않는다.
+ */
+class PartialContent(
+    val bytes: ByteArray,
+    val totalSize: Long,
+)
 
 /**
  * 보관 작업 실패.

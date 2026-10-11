@@ -2,7 +2,9 @@ package dev.joyson.aiworkbench.storage.local
 
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
+import dev.joyson.aiworkbench.storage.PartialContent
 import org.slf4j.LoggerFactory
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories
@@ -40,6 +42,28 @@ class LocalFileStorage(
 
     override fun read(key: String): ByteArray? =
         resolve(key).takeIf { it.exists() }?.readBytes()
+
+    override fun readRange(key: String, range: LongRange): PartialContent? {
+        require(range.first >= 0 && !range.isEmpty()) { "범위는 0 이상에서 시작하고 비어 있지 않아야 한다: $range" }
+        val path = resolve(key).takeIf { it.exists() } ?: return null
+        val size = Files.size(path)
+        val start = minOf(range.first, size)
+        val end = minOf(range.last + 1, size)
+        val bytes = RandomAccessFile(path.toFile(), "r").use { file ->
+            file.seek(start)
+            ByteArray((end - start).toInt()).also { file.readFully(it) }
+        }
+        return PartialContent(bytes, size)
+    }
+
+    override fun delete(key: String) {
+        try {
+            Files.deleteIfExists(resolve(key))
+        } catch (e: Exception) {
+            // put 과 같은 이유로 재시도 대상으로 둔다.
+            throw FileStorageException(retryable = true, message = "파일을 지우지 못했다: $key", cause = e)
+        }
+    }
 
     /**
      * 키를 실제 경로로 바꾼다.
