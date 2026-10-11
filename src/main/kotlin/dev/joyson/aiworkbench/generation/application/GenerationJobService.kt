@@ -7,7 +7,6 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
-import dev.joyson.aiworkbench.generation.infrastructure.FileSourceFinder
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -25,7 +24,7 @@ import java.util.UUID
 class GenerationJobService(
     private val generationJobWriter: GenerationJobWriter,
     private val providerRegistry: ProviderRegistry,
-    private val fileSourceFinder: FileSourceFinder,
+    private val fileSourceResolver: FileSourceResolver,
     private val generationJobRepository: GenerationJobRepository,
     private val generationJobTaskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
@@ -103,7 +102,7 @@ class GenerationJobService(
             is ImageToImageOption -> option.sources
         }
 
-        sources.firstOrNull { fileSourceFinder.findOwned(it, ownerUuid) == null }
+        sources.firstOrNull { fileSourceResolver.findOwned(it, ownerUuid) == null }
             ?.let { throw UnknownFileSourceException(it.uuid) }
     }
 }

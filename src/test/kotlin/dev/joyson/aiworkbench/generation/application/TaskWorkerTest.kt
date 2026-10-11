@@ -17,7 +17,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
 import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
 import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
-import dev.joyson.aiworkbench.generation.infrastructure.FileSourceFinder
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
@@ -60,7 +60,7 @@ class TaskWorkerTest @Autowired constructor(
     private val generatedFileRepository: JpaGeneratedFileRepository,
     private val callRecorder: ProviderCallRecorder,
     private val callRepository: JpaProviderCallRepository,
-    private val fileSourceFinder: FileSourceFinder,
+    private val generatedFileFinder: GeneratedFileFinder,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -111,7 +111,7 @@ class TaskWorkerTest @Autowired constructor(
         jobRepository = jobRepository,
         providerRegistry = ProviderRegistry(listOf(provider)),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
-        fileSourceResolver = FileSourceResolver(fileSourceFinder, fileStorage, presignedUrlIssuer),
+        fileSourceResolver = FileSourceResolver(generatedFileFinder, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
         stateWriter = stateWriter,
         callRecorder = recorder,

@@ -1,0 +1,101 @@
+{
+  "about": "패키지와 이름 규약. 규칙마다 문장(rule)·이유(why)·검사(check)·예(ok/ng)가 함께 있어 이 파일만 읽어도 이해되게 둔다. .claude/mods/convention-gate 와 ArchitectureTest 가 이 파일을 읽어 강제한다. 규칙에 없는 역할이 필요하면 이름을 짓기 전에 사람에게 묻고, 정해지면 이유와 함께 여기에 추가한다.",
+  "basePackage": "dev.joyson.aiworkbench",
+  "sourceRoot": "src/main/kotlin",
+  "layers": ["api", "application", "domain", "infrastructure", "config"],
+  "rules": [
+    {
+      "id": "application-no-infrastructure",
+      "rule": "application 은 infrastructure 를 import 하지 않는다",
+      "why": "구현 기술이 바뀌어도 유스케이스는 그대로여야 한다. 저장소가 필요하면 domain 의 포트로 받는다",
+      "check": { "kind": "no-import", "from": "application", "to": ["infrastructure"] },
+      "ok": ["import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository"],
+      "ng": ["import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository"]
+    },
+    {
+      "id": "domain-depends-on-nothing",
+      "rule": "domain 은 application·api·infrastructure 를 import 하지 않는다",
+      "why": "의존은 바깥에서 도메인으로 향한다. 도메인이 바깥을 알면 바깥이 바뀔 때마다 도메인이 흔들린다",
+      "check": { "kind": "no-import", "from": "domain", "to": ["application", "api", "infrastructure"] },
+      "ok": ["import java.util.UUID"],
+      "ng": ["import dev.joyson.aiworkbench.generation.application.GenerationCommand"]
+    },
+    {
+      "id": "application-roles",
+      "rule": "application 의 파일 이름은 정해진 역할로 끝나거나 Default 로 시작한다",
+      "why": "이름만 보고 컨트롤러 진입점인지 그 아래 부품인지 알게 한다. 목록에 없는 역할은 지어내지 말고 사람에게 묻는다",
+      "check": {
+        "kind": "file-name",
+        "in": "application",
+        "endsWith": {
+          "Service": "컨트롤러가 부르는 진입점. 애그리거트당 하나",
+          "Writer": "저장과 트랜잭션만 맡는 부품",
+          "Worker": "HTTP 가 아니라 폴러가 부르는 처리 단위",
+          "Resolver": "참조를 실제 값(바이트·주소)으로 푸는 부품",
+          "Mapper": "다른 모듈의 어휘로 옮기는 순수 번역기",
+          "Exception": "유스케이스가 던지는 예외",
+          "Command": "유스케이스에 들어가는 값",
+          "Views": "유스케이스가 내보내는 값 모음"
+        },
+        "startsWith": {
+          "Default": "모듈 밖에 공개한 포트의 기본 구현"
+        },
+        "except": {
+          "auth/application/WorkbenchOidcUser.kt": "Spring Security 의 OidcUser 를 감싼 것이라 이름을 프레임워크 역할이 정한다"
+        }
+      },
+      "ok": ["GenerationJobService", "TaskStateWriter", "DefaultUserRegistry"],
+      "ng": ["GenerationJobReader", "UsageQuery", "FooManager"]
+    },
+    {
+      "id": "banned-suffixes",
+      "rule": "다음 끝말로 타입 이름을 짓지 않는다",
+      "why": "각 끝말이 실제와 다른 층이나 역할을 가리킨다",
+      "check": {
+        "kind": "banned-suffix",
+        "suffixes": {
+          "Reader": "Writer 와 짝 이름이라 데이터 접근 부품으로 읽힌다. 조회 진입점은 Service 다",
+          "Query": "DB 쿼리로 읽힌다. 조회 진입점은 Service 다",
+          "ApplicationService": "층은 이미 application 패키지가 말한다. Service 로 충분하다",
+          "Adapter": "포트 구현은 {기술}{포트} 이름이 대신한다",
+          "Impl": "포트 구현은 {기술}{포트} 이름이 대신한다. Spring Data 는 Impl 로 끝나는 타입을 커스텀 구현 조각으로 가로챈다"
+        }
+      },
+      "ok": ["GenerationJobService", "JpaGenerationJobRepository"],
+      "ng": ["GenerationJobReader", "GenerationJobRepositoryImpl"]
+    },
+    {
+      "id": "ports-are-interfaces",
+      "rule": "domain 의 Repository·Finder 는 interface 다",
+      "why": "도메인은 계약만 갖고 저장 기술이 구현한다",
+      "check": { "kind": "interface-only", "in": "domain", "endsWith": ["Repository", "Finder"] },
+      "ok": ["interface GenerationJobRepository"],
+      "ng": ["class GenerationJobRepository"]
+    },
+    {
+      "id": "port-impl-name",
+      "rule": "domain 포트의 구현은 {기술}{포트} 로 이름 짓는다",
+      "why": "S3FileStorage·LocalFileStorage 처럼 포트 이름을 그대로 두고 기술을 앞에 붙이면, 이름만 보고 무엇을 어떤 기술로 구현했는지 안다",
+      "check": {
+        "kind": "port-impl-name",
+        "portsIn": "domain",
+        "portEndsWith": ["Repository", "Finder"],
+        "implIn": "infrastructure",
+        "prefixes": {
+          "Jpa": "Spring Data JPA",
+          "Jooq": "jOOQ"
+        }
+      },
+      "ok": ["JpaGenerationJobRepository", "JooqGeneratedFileFinder"],
+      "ng": ["GenerationJobJpaRepository", "GenerationJobRepositoryAdapter"]
+    },
+    {
+      "id": "controllers-call-services",
+      "rule": "컨트롤러가 생성자로 받는 application 타입은 Service 뿐이다",
+      "why": "Controller → Service → Repository 로 층이 이름에 드러나게 한다. Writer 같은 부품은 Service 를 거쳐 쓴다",
+      "check": { "kind": "controller-deps", "in": "api", "controllerEndsWith": "Controller", "typesFrom": "application", "allowedEndsWith": ["Service"] },
+      "ok": ["class GenerationJobController(private val generationJobService: GenerationJobService)"],
+      "ng": ["class GenerationJobController(private val generationJobWriter: GenerationJobWriter)"]
+    }
+  ]
+}

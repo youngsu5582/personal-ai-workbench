@@ -48,6 +48,23 @@ usage/
 쓰게 된다면 대개 경계를 넘을 타입이 잘못된 자리에 있다는 신호다.
 (이 저장소는 현재 하나도 쓰지 않는다.)
 
+### 모듈 안의 자리와 이름은 `.claude/conventions.json` 이 정한다
+
+`Controller → Service → Repository(포트)` 이고, 포트는 domain 이 갖고 `{기술}{포트}` 가 구현한다.
+어느 층에 무엇을 두고 어떻게 이름 짓는지는 그 파일의 규칙 목록 한 곳에 있다.
+규칙마다 문장·이유·예가 함께 있어 그 파일만 읽어도 된다.
+
+| 강제하는 곳 | 언제 | 무엇을 |
+|---|---|---|
+| `.claude/mods/convention-gate` | AI 가 파일을 쓰는 순간 | 새 파일은 쓰기 전에 막고, 바뀐 파일의 위반은 바로 알린다 |
+| `ArchitectureTest` | `test.sh` · CI | 사람이 쓴 코드까지 모두 |
+
+**규칙에 없는 역할이 필요하면 이름을 짓기 전에 묻는다.** 정해지면 그 파일에 이유와 함께 추가한다.
+규칙을 글로만 두면 낡고, 낡은 규칙은 같은 고민을 다시 하게 만든다 — 그래서 기계가 읽는 자리에 둔다.
+
+Mod 는 설치해야 돈다: `/plugin install convention-gate --marketplace youngsu5582/personal-ai-workbench`.
+그 폴더를 고치는 중에는 `claude --plugin-dir .claude/mods/convention-gate` 로 띄운다.
+
 ### 어댑터는 사실을 답하고, application 이 정책을 정한다
 
 `supports()` 는 Boolean 을 돌려주고 예외를 던지지 않는다.
