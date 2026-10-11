@@ -8,8 +8,12 @@ import dev.joyson.aiworkbench.storage.s3.S3Clients
 import dev.joyson.aiworkbench.storage.s3.S3FileStorage
 import dev.joyson.aiworkbench.storage.s3.S3PresignedUploadIssuer
 import dev.joyson.aiworkbench.upload.domain.UploadSpec
+import dev.joyson.aiworkbench.upload.domain.UploadStatus
+import dev.joyson.aiworkbench.upload.domain.UploadedFileMetadata
+import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -24,10 +28,13 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** API가 발급한 주소를 실제 Garage에 사용해 인증·서명·전송까지 검증한다. */
@@ -37,6 +44,8 @@ class UploadApiTest @Autowired constructor(
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
     private val jsonMapper: JsonMapper,
+    private val uploadedFileRepository: UploadedFileRepository,
+    private val em: EntityManager,
 ) : IntegrationTest() {
     private val user by lazy {
         userRegistry.resolveOrRegister(
@@ -83,6 +92,23 @@ class UploadApiTest @Autowired constructor(
         assertEquals(200, uploaded.statusCode())
         val storage = S3FileStorage(S3Clients.of(GarageTestStorage.properties()), GarageTestStorage.BUCKET)
         assertContentEquals(png, storage.read(key))
+    }
+
+    @Test
+    fun `발급하면 선언한 조건으로 PENDING 행이 남는다`() {
+        val response = request("""{"contentType":"image/webp","contentLength":7}""")
+            .andExpect { status { isOk() } }.andReturn().response
+        val uuid = UUID.fromString(jsonMapper.readTree(response.contentAsString).get("uuid").asText())
+        // 1차 캐시가 아니라 DB 에서 읽어야 metadata 가 JSON 에서 원래 타입으로 돌아오는지 본다.
+        em.flush()
+        em.clear()
+
+        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        assertEquals(UploadStatus.PENDING, file.status)
+        assertEquals("users/${user.uuid}/uploads/$uuid", file.storageKey)
+        assertEquals(UploadedFileMetadata(mimeType = "image/webp", fileSize = 7), file.metadata)
+        // 남의 것은 없는 것과 같게 답한다.
+        assertNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, UUID.randomUUID()))
     }
 
     @Test
