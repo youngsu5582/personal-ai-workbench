@@ -10,7 +10,7 @@
       "why": "구현 기술이 바뀌어도 유스케이스는 그대로여야 한다. 저장소가 필요하면 domain 의 포트로 받는다",
       "check": { "kind": "no-import", "from": "application", "to": ["infrastructure"] },
       "ok": ["import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository"],
-      "ng": ["import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository"]
+      "ng": ["import dev.joyson.aiworkbench.generation.infrastructure.JooqGeneratedFileFinder"]
     },
     {
       "id": "domain-depends-on-nothing",
@@ -61,21 +61,21 @@
           "Impl": "포트 구현은 {기술}{포트} 이름이 대신한다. Spring Data 는 Impl 로 끝나는 타입을 커스텀 구현 조각으로 가로챈다"
         }
       },
-      "ok": ["GenerationJobService", "JpaGenerationJobRepository"],
+      "ok": ["GenerationJobService", "JooqGeneratedFileFinder"],
       "ng": ["GenerationJobReader", "GenerationJobRepositoryImpl"]
     },
     {
       "id": "ports-are-interfaces",
       "rule": "domain 의 Repository·Finder 는 interface 다",
-      "why": "도메인은 계약만 갖고 저장 기술이 구현한다",
+      "why": "도메인은 계약만 갖고 저장 기술이 구현한다. Repository 는 Spring Data 의 Repository 를 잇고 쓰는 메서드만 선언한다 — JpaRepository 를 이으면 쓰지 않는 deleteAll 까지 열리고, 상속한 findById·saveAll 과 이름이 겹쳐 다리 메서드가 필요해진다",
       "check": { "kind": "interface-only", "in": "domain", "endsWith": ["Repository", "Finder"] },
-      "ok": ["interface GenerationJobRepository"],
+      "ok": ["interface GenerationJobRepository : Repository<GenerationJob, Long>"],
       "ng": ["class GenerationJobRepository"]
     },
     {
       "id": "port-impl-name",
-      "rule": "domain 포트의 구현은 {기술}{포트} 로 이름 짓는다",
-      "why": "S3FileStorage·LocalFileStorage 처럼 포트 이름을 그대로 두고 기술을 앞에 붙이면, 이름만 보고 무엇을 어떤 기술로 구현했는지 안다",
+      "rule": "domain 포트를 손으로 구현하면 {기술}{포트} 로 이름 짓는다",
+      "why": "S3FileStorage·LocalFileStorage 처럼 포트 이름을 그대로 두고 기술을 앞에 붙이면, 이름만 보고 무엇을 어떤 기술로 구현했는지 안다. Repository 는 Spring Data 가 구현을 만들어 구현 타입이 없으므로, 이 규칙은 jOOQ Finder 처럼 손으로 구현하는 포트에 걸린다",
       "check": {
         "kind": "port-impl-name",
         "portsIn": "domain",
@@ -86,8 +86,8 @@
           "Jooq": "jOOQ"
         }
       },
-      "ok": ["JpaGenerationJobRepository", "JooqGeneratedFileFinder"],
-      "ng": ["GenerationJobJpaRepository", "GenerationJobRepositoryAdapter"]
+      "ok": ["JooqGeneratedFileFinder"],
+      "ng": ["GeneratedFileJooqFinder", "GeneratedFileFinderAdapter"]
     },
     {
       "id": "controllers-call-services",

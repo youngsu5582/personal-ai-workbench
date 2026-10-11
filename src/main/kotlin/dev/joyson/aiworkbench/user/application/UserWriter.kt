@@ -98,6 +98,6 @@ class UserWriter(
     }
 
     private fun requireUser(userId: Long): User =
-        userRepository.findByIdOrNull(userId) ?: throw IllegalArgumentException("없는 사용자다: $userId")
+        userRepository.findById(userId) ?: throw IllegalArgumentException("없는 사용자다: $userId")
 
 }

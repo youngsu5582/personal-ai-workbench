@@ -46,8 +46,8 @@ class TaskWorker(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun process(taskId: Long) {
-        val task = taskRepository.findByIdOrNull(taskId) ?: return
-        val job = jobRepository.findByIdOrNull(task.jobId) ?: run {
+        val task = taskRepository.findById(taskId) ?: return
+        val job = jobRepository.findById(task.jobId) ?: run {
             // Task 는 있는데 Job 이 없는 건 설명되지 않는 상태다. 다시 해도 같으므로 닫는다.
             stateWriter.fail(taskId, "job 을 찾을 수 없다: ${task.jobId}", retryable = false)
             return
