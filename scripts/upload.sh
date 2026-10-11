@@ -100,4 +100,10 @@ case "$STATUS" in
   2??) echo "  업로드 성공 HTTP $STATUS · $CONTENT_LENGTH bytes" ;;
   *) echo "  업로드 실패 HTTP $STATUS (주소 만료 또는 파일 형식·크기 변경을 확인한다)" >&2; exit 1 ;;
 esac
-echo "  보관소가 PUT을 수락했다. 앱의 업로드 완료 검증·입력 등록은 아직 제공하지 않는다."
+echo "  보관소가 PUT을 수락했다. 형식 확인은 이 파일을 처음 입력으로 쓸 때 앱이 한다."
+echo
+printf '  SOURCE_TYPE=uploaded BASE_URL=%q ' "$BASE_URL"
+if [ -n "${USER_UUID:-}" ]; then
+  printf 'USER_UUID=%q ' "$USER_UUID"
+fi
+printf './scripts/i2i.sh %s "<프롬프트>"\n' "$UPLOAD_UUID"
