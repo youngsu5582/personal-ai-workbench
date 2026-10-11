@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.upload.application
 
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
 import dev.joyson.aiworkbench.upload.UsableUpload
 import dev.joyson.aiworkbench.upload.domain.ImageContentType
@@ -9,10 +10,12 @@ import dev.joyson.aiworkbench.upload.domain.UploadedFile
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.net.URI
 import java.util.UUID
 
 /**
  * 올린 파일을 처음 쓰일 때 판정한다 — 있는가, 선언한 크기인가, 앞부분이 선언한 형식의 매직넘버인가.
+ * 판정을 통과한 파일에만 읽기 주소를 낸다.
  *
  * 판정은 한 번이다. READY 와 REJECTED 는 다시 보지 않는다.
  */
@@ -21,6 +24,7 @@ class DefaultUploadedFiles(
     private val uploadedFileRepository: UploadedFileRepository,
     private val uploadedFileWriter: UploadedFileWriter,
     private val fileStorage: FileStorage,
+    private val presignedUrlIssuer: PresignedUrlIssuer? = null,
 ) : UploadedFiles {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -32,6 +36,14 @@ class DefaultUploadedFiles(
             UploadStatus.REJECTED -> null
             UploadStatus.PENDING -> judge(file)
         }
+    }
+
+    override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI? {
+        val issuer = presignedUrlIssuer ?: return null
+        val file = uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid)
+            ?.takeIf { it.status == UploadStatus.READY }
+            ?: return null
+        return issuer.issue(file.storageKey, fileName)
     }
 
     private fun judge(file: UploadedFile): UsableUpload? {

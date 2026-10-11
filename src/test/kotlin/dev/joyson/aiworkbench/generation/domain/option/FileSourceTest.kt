@@ -27,7 +27,7 @@ class FileSourceTest @Autowired constructor(
 
     private val sourceUuid = UUID.fromString("11111111-1111-1111-1111-111111111111")
 
-    /** 구현체가 하나뿐이어도 판별자가 나간다 — 종류가 늘어도 기존 행을 그대로 읽으려는 것이다. */
+    /** 판별자가 함께 나간다 — 종류가 늘어도 기존 행을 그대로 읽으려는 것이다. */
     @Test
     fun `생성 결과 참조에는 종류가 함께 적힌다`() {
         val source: FileSource = FileSource.Generated(sourceUuid)
@@ -35,6 +35,16 @@ class FileSourceTest @Autowired constructor(
         val json = mapper.writeValueAsString(source)
 
         assertEquals("""{"type":"generated","uuid":"$sourceUuid"}""", json)
+        assertEquals(source, mapper.readValue<FileSource>(json))
+    }
+
+    @Test
+    fun `올린 파일 참조는 uploaded 로 적힌다`() {
+        val source: FileSource = FileSource.Uploaded(sourceUuid)
+
+        val json = mapper.writeValueAsString(source)
+
+        assertEquals("""{"type":"uploaded","uuid":"$sourceUuid"}""", json)
         assertEquals(source, mapper.readValue<FileSource>(json))
     }
 

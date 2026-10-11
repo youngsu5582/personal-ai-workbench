@@ -37,6 +37,8 @@ import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.usage.FailureKind as RecordedFailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
+import dev.joyson.aiworkbench.upload.UploadedFiles
+import dev.joyson.aiworkbench.upload.UsableUpload
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import dev.joyson.aiworkbench.usage.ProviderCallTestRepository
@@ -66,6 +68,7 @@ class TaskWorkerTest @Autowired constructor(
     private val callRecorder: ProviderCallRecorder,
     private val callRepository: ProviderCallTestRepository,
     private val generatedFileFinder: GeneratedFileFinder,
+    private val uploadedFiles: UploadedFiles,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -113,12 +116,13 @@ class TaskWorkerTest @Autowired constructor(
         fileStorage: FileStorage = storage,
         recorder: ProviderCallRecorder = callRecorder,
         presignedUrlIssuer: PresignedUrlIssuer? = null,
+        uploadedFiles: UploadedFiles = this.uploadedFiles,
     ) = TaskWorker(
         taskRepository = taskPort,
         jobRepository = jobPort,
         providerRegistry = ProviderRegistry(listOf(provider)),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
-        fileSourceResolver = FileSourceResolver(generatedFileFinder, fileStorage, presignedUrlIssuer),
+        fileSourceResolver = FileSourceResolver(generatedFileFinder, uploadedFiles, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
         stateWriter = stateWriter,
         callRecorder = recorder,
@@ -671,9 +675,57 @@ class TaskWorkerTest @Autowired constructor(
         assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty())
     }
 
-    private fun editOption(sourceUuid: UUID) = ImageToImageOption(
+    @Test
+    fun `올린 이미지는 upload 모듈이 발급한 주소로 넘기고 바이트를 읽지 않는다`() {
+        val owner = UUID.randomUUID()
+        val uploadUuid = UUID.randomUUID()
+        val uploads = object : UploadedFiles {
+            override fun findUsable(uuid: UUID, ownerUuid: UUID) =
+                UsableUpload("image/png").takeIf { uuid == uploadUuid && ownerUuid == owner }
+
+            override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI {
+                assertEquals("$uploadUuid.png", fileName)
+                return URI.create("https://storage.test/upload?X-Amz-Signature=upload")
+            }
+        }
+        var sent: URI? = null
+        val provider = object : ExternalApiProvider {
+            override val name = PROVIDER
+            override fun supports(model: String) = model == MODEL
+            override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
+                sent = assertIs<ExternalApiFileInput.Url>(request.images.single()).url
+                return success()
+            }
+        }
+        val (_, task) = newTask(option = editOption(FileSource.Uploaded(uploadUuid)), ownerUuid = owner)
+        val readsBefore = storage.reads
+
+        workerWith(provider, uploadedFiles = uploads).process(task.id!!)
+
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertEquals("X-Amz-Signature=upload", sent?.query)
+        assertEquals(readsBefore, storage.reads)
+    }
+
+    @Test
+    fun `쓸 수 없는 업로드는 주소를 받지 않고 Provider 도 부르지 않는다`() {
+        val uploads = object : UploadedFiles {
+            override fun findUsable(uuid: UUID, ownerUuid: UUID): UsableUpload? = null
+            override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String) = error("주소를 받으면 안 된다")
+        }
+        val (_, task) = newTask(option = editOption(FileSource.Uploaded(UUID.randomUUID())))
+
+        workerWith(provider { error("Provider를 호출하면 안 된다") }, uploadedFiles = uploads).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty())
+    }
+
+    private fun editOption(sourceUuid: UUID) = editOption(FileSource.Generated(sourceUuid))
+
+    private fun editOption(source: FileSource) = ImageToImageOption(
         prompt = "수채화로",
-        sources = listOf(FileSource.Generated(sourceUuid)),
+        sources = listOf(source),
         size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
     )
 

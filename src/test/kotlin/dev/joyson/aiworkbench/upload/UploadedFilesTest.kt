@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.upload
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PartialContent
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.application.DefaultUploadedFiles
 import dev.joyson.aiworkbench.upload.application.UploadedFileWriter
 import dev.joyson.aiworkbench.upload.domain.UploadStatus
@@ -10,6 +11,7 @@ import dev.joyson.aiworkbench.upload.domain.UploadedFile
 import dev.joyson.aiworkbench.upload.domain.UploadedFileMetadata
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import org.springframework.beans.factory.annotation.Autowired
+import java.net.URI
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,6 +101,34 @@ class UploadedFilesTest @Autowired constructor(
         assertNull(uploadedFiles.findUsable(file.uuid, UUID.randomUUID()))
         assertEquals(UploadStatus.PENDING, statusOf(file))
     }
+
+    @Test
+    fun `READY 인 업로드에는 그 자리의 읽기 주소를 낸다`() {
+        val file = pending()
+        fileStorage.put(file.storageKey, png, "image/png")
+        uploadedFiles.findUsable(file.uuid, owner)
+
+        val url = withIssuer().issueReadUrl(file.uuid, owner, "${file.uuid}.png")
+
+        assertEquals(URI.create("https://storage.test/${file.storageKey}?name=${file.uuid}.png"), url)
+    }
+
+    @Test
+    fun `판정 전 업로드에는 읽기 주소를 내지 않는다`() {
+        val file = pending()
+        fileStorage.put(file.storageKey, png, "image/png")
+
+        assertNull(withIssuer().issueReadUrl(file.uuid, owner, "${file.uuid}.png"))
+        assertEquals(UploadStatus.PENDING, statusOf(file))
+    }
+
+    /** 공통 설정은 로컬 보관소라 서명 발급자가 없다. 주소의 모양만 보면 되므로 가짜를 붙인다. */
+    private fun withIssuer() = DefaultUploadedFiles(
+        uploadedFileRepository,
+        uploadedFileWriter,
+        fileStorage,
+        PresignedUrlIssuer { key, name -> URI.create("https://storage.test/$key?name=$name") },
+    )
 
     @Test
     fun `판정하는 사이 다른 요청이 먼저 정하면 그 결과를 따르고 지우지 않는다`() {

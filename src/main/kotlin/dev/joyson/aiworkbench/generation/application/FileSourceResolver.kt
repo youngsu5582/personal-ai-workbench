@@ -1,6 +1,5 @@
 package dev.joyson.aiworkbench.generation.application
 
-import dev.joyson.aiworkbench.generation.domain.FileLocation
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.generation.domain.MimeTypes
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
@@ -9,6 +8,7 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
+import dev.joyson.aiworkbench.upload.UploadedFiles
 import org.springframework.stereotype.Component
 import java.net.URI
 import java.util.UUID
@@ -16,30 +16,32 @@ import java.util.UUID
 /**
  * 소유권을 확인한 참조를 바이트 또는 읽기 주소로 푼다.
  *
- * [GeneratedFileService] 와 같은 모양이다 — 조회는 finder 에, 읽기는 보관소에 맡기고
- * 둘을 잇기만 한다. `@Transactional` 을 걸지 않는 이유도 같다: 보관소 읽기가 그 안에 들어온다.
+ * 결과물은 [GeneratedFileService] 와 같은 모양이다 — 조회는 finder 에, 읽기는 보관소에 맡기고
+ * 둘을 잇기만 한다. 올린 파일은 upload 모듈에 묻는다. 판정도 주소 발급도 그 파일을 가진 모듈이 한다.
+ * `@Transactional` 을 걸지 않는 이유는 둘 다 보관소를 탈 수 있어서다.
  *
- * 찾지 못하면 **예외를 던진다.** finder 가 `null` 을 답하는 것과 어긋나 보이지만, 그 규칙의 근거는
+ * 실행 시점에 찾지 못하면 **예외를 던진다.** finder 가 `null` 을 답하는 것과 어긋나 보이지만, 그 규칙의 근거는
  * "호출 지점마다 처리가 갈린다" 였다. 여기는 부르는 곳이 워커 하나뿐이고 한 장이라도 없으면
  * 요청 전체가 실패하므로, 항목별 `null` 은 부르는 쪽만 복잡하게 만든다.
  */
 @Component
 class FileSourceResolver(
     private val generatedFileFinder: GeneratedFileFinder,
+    private val uploadedFiles: UploadedFiles,
     private val fileStorage: FileStorage,
     private val presignedUrlIssuer: PresignedUrlIssuer? = null,
 ) {
 
     /**
-     * 참조가 가리키는 파일의 자리를 **소유자와 함께** 찾는다. 남의 것은 없는 것과 같게 `null` 이다.
+     * 참조가 가리키는 파일을 **소유자와 함께** 확인한다. 남의 것은 없는 것과 같게 `false` 다.
      *
-     * **바이트는 읽지 않는다.** 접수는 트랜잭션 안이라 보관소 왕복을 넣으면 안 되고,
-     * 존재를 확인하는 데는 메타 행이면 충분하다. 접수는 400 을 만들고 워커는 Task 를 닫으므로,
-     * 찾지 못한 것을 어떻게 할지는 부르는 쪽이 정한다.
+     * 결과물은 메타 행만 본다. 올린 파일은 처음 참조될 때 보관소에서 앞부분을 읽어 판정한다 —
+     * 그래서 이것을 부르는 접수는 트랜잭션 밖이다. 찾지 못한 것을 어떻게 할지는 부르는 쪽이 정한다.
      */
-    fun findOwned(source: FileSource, ownerUuid: UUID): FileLocation? = when (source) {
+    fun isUsable(source: FileSource, ownerUuid: UUID): Boolean = when (source) {
         // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
-        is FileSource.Generated -> generatedFileFinder.findOwned(source.uuid, ownerUuid)
+        is FileSource.Generated -> generatedFileFinder.findOwned(source.uuid, ownerUuid) != null
+        is FileSource.Uploaded -> uploadedFiles.findUsable(source.uuid, ownerUuid) != null
     }
 
     /**
@@ -52,23 +54,19 @@ class FileSourceResolver(
         is ImageToImageOption -> option.sources.map { prepare(it, ownerUuid) }
     }
 
-    private fun prepare(source: FileSource, ownerUuid: UUID): ResolvedFile {
-        // 없는 것과 남의 것은 동일하게 처리한다.(외부 노출 방지) 주소를 발급하기 전에 확인해야 한다.
-        val location = findOwned(source, ownerUuid)
-            ?: throw FileSourceUnavailableException(
-                retryable = false,
-                message = "입력 이미지를 찾을 수 없다: ${source.uuid}",
-            )
+    private fun prepare(source: FileSource, ownerUuid: UUID): ResolvedFile = when (source) {
+        is FileSource.Generated -> prepareGenerated(source, ownerUuid)
+        is FileSource.Uploaded -> prepareUploaded(source, ownerUuid)
+    }
 
-        val filename = "${source.uuid}.${MimeTypes.extensionOf(location.mimeType)}"
+    private fun prepareGenerated(source: FileSource.Generated, ownerUuid: UUID): ResolvedFile {
+        // 없는 것과 남의 것은 동일하게 처리한다.(외부 노출 방지) 주소를 발급하기 전에 확인해야 한다.
+        val location = generatedFileFinder.findOwned(source.uuid, ownerUuid) ?: throw notFound(source)
+
+        val filename = fileNameOf(source, location.mimeType)
         presignedUrlIssuer?.let { issuer ->
             // 큐에는 UUID만 저장한다. 실행과 재시도마다 발급해야 대기 중 주소가 만료되지 않는다.
-            val url = try {
-                issuer.issue(location.storageKey, filename)
-            } catch (e: Exception) {
-                // 서명 실패는 Provider를 부르기 전의 실패다. 원문에 자격증명이 섞일 수 있어 사유만 남긴다.
-                throw FileSourceUnavailableException(true, "입력 이미지 주소를 발급하지 못했다: ${source.uuid}", e)
-            }
+            val url = signing(source) { issuer.issue(location.storageKey, filename) }
             return ResolvedFile.Url(url, location.mimeType, filename)
         }
 
@@ -88,6 +86,30 @@ class FileSourceResolver(
             filename = filename,
         )
     }
+
+    /** 올린 파일은 주소로만 넘긴다. 직접 업로드를 받는 보관소는 서명도 하므로 바이트로 읽을 길이 필요 없다. */
+    private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID): ResolvedFile {
+        // 접수에서 판정을 마쳤으므로 여기서는 보관소를 읽지 않는다.
+        val usable = uploadedFiles.findUsable(source.uuid, ownerUuid) ?: throw notFound(source)
+
+        val filename = fileNameOf(source, usable.mimeType)
+        val url = signing(source) { uploadedFiles.issueReadUrl(source.uuid, ownerUuid, filename) }
+            ?: throw FileSourceUnavailableException(false, "입력 이미지 주소를 발급할 수 없다: ${source.uuid}")
+        return ResolvedFile.Url(url, usable.mimeType, filename)
+    }
+
+    private fun fileNameOf(source: FileSource, mimeType: String) = "${source.uuid}.${MimeTypes.extensionOf(mimeType)}"
+
+    private fun notFound(source: FileSource) =
+        FileSourceUnavailableException(retryable = false, message = "입력 이미지를 찾을 수 없다: ${source.uuid}")
+
+    /** 서명 실패는 Provider 를 부르기 전의 실패다. 원문에 자격증명이 섞일 수 있어 사유만 남긴다. */
+    private fun <T> signing(source: FileSource, issue: () -> T): T =
+        try {
+            issue()
+        } catch (e: Exception) {
+            throw FileSourceUnavailableException(true, "입력 이미지 주소를 발급하지 못했다: ${source.uuid}", e)
+        }
 }
 
 /**

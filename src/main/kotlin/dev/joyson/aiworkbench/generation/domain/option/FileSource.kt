@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 import java.util.UUID
 
 /**
- * 구현체가 하나뿐인데도 판별자를 두는 이유는 **이 값이 저장되기 때문**이다.
+ * 판별자는 **이 값이 저장되기 때문에** 둔다. 판별자 이름이 곧 저장된 행의 계약이다.
  *
  * 종류를 가르는 축은 **어느 테이블이 그 파일을 아는가** 다. 같은 바이트여도 우리가 만든 것과
  * 바깥에서 들어온 것은 사는 곳이 다르고, 참조가 그 사실을 들고 있어야 푸는 쪽이 갈 곳을 안다.
@@ -13,6 +13,7 @@ import java.util.UUID
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(
     JsonSubTypes.Type(value = FileSource.Generated::class, name = "generated"),
+    JsonSubTypes.Type(value = FileSource.Uploaded::class, name = "uploaded"),
 )
 sealed interface FileSource {
 
@@ -21,4 +22,7 @@ sealed interface FileSource {
 
     /** 이 서비스가 만들어 둔 결과물. `generated_files` 의 한 행이다. */
     data class Generated(override val uuid: UUID) : FileSource
+
+    /** 사용자가 보관소에 직접 올린 파일. upload 모듈이 알고, 처음 쓰일 때 판정한다. */
+    data class Uploaded(override val uuid: UUID) : FileSource
 }

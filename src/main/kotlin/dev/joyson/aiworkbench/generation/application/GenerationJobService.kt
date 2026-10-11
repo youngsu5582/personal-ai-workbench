@@ -44,10 +44,10 @@ class GenerationJobService(
      * 컨트롤러가 아니라 여기서 확인하는 이유: 호출 경로가 늘어나면(배치 등록·재실행)
      * 호출자마다 같은 검사를 기억해야 하고, 한 곳만 빠뜨려도 조용히 통과한다.
      *
-     * 트랜잭션 경계를 여기 두는 이유: 나중에 크레딧을 깎게 되면 차감과 기록이 원자적이어야 한다.
-     * 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
+     * 트랜잭션은 기록([GenerationJobWriter.create])만 감싼다. 입력 확인이 보관소를 읽을 수 있어서,
+     * 여기에 걸면 그 왕복 동안 커넥션을 붙잡는다. 나중에 크레딧을 깎게 되면 차감도 기록과 같은
+     * 트랜잭션에 들어가야 한다 — 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
      */
-    @Transactional
     fun submit(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
         providerRegistry.find(command.model)
             ?: throw UnsupportedModelException(command.model, providerRegistry.availableNames)
@@ -90,8 +90,8 @@ class GenerationJobService(
      * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
      *
-     * **바이트는 읽지 않는다.** 이 메서드는 트랜잭션 안이고, 보관소 읽기가 거기 들어오면
-     * 커넥션을 그 시간만큼 붙잡는다. 있는지 묻는 데는 메타 행이면 충분하다.
+     * 결과물은 메타 행만 보고, 올린 파일은 처음 참조될 때 앞부분을 읽어 판정한다.
+     * 그래서 이 검사는 트랜잭션 밖에서 한다.
      *
      * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
      */
@@ -102,7 +102,7 @@ class GenerationJobService(
             is ImageToImageOption -> option.sources
         }
 
-        sources.firstOrNull { fileSourceResolver.findOwned(it, ownerUuid) == null }
+        sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }
             ?.let { throw UnknownFileSourceException(it.uuid) }
     }
 }
