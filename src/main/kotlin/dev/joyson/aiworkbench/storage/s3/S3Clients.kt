@@ -4,7 +4,7 @@ import dev.joyson.aiworkbench.storage.s3.S3StorageProperties.Companion.orNull
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
 import software.amazon.awssdk.core.checksums.RequestChecksumCalculation
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient
+import software.amazon.awssdk.http.apache5.Apache5HttpClient
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
@@ -15,8 +15,8 @@ import java.net.URI
  * 설정에서 S3 클라이언트를 만든다.
  *
  * 설정 클래스 안의 private 함수가 아니라 여기 있는 이유는 **테스트가 이 함수를 그대로 부르게**
- * 하기 위해서다. 테스트가 자기 손으로 클라이언트를 조립하면 아래 두 설정이 검증 밖으로 빠지고,
- * 그 둘이 정확히 "안 맞추면 조용히 깨지는" 것들이다.
+ * 하기 위해서다. 테스트가 자기 손으로 클라이언트를 조립하면 아래 설정들이 검증 밖으로 빠지고,
+ * 그것들이 정확히 "안 맞추면 조용히 깨지는" 것들이다.
  */
 object S3Clients {
 
@@ -28,9 +28,11 @@ object S3Clients {
             // 그때 스택트레이스에 "checksum" 이라는 말이 나오지 않아 원인을 찾기 어렵다.
             // 필요할 때만 붙이게 내린다 — 전송 무결성은 HTTPS 가 이미 본다.
             .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
-            // s3 모듈은 HTTP 구현체를 전이 의존으로 갖지 않는다. 지정하지 않으면 컴파일은 되고
-            // 클라이언트를 만드는 순간 터진다.
-            .httpClient(UrlConnectionHttpClient.create())
+            // JDK 의 HttpURLConnection(url-connection-client)은 PUT 에서 두 가지를 잃는다.
+            // `Expect: 100-continue` 에 서버가 거절(404 등)로 답하면 그 XML 본문을 읽지 않고 끊어서 오류 코드가 사라지고,
+            // 헤더가 없을 때는 본문을 보내는 중에 서버가 연결을 닫으면 응답 자체가 사라진다.
+            // 어느 쪽이든 "버킷 없음" 이 연결 실패로 바뀌어 재시도 대상이 된다. SDK 도 같은 제약을 적어 뒀다.
+            .httpClientBuilder(Apache5HttpClient.builder())
 
         properties.endpoint.orNull()?.let { builder.endpointOverride(URI.create(it)) }
 
@@ -62,6 +64,10 @@ object S3Clients {
     private fun serviceConfiguration(properties: S3StorageProperties): S3Configuration =
         S3Configuration.builder()
             .pathStyleAccessEnabled(properties.pathStyleAccess)
+            // PUT 은 본문 크기와 무관하게 헤더를 먼저 보내고 서버의 판정(100 또는 거절)을 받은 뒤 본문을 보낸다.
+            // SDK 기본은 1 MiB 부터만 그렇게 하고, 그 아래는 거절당하는 중에도 본문을 보내다 응답을 잃을 수 있다.
+            // Apache 5 는 이 헤더를 스스로 붙이지 않으므로 여기서 정해야 한다.
+            .expectContinueThresholdInBytes(0)
             .build()
 
     private fun credentials(properties: S3StorageProperties): StaticCredentialsProvider? {
