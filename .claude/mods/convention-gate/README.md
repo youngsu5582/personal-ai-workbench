@@ -21,11 +21,11 @@ Bash 뒤에는 도구가 아니라 **결과로 바뀐 파일**(`git status`)을 
 
 | `kind` | 보는 곳 | 걸리는 예 |
 |---|---|---|
-| `no-import` | `from` 층 파일의 import 중 `to` 층을 가리키는 것 | `application/TaskWorker.kt` 가 `…generation.infrastructure.JpaGenerationJobRepository` 를 import |
+| `no-import` | `from` 층 파일의 import 중 `to` 층을 가리키는 것 | `application/TaskWorker.kt` 가 `…generation.infrastructure.JooqGeneratedFileFinder` 를 import |
 | `file-name` | `in` 층의 파일 이름. `endsWith` 로 끝나거나 `startsWith` 로 시작해야 한다. `except` 의 경로는 뺀다 | `application/FooManager.kt` |
 | `banned-suffix` | 층과 상관없이 선언된 타입 이름과 파일 이름 | `GenerationJobRepositoryImpl` |
 | `interface-only` | `in` 층에서 `endsWith` 로 끝나는 선언이 interface 인지 | `domain/` 의 `class GenerationJobRepository` |
-| `port-impl-name` | `implIn` 층 선언의 상위 타입 중 `portsIn` 층에서 import 한 포트. 이름이 `{prefixes}{포트}` 여야 한다 | `GenerationJobJpaRepository : GenerationJobRepository` |
+| `port-impl-name` | `implIn` 층 선언의 상위 타입 중 `portsIn` 층에서 import 한 포트. 이름이 `{prefixes}{포트}` 여야 한다 | `GeneratedFileJooqFinder : GeneratedFileFinder` |
 | `controller-deps` | `in` 층의 `controllerEndsWith` class 가 주 생성자로 받는 `typesFrom` 층 타입. `allowedEndsWith` 로 끝나야 한다 | `GenerationJobController(private val writer: TaskStateWriter)` |
 
 층은 기준 패키지 아래 `<모듈>/<층>/…` 의 둘째 칸으로 읽는다. 모듈 루트의 파일(공개 포트·값)은 층이 없어서
@@ -48,7 +48,7 @@ AI 가 `generation/application/UsageReader.kt` 를 새로 만들려 하면 쓰�
 ■ banned-suffixes — 다음 끝말로 타입 이름을 짓지 않는다
   위반: UsageReader — Reader: Writer 와 짝 이름이라 데이터 접근 부품으로 읽힌다. 조회 진입점은 Service 다
   이유: 각 끝말이 실제와 다른 층이나 역할을 가리킨다
-  예: GenerationJobService, JpaGenerationJobRepository
+  예: GenerationJobService, JooqGeneratedFileFinder
 규칙에 없는 역할이면 이름을 짓지 말고 사용자에게 묻는다. 정해지면 .claude/conventions.json 에 이유와 함께 추가한다.
 ```
 

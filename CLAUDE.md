@@ -50,7 +50,8 @@ usage/
 
 ### 모듈 안의 자리와 이름은 `.claude/conventions.json` 이 정한다
 
-`Controller → Service → Repository(포트)` 이고, 포트는 domain 이 갖고 `{기술}{포트}` 가 구현한다.
+`Controller → Service → Repository(포트)` 이고, 포트는 domain 이 갖는다.
+Repository 는 Spring Data 가 구현을 만들고, 손으로 구현하는 포트(jOOQ Finder 등)는 `{기술}{포트}` 로 이름 짓는다.
 어느 층에 무엇을 두고 어떻게 이름 짓는지는 그 파일의 규칙 목록 한 곳에 있다.
 규칙마다 문장·이유·예가 함께 있어 그 파일만 읽어도 된다.
 

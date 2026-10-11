@@ -3,7 +3,9 @@ package dev.joyson.aiworkbench.generation.application
 import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
@@ -14,9 +16,9 @@ import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.GeneratedFileTestRepository
+import dev.joyson.aiworkbench.generation.GenerationJobTestRepository
+import dev.joyson.aiworkbench.generation.GenerationJobTaskTestRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.AppliedParameters
@@ -37,7 +39,7 @@ import dev.joyson.aiworkbench.usage.FailureKind as RecordedFailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
-import dev.joyson.aiworkbench.usage.infrastructure.JpaProviderCallRepository
+import dev.joyson.aiworkbench.usage.ProviderCallTestRepository
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -55,11 +57,14 @@ import kotlin.test.assertTrue
  */
 class TaskWorkerTest @Autowired constructor(
     private val stateWriter: TaskStateWriter,
-    private val jobRepository: JpaGenerationJobRepository,
-    private val taskRepository: JpaGenerationJobTaskRepository,
-    private val generatedFileRepository: JpaGeneratedFileRepository,
+    private val jobRepository: GenerationJobTestRepository,
+    private val taskRepository: GenerationJobTaskTestRepository,
+    private val generatedFileRepository: GeneratedFileTestRepository,
+    /** 워커가 받는 것. 확인은 전체 CRUD 가 있는 [jobRepository]·[taskRepository] 로 한다. */
+    private val jobPort: GenerationJobRepository,
+    private val taskPort: GenerationJobTaskRepository,
     private val callRecorder: ProviderCallRecorder,
-    private val callRepository: JpaProviderCallRepository,
+    private val callRepository: ProviderCallTestRepository,
     private val generatedFileFinder: GeneratedFileFinder,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
@@ -107,8 +112,8 @@ class TaskWorkerTest @Autowired constructor(
         recorder: ProviderCallRecorder = callRecorder,
         presignedUrlIssuer: PresignedUrlIssuer? = null,
     ) = TaskWorker(
-        taskRepository = taskRepository,
-        jobRepository = jobRepository,
+        taskRepository = taskPort,
+        jobRepository = jobPort,
         providerRegistry = ProviderRegistry(listOf(provider)),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
         fileSourceResolver = FileSourceResolver(generatedFileFinder, fileStorage, presignedUrlIssuer),

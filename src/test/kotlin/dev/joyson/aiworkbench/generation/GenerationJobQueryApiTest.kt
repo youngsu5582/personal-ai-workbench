@@ -7,9 +7,6 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
@@ -49,9 +46,9 @@ class GenerationJobQueryApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
-    private val jobRepository: JpaGenerationJobRepository,
-    private val taskRepository: JpaGenerationJobTaskRepository,
-    private val fileRepository: JpaGeneratedFileRepository,
+    private val jobRepository: GenerationJobTestRepository,
+    private val taskRepository: GenerationJobTaskTestRepository,
+    private val fileRepository: GeneratedFileTestRepository,
     private val fileStorage: FileStorage,
 ) : IntegrationTest() {
 

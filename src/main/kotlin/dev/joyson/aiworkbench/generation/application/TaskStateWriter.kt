@@ -65,7 +65,7 @@ class TaskStateWriter(
      */
     @Transactional
     fun succeed(taskId: Long, files: List<StoredFile>) {
-        val task = taskRepository.findByIdOrNull(taskId) ?: return
+        val task = taskRepository.findById(taskId) ?: return
 
         generatedFileRepository.saveAll(
             files.map {
@@ -90,7 +90,7 @@ class TaskStateWriter(
      */
     @Transactional
     fun fail(taskId: Long, reason: String, retryable: Boolean) {
-        val task = taskRepository.findByIdOrNull(taskId) ?: return
+        val task = taskRepository.findById(taskId) ?: return
 
         task.transitionTo(TaskStatus.FAILED, failureReason = reason)
 

@@ -18,9 +18,6 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGeneratedFileRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobRepository
-import dev.joyson.aiworkbench.generation.infrastructure.JpaGenerationJobTaskRepository
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
@@ -42,9 +39,9 @@ import kotlin.test.assertFailsWith
  */
 class GenerationJobServiceTest @Autowired constructor(
     private val service: GenerationJobService,
-    private val jobRepository: JpaGenerationJobRepository,
-    private val taskRepository: JpaGenerationJobTaskRepository,
-    private val generatedFileRepository: JpaGeneratedFileRepository,
+    private val jobRepository: GenerationJobTestRepository,
+    private val taskRepository: GenerationJobTaskTestRepository,
+    private val generatedFileRepository: GeneratedFileTestRepository,
 ) : IntegrationTest() {
 
     private fun command(model: String = MODEL, taskCount: Int = 2) = GenerationCommand(

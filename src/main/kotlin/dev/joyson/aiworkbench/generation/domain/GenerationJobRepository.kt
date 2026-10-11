@@ -1,18 +1,17 @@
 package dev.joyson.aiworkbench.generation.domain
 
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.Repository
+import org.springframework.data.repository.query.Param
 import java.util.UUID
 
-/**
- * Job 을 저장하고 꺼낸다.
- *
- * 도메인이 이 인터페이스를 갖고 저장 기술이 구현한다 — 의존이 도메인 쪽으로 향한다.
- * 구현은 infrastructure 의 `JpaGenerationJobRepository` 다.
- */
-interface GenerationJobRepository {
+/** Job 을 저장하고 꺼낸다. 구현은 Spring Data 가 만든다. */
+interface GenerationJobRepository : Repository<GenerationJob, Long> {
 
     fun save(job: GenerationJob): GenerationJob
 
-    fun findByIdOrNull(id: Long): GenerationJob?
+    fun findById(id: Long): GenerationJob?
 
     fun findByUuid(uuid: UUID): GenerationJob?
 
@@ -21,7 +20,36 @@ interface GenerationJobRepository {
      *
      * 마지막 Task 들이 거의 동시에 끝나 여럿이 함께 불러도 **한 번만** 닫힌다.
      *
+     * 엔티티를 읽어 고치지 않고 **조건부 UPDATE** 한 방으로 하는 이유는 경쟁 때문이다.
+     * 마지막 Task 들이 거의 동시에 끝나면 여러 워커가 같은 판정을 동시에 하는데,
+     * 읽고-판단하고-쓰는 사이에 다른 워커의 커밋이 끼어들면 둘 다 "아직 남았다" 로 보고
+     * 아무도 닫지 않는 상태가 된다.
+     *
+     * 서브쿼리가 `:jobId` 를 다시 쓰지 않고 바깥의 `j.id` 를 참조하는 이유:
+     * 같은 이름 파라미터를 두 번 쓰면 이 쿼리가 **조건을 만족해도 0행을 돌려준다**.
+     * 상관 서브쿼리로 두면 파라미터가 한 번만 등장해 그 문제를 피하고, 뜻도 같다.
+     *
+     * `clearAutomatically` 는 벌크 UPDATE 뒤 영속성 컨텍스트에 남은 옛 Job 을 비운다.
+     * 없으면 같은 트랜잭션에서 다시 읽을 때 1차 캐시의 PENDING 이 돌아온다.
+     *
+     * `flushAutomatically` 는 붙이지 않는다. Hibernate 는 네이티브 쿼리의 대상 테이블을
+     * 알 수 없으면 세션 전체를 flush 하므로, 바뀐 Task 상태는 이미 나간 뒤다.
+     *
      * @return 실제로 닫은 행 수. 0 이면 다른 쪽이 이미 닫았거나 아직 끝나지 않았다는 뜻이다.
      */
-    fun closeIfAllTasksFinished(jobId: Long): Int
+    @Modifying(clearAutomatically = true)
+    @Query(
+        value = """
+            UPDATE generation_jobs j
+            SET status = 'CLOSED', updated_at = current_timestamp
+            WHERE j.id = :jobId
+              AND j.status <> 'CLOSED'
+              AND NOT EXISTS (
+                  SELECT 1 FROM generation_job_tasks t
+                  WHERE t.job_id = j.id AND t.status NOT IN ('SUCCEEDED', 'FAILED')
+              )
+        """,
+        nativeQuery = true,
+    )
+    fun closeIfAllTasksFinished(@Param("jobId") jobId: Long): Int
 }
