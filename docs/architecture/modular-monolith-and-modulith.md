@@ -141,9 +141,10 @@ generation/
 │   └── GenerationJobWriter.kt         ← 그 아래 부품
 ├── domain/
 │   ├── GenerationJob.kt
-│   └── GenerationJobRepository.kt     ← 포트. interface
+│   ├── GenerationJobRepository.kt     ← 포트. 구현은 Spring Data 가 만든다
+│   └── GeneratedFileFinder.kt         ← 포트. 손으로 구현한다
 └── infrastructure/
-    └── JpaGenerationJobRepository.kt  ← 포트 구현. {기술}{포트}
+    └── JooqGeneratedFileFinder.kt     ← 포트 구현. {기술}{포트}
 ```
 
 어디에 무엇을 두고 어떻게 이름 짓는지는 `.claude/conventions.json` 이 정하고, 테스트와 Mod 가 그것을 강제한다.
