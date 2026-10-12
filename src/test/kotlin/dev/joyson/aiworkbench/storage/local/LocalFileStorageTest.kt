@@ -3,10 +3,12 @@ package dev.joyson.aiworkbench.storage.local
 import dev.joyson.aiworkbench.storage.FileStorageException
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -88,6 +90,17 @@ class LocalFileStorageTest {
     @Test
     fun `없는 키를 범위로 읽으면 null 이다`() {
         assertNull(storage.readRange("없는/키.png", 0L until 12))
+    }
+
+    /** 없는 것만 null 이다. 열 수 없는 것을 "없다" 로 숨기면 원인이 사라진다. */
+    @Test
+    fun `읽을 수 없는 자리를 범위로 읽으면 보관 실패다`() {
+        // 키 자리에 디렉토리가 있다. 권한으로 만들면 root 로 도는 환경에서 실패가 재현되지 않는다.
+        root.resolve("range/dir.png").createDirectories()
+
+        val ex = assertFailsWith<FileStorageException> { storage.readRange("range/dir.png", 0L until 4) }
+
+        assertTrue(ex.retryable)
     }
 
     @Test
