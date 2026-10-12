@@ -44,8 +44,8 @@ dependencies {
 	implementation("tools.jackson.module:jackson-module-kotlin")
 	runtimeOnly("org.postgresql:postgresql")
 	implementation("software.amazon.awssdk:s3")
-	// s3 모듈은 HTTP 구현체를 전이 의존으로 갖지 않는다. 없으면 컴파일은 되고 클라이언트를 만들 때 터진다.
-	implementation("software.amazon.awssdk:url-connection-client")
+	// s3 는 Apache 5 를 runtime 으로만 끌고 온다. S3Clients 가 클래스를 직접 고르므로 컴파일에도 보여야 한다.
+	implementation("software.amazon.awssdk:apache5-client")
 	// 코드 생성이 마이그레이션 SQL 을 직접 읽는다. 빌드에 DB 가 필요 없다.
 	jooqGenerator("org.jooq:jooq-meta-extensions")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
