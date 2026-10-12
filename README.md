@@ -3,6 +3,13 @@
 내 서비스들이 함께 쓰는 AI 작업대, **Personal AI Workbench** <br>
 : **연결은 한 번, 비용은 정확히**
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.svg">
+    <img src="docs/images/overview-light.svg" alt="Workbench 가 없으면 서비스마다 AI Provider 를 따로 붙이고, 있으면 한 곳으로 모인다">
+  </picture>
+</p>
+
 <br>
 
 ## 어떤 서비스인가요?
@@ -12,31 +19,6 @@
 
 서비스는 *AI 를 어떻게 부르는지* 대신 **무엇을 원하는지**만 말하면 돼요.
 어느 Provider 에 어떻게 보내고, 언제 끝났는지 확인하고, 얼마였는지 적어두는 일은 Workbench 가 해요.
-
-```mermaid
-flowchart LR
-    subgraph clients["내 서비스들"]
-        direction TB
-        s1["서비스 A"]
-        s2["서비스 B"]
-        mcp["AI 클라이언트 (MCP)"]
-    end
-    subgraph wb["Personal AI Workbench"]
-        direction TB
-        auth["인증 · OAuth"]
-        job["작업 접수 · 처리 · 재시도"]
-        cost["단가 · 비용 · 사용 내역"]
-        tpl["템플릿"]
-    end
-    subgraph ai["AI Provider"]
-        direction TB
-        img["이미지"]
-        vid["비디오"]
-        tts["음성"]
-        etc["…"]
-    end
-    clients --> wb --> ai
-```
 
 <br>
 
