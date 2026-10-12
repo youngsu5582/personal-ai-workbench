@@ -14,3 +14,6 @@
 -- 없는 것이 맞다. 기존 행도 채우지 않는다 — 그때는 받아놓고 버렸으므로 지어낼 것이 없다.
 ALTER TABLE generated_files
     ADD COLUMN provider_info jsonb;
+
+ALTER TABLE generated_files
+    ADD COLUMN provider_request_id varchar(100);
