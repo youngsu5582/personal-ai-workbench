@@ -154,6 +154,26 @@ class OpenAIProviderTest {
         assertEquals(FailureKind.REJECTED, failureFor(HttpStatus.BAD_REQUEST).kind)
     }
 
+    /** 주소로 넘긴 입력을 받아가지 못한 400 만 따로 가른다. 바이트로 다시 보내면 될 수 있다. */
+    @Test
+    fun `입력 주소를 받아가지 못한 400 은 다른 거절과 갈린다`() {
+        val unreachable = failureFor(
+            HttpStatus.BAD_REQUEST,
+            """{"error":{"message":"Error while downloading file. Upstream status code: 407.","type":"invalid_request_error"}}""",
+        )
+
+        assertEquals(FailureKind.INPUT_UNREACHABLE, unreachable.kind)
+        assertFalse(unreachable.retryable)
+        assertEquals(FailureKind.REJECTED, failureFor(HttpStatus.BAD_REQUEST).kind)
+    }
+
+    @Test
+    fun `OpenAI 가 오류 이름을 주면 메시지에 남긴다`() {
+        val failure = failureFor(HttpStatus.BAD_REQUEST, """{"error":{"message":"안된다","code":"example_code"}}""")
+
+        assertEquals("[openai 400 BAD_REQUEST example_code] 안된다", failure.message)
+    }
+
     @Test
     fun `200 인데 이미지가 없으면 실패로 본다`() {
         server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
@@ -229,12 +249,12 @@ class OpenAIProviderTest {
      * 한 테스트에서 호출을 여러 번 하려면 서버를 매번 새로 만들어야 한다 —
      * `MockRestServiceServer` 는 요청이 한 번 나간 뒤에는 기대를 더 등록하지 못한다.
      */
-    private fun failureFor(status: HttpStatus): ExternalApiException {
+    private fun failureFor(status: HttpStatus, body: String = """{"error":{"message":"안된다"}}"""): ExternalApiException {
         val builder = RestClient.builder().baseUrl(BASE_URL)
         val server = MockRestServiceServer.bindTo(builder).build()
         server.expect(requestTo("$BASE_URL${OpenAIImageEndpoint.GENERATIONS.path}"))
             .andRespond(
-                withStatus(status).body("""{"error":{"message":"안된다"}}""")
+                withStatus(status).body(body)
                     .contentType(MediaType.APPLICATION_JSON),
             )
 

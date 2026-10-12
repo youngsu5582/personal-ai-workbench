@@ -22,6 +22,11 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ProviderRegistry
+import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.upload.domain.UploadStatus
+import dev.joyson.aiworkbench.upload.domain.UploadedFile
+import dev.joyson.aiworkbench.upload.domain.UploadedFileMetadata
+import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -42,6 +47,8 @@ class GenerationJobServiceTest @Autowired constructor(
     private val jobRepository: GenerationJobTestRepository,
     private val taskRepository: GenerationJobTaskTestRepository,
     private val generatedFileRepository: GeneratedFileTestRepository,
+    private val uploadedFileRepository: UploadedFileRepository,
+    private val fileStorage: FileStorage,
 ) : IntegrationTest() {
 
     private fun command(model: String = MODEL, taskCount: Int = 2) = GenerationCommand(
@@ -93,7 +100,7 @@ class GenerationJobServiceTest @Autowired constructor(
     fun `내가 만든 이미지를 가리키면 접수된다`() {
         val me = UUID.randomUUID()
 
-        val view = service.submit(ownerUuid = me, command = editCommand(sourceUuid = fileOwnedBy(me)))
+        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Generated(fileOwnedBy(me))))
 
         assertEquals(1, view.progress.total)
     }
@@ -104,8 +111,65 @@ class GenerationJobServiceTest @Autowired constructor(
         val theirFile = fileOwnedBy(UUID.randomUUID())
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(sourceUuid = theirFile))
+            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Generated(theirFile)))
         }
+    }
+
+    @Test
+    fun `올린 이미지가 선언대로 올라왔으면 접수되고 판정이 남는다`() {
+        val me = UUID.randomUUID()
+        val upload = uploadOwnedBy(me, content = png)
+
+        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+
+        assertEquals(1, view.progress.total)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByUuidAndOwnerUserUuid(upload.uuid, me)?.status)
+    }
+
+    @Test
+    fun `올린 이미지가 선언과 다른 형식이면 접수되지 않는다`() {
+        val me = UUID.randomUUID()
+        // zip 을 png 라고 선언했다.
+        val upload = uploadOwnedBy(me, content = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0, 0, 0, 0, 0))
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+        }
+        assertEquals(0, jobRepository.count())
+    }
+
+    @Test
+    fun `주소만 받고 올리지 않은 이미지는 접수되지 않는다`() {
+        val me = UUID.randomUUID()
+        val upload = uploadOwnedBy(me, content = null)
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+        }
+    }
+
+    @Test
+    fun `남이 올린 이미지를 가리키면 없는 것과 같은 실패다`() {
+        val upload = uploadOwnedBy(UUID.randomUUID(), content = png)
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Uploaded(upload.uuid)))
+        }
+    }
+
+    /** 발급만 된 업로드 한 개를 만들고, [content] 가 있으면 보관소에 올려 둔다. 선언은 png 다. */
+    private fun uploadOwnedBy(ownerUuid: UUID, content: ByteArray?): UploadedFile {
+        val uuid = UUID.randomUUID()
+        val file = uploadedFileRepository.save(
+            UploadedFile(
+                uuid = uuid,
+                ownerUserUuid = ownerUuid,
+                storageKey = "users/$ownerUuid/uploads/$uuid",
+                metadata = UploadedFileMetadata(mimeType = "image/png", fileSize = (content ?: png).size.toLong()),
+            ),
+        )
+        content?.let { fileStorage.put(file.storageKey, it, "image/png") }
+        return file
     }
 
     /** 누군가의 결과물 한 개를 만들어 둔다. 소유자는 Job 이 알고, 파일은 Task 를 거쳐 거기 닿는다. */
@@ -128,10 +192,12 @@ class GenerationJobServiceTest @Autowired constructor(
         ).uuid
     }
 
-    private fun editCommand(sourceUuid: UUID = UUID.randomUUID()) = GenerationCommand(
+    private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13)
+
+    private fun editCommand(source: FileSource = FileSource.Generated(UUID.randomUUID())) = GenerationCommand(
         option = ImageToImageOption(
             prompt = "수채화로",
-            sources = listOf(FileSource.Generated(sourceUuid)),
+            sources = listOf(source),
             size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
         ),
         model = MODEL,

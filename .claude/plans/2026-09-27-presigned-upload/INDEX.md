@@ -2,18 +2,28 @@
 
 Created: 2026-09-27
 Status: active
+코드와 대조: 2026-10-11 (base main — #39 · #40 · #41 · #43 머지 후)
 
 ## 무엇을 만드나
 
 사용자가 가진 이미지를 **앱을 거치지 않고 보관소에 직접** 올리고, 그것을 i2i 입력으로 쓴다.
 
-**완료 기준(1문장)**: 발급받은 주소로 이미지를 올리고 완료를 알리면, 그 파일을 `ImageSource.Uploaded` 로 참조해 i2i 를 돌릴 수 있다.
+**완료 기준(1문장)**: 발급받은 주소로 이미지를 올리면, 그 uuid 를 `FileSource.Uploaded` 로 참조해 i2i 를 돌릴 수 있다.
 
 앱이 바이트를 받지 않는 것이 이 방식을 고른 이유 전부다. `MultipartFile` 은 힙에 통째로 올라오는데, 그건 결과물을 내려보낼 때 #35 에서 막 걷어낸 모양이다.
 
-## 확인된 사실 (실험으로)
+```
+POST /api/uploads          → PUT 주소 + uuid, PENDING 행
+PUT → Garage               앱을 거치지 않는다
+POST /api/jobs  sources:[{"type":"uploaded","uuid":…}]
+   └ 트랜잭션 밖: PENDING 이면 Range GET 1번 → 매직넘버 → READY / 불합격이면 REJECTED + 객체 삭제 → 400
+   └ 트랜잭션 안: Job·Task 기록
+워커가 실행 시점에 읽기 주소를 발급 → Provider
+```
 
-Garage `v2.4.1` 에 실제로 쏘아 확인했다. 추정이 아니다.
+## 확인된 사실
+
+실험으로 — Garage `v2.4.1` 에 실제로 쏘아 확인했다.
 
 | # | 사실 | 무엇을 정했나 |
 |---|---|---|
@@ -21,138 +31,101 @@ Garage `v2.4.1` 에 실제로 쏘아 확인했다. 추정이 아니다.
 | F2 | `contentLength` 도 서명에 들어간다 (`SignedHeaders=content-length;content-type;host`) | 크기도 발급 시점에 못박는다 |
 | F3 | **같은 주소로 다시 PUT 하면 덮어써진다** (1차·2차 모두 200) | 검증 후 바꿔치기가 가능하다 |
 | F4 | Garage 는 조건부 쓰기(`If-None-Match: *`)를 **지원하지 않는다** (400) | 1회용 주소로 F3 을 막을 수 없다 |
-| F5 | `contentMD5` 를 서명에 넣으면 **내용이 고정된다.** 내용을 바꾸면 보관소가 400, 해시를 내용에 맞게 고치면 서명이 깨져 403 | **F3 이 무해해진다.** 같은 주소로 다시 올려도 같은 내용만 올라간다 |
+| F5 | `contentMD5` 를 서명에 넣으면 **내용이 고정된다.** 내용을 바꾸면 보관소가 400, 해시를 내용에 맞게 고치면 서명이 깨져 403 | F3 을 구조적으로 막을 수 있다 (해시 PR) |
+| F6 | 범위 요청(`Range: bytes=0-11`)에 `Content-Range` 를 준다. 객체보다 큰 범위면 있는 만큼, 없는 키를 지워도 성공 (`S3FileStorageTest` 가 고정한다) | 요청 한 번으로 크기와 앞부분을 함께 읽는다 |
+| F7 | `x-amz-checksum-sha256` 도 서명에 실으면 **강제된다** — 다른 내용 400 `InvalidDigest`, 해시를 고치면 403, 헤더를 빼면 400. 원본이 있는 자리에 같은 주소로 다른 내용을 올려도 400 이고 원본이 남는다 | 해시 PR 은 SHA-256 하나로 키와 강제를 겸한다 |
+| F8 | (라이브) OpenAI 는 `localhost` 보관소의 읽기 주소를 받아가지 못한다 — `400 invalid_value` "Error while downloading file. Upstream status code: 407." | 주소로 실패하면 바이트로 다시 보낸다(D13) |
 
-> F4 를 모르고 `ifNoneMatch("*")` 를 넣었다면 **모든 업로드가 400 으로 실패**했을 것이다.
-> AWS S3 는 이 기능을 지원하므로, 확인 없이 넣었으면 "AWS 에선 되고 Garage 에선 안 되는" 코드가 됐다.
+공식 문서로 — [S3 compatibility](https://garagehq.deuxfleurs.fr/documentation/reference-manual/s3-compatibility/)
+
+- 버킷 이벤트 알림(`PutBucketNotificationConfiguration`)은 **Missing** 이다 → 보관소가 업로드 완료를 알려줄 수 없다
+- Lifecycle 은 `Expiration`·`AbortIncompleteMultipartUpload` 만, prefix 는 `Filter` 안에서만 받는다
+- Range GET 과 `x-amz-checksum-sha256` 강제는 문서에 없었지만 F6·F7 로 확인했다
 
 ## 결정 사항
 
 | # | 결정 | 이유 |
 |---|---|---|
-| D1 | 발급 포트를 `PresignedUrlIssuer` 와 **따로** 둔다 | 방향이 반대이고 위험도 반대다. 내주는 주소가 새면 남이 보고, 받는 주소가 새면 남이 **쓴다**. 한 포트면 두 권한이 함께 열린다 |
+| D1 | 발급 포트를 `PresignedUrlIssuer` 와 **따로** 둔다 | 방향이 반대이고 위험도 반대다. 내주는 주소가 새면 남이 보고, 받는 주소가 새면 남이 **쓴다** |
 | D2 | 서명에 `key` · `contentType` · `contentLength` 를 싣는다 | F1·F2. 발급 시점에 막을 수 있는 전부다 |
-| D3 | **내용은 올라온 뒤에 본다** — 선두 32바이트 매직넘버 | 발급 시점에 서버는 그 바이트를 본 적이 없다. 해시를 서명에 넣어도 "말한 그 바이트"를 고정할 뿐 "그게 png 다"는 보장하지 못한다 |
-| D4 | **최종 위치로 옮기지 않는다** | F5 때문이다. 내용이 서명에 묶이면 **바꿔치기가 구조적으로 불가능**해서 이동이 막던 것이 애초에 일어나지 않는다. 공유 기능이 생겨도 마찬가지다 |
-| D7 | 키를 **결과물과 같은 규칙**(`users/{owner}/blobs/{digest}`)으로 둔다 | 발급 요청에 해시를 받고 그 해시를 서명에 싣는다(F5). **보관소가 "키 = 내용의 해시"를 대신 보장**하므로 우리가 전체를 읽지 않아도 된다 |
-| D5 | 쓰기 수명을 읽기와 **나눈다** | F3 때문에 수명이 곧 바꿔치기 창이다. 읽기(15분)와 근거가 달라졌다. 전송이 끝날 만큼만 |
-| D6 | 검증 전에는 **읽기 주소를 발급하지 않는다** | 검증을 통과하지 못한 객체는 열람 경로가 없어야 한다. `status` 의 목적이 상태 추적이 아니라 **노출 통제**다 |
+| D3 | **내용은 올라온 뒤에 본다** — 앞 12바이트 매직넘버 | 해시를 서명에 넣어도 "말한 그 바이트"를 고정할 뿐 "그게 png 다"는 보장하지 못한다 |
+| D4 | **최종 위치로 옮기지 않는다** | 내용이 서명에 묶이면(F5) 바꿔치기가 구조적으로 불가능해 이동이 막던 것이 일어나지 않는다 |
+| D5 | 쓰기 수명을 읽기와 **나누지 않는다** | 느린 회선에서 실제로 짧아 실패하면 그때 나눈다 (`StorageConfig` 의 업로드 발급자 KDoc) |
+| D6 | 검증 전에는 **읽기 주소를 발급하지 않는다** | 검증을 통과하지 못한 객체는 열람 경로가 없어야 한다. `status` 의 목적은 노출 통제다 |
+| D8 | **complete API 를 두지 않는다.** 첫 참조(i2i 접수) 때 트랜잭션 밖에서 검증하고 결과를 `status` 에 남긴다 | 보관소를 읽는 일은 같고 시점만 다르다. complete 가 더하는 것은 "올렸다" 신호 왕복 1번, 공개 계약, 클라이언트의 순서 의무다. 업로드 직후 결과를 보여줄 화면이 생기면 같은 판정 함수를 부르는 얇은 엔드포인트로 붙인다 |
+| D9 | 상태 전이는 **조건부 UPDATE** (`… WHERE status = 'PENDING'`) | 판정은 HTTP 요청마다 불려 "부르는 쪽이 하나" 라는 전제가 처음부터 없다. 첫 참조가 겹치고 F3 이 끼면 READY 인데 객체가 없는 행이 생긴다. 선례 `closeIfAllTasksFinished` |
+| D7 | 해시를 받으면 **키에 해시를 넣되 결과물(`blobs/`)과 자리를 나눈다** — `users/{owner}/uploads/ab/cd/{hash}.{ext}` | 같은 자리면 업로드 행과 결과물 행이 한 객체를 공유해 삭제에 참조 세기가 필요하다. 키 규칙(`BlobKey`)은 공유하고 객체는 공유하지 않는다. **해시 PR** |
+| D10 | 중복 판정은 `(owner_user_uuid, hash)` unique. **밖으로 내는 식별자는 uuid** | 형식은 바이트가 정하므로 정체성은 해시다. 선언한 형식은 주장일 뿐이다. 해시를 식별자로 내보내면 알고리즘이 계약에 박힌다. **해시 PR** |
+| D11 | 키에 `v2/` 같은 판 표시를 붙이지 않는다 | 키는 행마다 통째로 저장돼 옛 모양과 새 모양이 함께 산다. 앞에 붙이면 "계정 정리는 `users/{owner}/` 접두사 하나" (`BlobKey`) 가 깨진다 |
+| D12 | 판정은 **있는가 · 선언한 크기인가 · 매직넘버** 까지. 디코드·재인코딩은 하지 않는다 | 이 서버는 이미지를 열지 않고 Provider 가 디코드한다. 판정의 목적은 보안 경계가 아니라 이른 거절과 노출 통제(D6)다. 재인코딩은 앱이 바이트를 받아야 해 presigned 를 고른 이유와 부딪친다. OWASP 는 매직넘버만으로는 부족하다고 한다 — 우리가 파일을 열게 되면 다시 본다 |
+| D13 | 주소로 넘긴 입력을 Provider 가 받아가지 못하면 **같은 입력을 바이트로 한 번 더** 보낸다 | 운영 보관소는 직접 업로드 때문에 어차피 공개돼야 해 대개 주소로 된다. 그래도 일시적으로 못 받아가는 경우를 견딘다. 어댑터는 `INPUT_UNREACHABLE` 이라는 사실만 답하고 다시 보낼지는 워커가 정한다. 가르는 근거는 문구다 — `code` 는 `invalid_value` 로 일반적이다(F8). 지출 기록에는 과금 없는 거절(`REJECTED`)로 남는다 |
 
-### D4 는 왜 뒤집히지 않나
+결정이 정한 모양 — U1 은 **한 행 + `status`**(`PENDING`·`READY`·`REJECTED`), U3 은 **`upload` 모듈 + 루트 포트**다.
+generation 은 루트 포트로 "쓸 수 있는 내 파일인가" 와 "읽기 주소" 만 묻는다. **보관소 키는 경계를 넘지 않는다.**
 
-처음에는 "우리 제품엔 공유 경로가 없어서 피해자가 자기 자신"이라는 **제품 근거**로 미뤘다.
-F5 를 확인한 뒤로는 **구조적 근거**가 됐다 — 내용이 서명에 묶여 바꿔치기 자체가 불가능하다.
-공유 기능이 생겨도 이 근거는 흔들리지 않는다.
+### D7 은 원래 `blobs/` 공유였다
 
-남는 것은 **"그 바이트가 정말 png 인가"** 하나뿐이고, 그것도 내용이 고정되므로 `complete` 의 검증이
-**영구적으로 유효**하다. 한 번 통과하면 다시 볼 필요가 없다.
+처음에는 업로드 키를 결과물과 같은 `blobs/{sha256}` 에 두고 "보관소가 키 = 내용을 보장한다" 고 봤다.
+그런데 서명에 싣는 것은 MD5(F5)고 키는 SHA-256 이다. 보관소는 MD5 만 확인하므로 키의 SHA-256 은 클라이언트의 말이다.
+그러면 내려받은 결과물의 SHA-256 을 대고 다른 바이트를 올려 **결과물 객체를 덮어쓸 수 있다.** 자리를 나누면 이 길이 없다.
 
-> 주의: MD5 는 충돌 공격이 알려져 있다. 다만 그 공격으로 얻는 것이 "자기 계정의 자기 파일을 바꾸는 것"이라
-> 현재 위협 모델에서는 의미가 없다. `x-amz-content-sha256` 으로 올리면 그 걱정도 사라진다(미확인).
+### 잘못 선언한 형식은 REJECTED 를 다시 연다 (해시 PR)
 
-## 아직 정하지 않은 것
+이름이 `.png` 인 JPEG 는 해시는 같고 선언만 틀린다. `(owner, hash)` 가 REJECTED 로 남아 그 해시를 영원히 막으면 안 된다.
 
-**U1. 발급 기록을 한 행으로 둘까, 두 행으로 둘까**
-
-| | 안 1 `uploaded_files.status` | 안 2 `pending_uploads` + `uploaded_files` |
-|---|---|---|
-| `uploaded_files` 에 행이 있으면 | 쓸 수 있을 수도, 없을 수도 | **무조건 쓸 수 있다** |
-| 참조하는 쪽 | `READY` 확인 필요 | 존재 확인만 → `generated` 와 **대칭** |
-| 실패 이력 | 남는다 | 안 남는다 |
-| 부수 효과 | — | `pending_uploads` 가 비어 있는 게 정상 → 쌓이면 이상 신호 |
-| 선례 | — | GitLab `ObjectStorage::PendingDirectUpload` |
-
-지출 기록에서 **실패한 호출도 적기로** 한 것과, 안 2 의 "실패가 안 남는다"가 어긋난다. 그게 걸리면 안 1 이거나 안 2 + 별도 이력이다.
-
-**U3. `UploadedFile` 을 어느 모듈에 둘까**
-
-`storage` 를 단순 어댑터가 아니라 **파일을 관리하는 팀**으로 볼 것인가.
-
-```
-generation  →  file(도메인)  →  storage(S3 어댑터)
-  "이 파일로"    파일의 생애 책임    바이트를 넣고 뺀다
-```
-
-- `storage` 에 직접 두는 것은 안 된다 — 지금 그 모듈은 **DB 를 전혀 모르고**, `FileStorage` 가 "담긴 바이트가 무엇인지는 모른다" 고 선언했다
-- `generation` 은 지금 유일한 소비자라 자연스럽지만, 업로드는 **생성 작업과 무관**하다
-- 새 `file` 모듈이 구상과 맞다. 대가는 `@NamedInterface` 첫 사례(이 저장소엔 아직 0개)
-
-> 이 방향으로 가면 `GeneratedFile` 도 언젠가 옮겨야 한다. 지금은 `파일 → Task` 인데 `Task → 파일` 로 뒤집히는
-> 큰 리팩토링이라 **별도 과제**다. 다만 방향을 알고 새것을 놓는 것과 모르고 놓는 것은 다르다.
-
-**U2. 키 규칙** — **D7 로 정해졌다.** 발급 때 해시를 받아 결과물과 같은 규칙을 쓴다.
+- 클라이언트는 확장자가 아니라 **매직넘버로 선언**한다 — 해시를 내려고 어차피 전체를 읽는다. `upload.sh` 는 이미 그렇다
+- REJECTED 에 **같은 형식**으로 다시 오면 업로드 없이 400, **다른 형식**이면 그 행을 새 형식의 PENDING 으로 되돌린다
+- 그래서 전이 `REJECTED → PENDING` 이 하나 생긴다. 발급에서만 열리고 그때 진행 중인 판정이 없어 조건부 UPDATE 하나로 충분하다
 
 ## 단계와 PR
 
 ```
-main
- └─ #36  feat/presigned-upload    1단계: 발급 포트 + S3 구현
-     └─ #__ feat/upload-records    2단계: 테이블 + 엔티티
-         └─ #__ feat/upload-api    3단계: 발급 / complete API
-
-(별도) feat/image-to-image
-         └─ 4단계: ImageSource.Uploaded 배선   ← 위 셋 + i2i 가 머지된 뒤
+main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Spring Data Repository 포트 — 머지됨)
+ └─ #45 feat/upload-records     기록 + 판정 (upload 모듈)
+     └─ #46 feat/upload-i2i      i2i 동작 + 스크립트 + 문서
+         └─ 해시 PR (별도)        내용 고정 + 중복 방지
 ```
 
-앞 PR 이 머지되면 GitHub 이 뒤 PR 의 base 를 자동으로 옮긴다.
-앞에 커밋이 추가되면 뒤를 rebase 해야 하므로, **앞이 안정된 뒤에 뒤를 시작**한다.
+관심사로 나눈다. 기록과 판정은 upload 모듈 안에서 혼자 설명되고, i2i 연결은 generation 의 접수와 워커를 고친다.
+문서는 i2i 까지 이어진 흐름을 설명하므로 i2i PR 에 둔다.
 
-```bash
-.claude/scripts/worktree.sh feat/upload-records feat/presigned-upload
-gh pr create --base feat/presigned-upload --draft
-```
+입력 파일 확인은 `FileSourceResolver.isUsable`·`prepare` 의 두 `when` 이 종류별로 가른다. 올린 파일은 upload 모듈의 `UploadedFiles` 에 묻는다.
 
 ## Progress
 
-- [x] **1단계** 발급 포트 + S3 구현 + 빈 등록 (#36, CI 초록)
-- [ ] **1단계 보강** — `contentLength`·`contentMD5` 파라미터(F2·F5), 수명 분리(D5), 내용 고정 테스트(F5), KDoc 에 "왜 형식을 묶나"
-- [ ] **2단계** U1·U2 결정 → `V5__uploaded_files.sql` + 엔티티 + repository
-- [ ] **3단계** `POST /api/uploads`(발급) · `POST /api/uploads/{uuid}/complete`(검증) + 기동 로그
-- [ ] **4단계** `ImageSource.Uploaded` + `ImageSourceFinder` 가지
-- [ ] (선택) 누락 복구 폴링 — complete 을 못 부른 발급 정리
-
-## 단계별 체크리스트
-
-### 1단계 보강
-- `issueUpload(key, contentType, contentLength)` — 크기를 서명에
-- 수명을 `presignedUploadTtl` 로 분리 (D5). 읽기 15분과 근거가 다르다
-- 테스트 `같은 주소로 다시 올리면 덮어쓴다` — F3 을 코드에 고정. **2·3단계에서 status 가 왜 필요한지의 근거**가 된다
-- KDoc: 저장된 `Content-Type` 이 GET 응답 헤더가 되고 `inline` 으로 내려가므로, 통제하지 않으면 보관소 도메인에서 임의 HTML 이 렌더링된다
-
-### 2단계
-- U1 을 정하고 그에 맞춰 테이블 1개 또는 2개
-- **엔티티와 마이그레이션은 같은 커밋** — 짝일 때만 `SchemaMigrationTest` 가 검증한다. 테이블만 넣으면 아무도 안 본다
-- **V3·V4 는 지출 기록이 가져갔다 → `V5`**
-- 소유자는 `owner_user_uuid uuid` (`V2` 규약)
-- 선례: `GeneratedFile.kt` · `V1__baseline_schema.sql` · `V2__owner_user_uuid.sql`
-
-### 3단계
-- 발급: `contentType` 화이트리스트(OpenAI 가 받는 png·jpeg·webp 와 **정확히 같게**) + `byteSize` 필수
-- complete: `HeadObject` 로 크기 대조 → 선두 32바이트 Range GET → 매직넘버 대조 → 불일치면 **객체 삭제**
-- `ImageContentType.detect()` 신설 — PNG `89 50 4E 47 0D 0A 1A 0A` · JPEG `FF D8 FF` · WebP `RIFF....WEBP`
-- **전체 디코드를 하지 않는다** — 픽셀 수가 수억인 이미지를 `ImageIO.read` 로 열면 메모리가 터진다
-- 예외 매핑은 `GenerationApiExceptionHandler` 의 `assignableTypes` 에 추가 (새 advice 금지)
-- 기동 로그(`describeStorage`)에 업로드 발급 가능 여부 추가
-
-### 4단계
-- `ImageSource` 에 `Uploaded` + `@JsonSubTypes` 한 줄
-- `ImageSourceFinder` 의 `when` 에 가지 하나 — sealed 라 빠뜨리면 컴파일 에러
+- [x] **1단계** 발급 포트 + S3 구현 + 발급 API `POST /api/uploads` (#36)
+- [x] **#45** `feat/upload-records` — 기록 + 판정
+  - [x] 1. 올라온 파일을 기록한다 — `V6__uploaded_files.sql` + `UploadedFile` + `UploadedFileRepository`(Spring Data 가 구현), 발급이 PENDING 행을 남긴다
+  - [x] 2. 보관소가 객체의 일부와 전체 크기를 알려 준다 — `FileStorage.readRange` · `delete`
+  - [x] 3. 올라온 파일이 쓸 만한지 upload 모듈이 판정한다 — 루트 포트 `UploadedFiles.findUsable` + `ImageContentType.detect` + 조건부 전이(`UploadedFileWriter.settle`)
+- [x] **#46** `feat/upload-i2i` — #45 위에 쌓는다
+  - [x] 4. 올린 이미지를 i2i 입력으로 쓴다 — `FileSource.Uploaded`, 접수 검증을 트랜잭션 밖으로, 읽기 주소는 `UploadedFiles.issueReadUrl`, 보관소 장애는 503
+  - [x] 5. 스크립트(`SOURCE_TYPE=uploaded`)와 문서(`direct-upload.md` 재구성)
+  - [x] 6. 폴백 — 주소로 실패하면 바이트로 다시 보낸다(D13)
+  - [x] 라이브 확인 — 로컬 Garage + OpenAI 로 `upload.sh` → `i2i.sh`. 주소 실패(1.1초, 과금 없음) → 바이트로 성공(12.3초)
+- [ ] **해시 PR** — 아래 순서
+  - [x] Garage 실험 — SHA-256 도 강제된다(F7). SHA-256 으로 간다
+  - [ ] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
+  - [ ] 서명에 해시(F5) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
+  - [ ] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
+- [ ] (선택) 한 번도 참조되지 않은 PENDING 정리 — DB 기준. 자리를 옮기지 않으므로(D4) prefix lifecycle 로는 READY 까지 지워진다
 
 ## 함정
 
+- **로컬 보관소(`localhost`) 주소는 Provider 가 받아가지 못한다** — 폴백이 바이트로 보내 동작은 하지만, 요청마다 실패 1건(약 1초)이 먼저 지출 기록에 남는다
+- **jOOQ 가 마이그레이션 SQL 을 H2 파서로 읽는다** — 인덱스 `DESC` 금지, 복합 `ALTER` 금지. 부분 인덱스(`WHERE`)도 위험하다
+- **`GenerationJobService.submit` 의 `@Transactional`** — 판정이 보관소를 타므로 검증을 트랜잭션 밖으로 빼야 한다. 크레딧과 기록의 원자성은 `GenerationJobWriter.create` 의 트랜잭션이 맡는다
 - **`ByteArrayResource.getFilename()` 은 기본이 null** — override 하지 않으면 파트가 파일로 안 나가고, 증상은 저쪽의 400 이라 원인이 멀다
-- **jOOQ 가 마이그레이션 SQL 을 H2 파서로 읽는다** — 인덱스 `DESC` 금지, 복합 `ALTER` 금지
 - **`spring.servlet.multipart` 설정은 이 경로에 필요 없다** — 앱이 파일을 받지 않는다
-- **`contentLength` 를 서명에 넣으면 스트리밍 업로드가 불가능해진다** — 올리는 쪽이 정확한 크기를 미리 알아야 한다. 브라우저는 `File.size` 로 안다
-- **크기·형식·키를 다 고정해도 같은 크기의 다른 파일로 덮어쓸 수 있다**(F3). 그래서 D6 이 필요하다
+- **`contentLength` 를 서명에 넣으면 스트리밍 업로드가 불가능해진다** — 올리는 쪽이 정확한 크기를 미리 알아야 한다
+- **F3 의 창은 해시 PR 전까지 열려 있다** — 주소 수명(기본 15m) 동안 같은 크기·형식의 다른 바이트로 덮어쓸 수 있고, READY 는 다시 보지 않는다. 재사용한 Job 들이 서로 다른 입력으로 돌았을 수 있다
 
 ## Resume Point
 
-**U1(한 행 vs 두 행)을 정하는 것부터.** 정해지면 2단계에서 만들 파일이 확정된다.
-1단계 보강은 U1 과 독립이라 병행 가능하다 — `storage` 모듈이고 2단계는 `generation` 이라 파일이 겹치지 않는다.
+**다음은 해시 PR** — SHA-256 으로 간다(F7). 실험 코드는 `S3FileStorageTest` 처럼 사실을 고정하는 테스트로 다시 쓴다.
+Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)이 이 PR 로 닫힌다. 업로드를 i2i 입력으로 쓰는 일은 #45·#46 으로 끝났다.
 
 ## Files
 
 - `INDEX.md` — 이 문서. 결정과 진행 상황
-- `step-2-records.md` — **2단계 작업 카드.** 손이 움직일 때 보는 것
 - `../../docs/architecture/direct-upload.md` — 설계를 처음 보는 사람에게 설명하는 문서

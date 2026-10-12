@@ -155,11 +155,15 @@ class OpenAIImageClient(
                 // 스트림이 이미 소비돼 원문을 다시 볼 수 없다 — 그러면 "요청이 실패했다" 만 남아
                 // 무엇이 잘못됐는지 알 수 없다.
                 val raw = runCatching { response.bodyTo(String::class.java) }.getOrNull()
-                val parsed = raw?.let {
+                val error = raw?.let {
                     // 실패 본문은 {"error": {...}} 형태다. 아니면(HTML 오류 페이지 등) 원문을 그대로 남긴다.
-                    runCatching { mapper.readValue(it, OpenAIErrorEnvelope::class.java).error?.message }.getOrNull()
+                    runCatching { mapper.readValue(it, OpenAIErrorEnvelope::class.java).error }.getOrNull()
                 }
-                throw OpenAIException(status, parsed ?: raw?.take(500)?.ifBlank { null } ?: "본문이 비어 있다")
+                throw OpenAIException(
+                    status = status,
+                    detail = error?.message ?: raw?.take(500)?.ifBlank { null } ?: "본문이 비어 있다",
+                    code = error?.code,
+                )
             }
         }
 
@@ -189,4 +193,6 @@ class OpenAIException(
      * `message` 를 이 값으로 덮으면 상태 코드가 로그와 상위 예외에서 사라진다.
      */
     val detail: String,
-) : RuntimeException("[$status] $detail")
+    /** OpenAI 가 준 오류 이름(`error.code`). 주지 않는 오류가 많다. */
+    val code: String? = null,
+) : RuntimeException("[$status${code?.let { " $it" }.orEmpty()}] $detail")

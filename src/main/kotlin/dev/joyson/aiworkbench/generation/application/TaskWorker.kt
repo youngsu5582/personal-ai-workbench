@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
@@ -9,6 +10,8 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
+import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
@@ -65,42 +68,26 @@ class TaskWorker(
 
         // 호출 전에 소유권을 다시 확인하고 바이트 또는 새 읽기 주소를 준비한다.
         // 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
-        val images = try {
-            fileSourceResolver.resolve(job.ownerUserUuid, job.option)
-        } catch (e: FileSourceUnavailableException) {
-            // 아직 아무것도 부르지 않았다 — 나간 돈이 없으므로 지출도 적지 않는다.
-            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
-            return
-        } catch (e: FileStorageException) {
-            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
-            return
-        }
+        val images = prepareInputs(taskId, job, inline = false) ?: return
 
-        val request = ProviderRequestMapper.from(job.option, images)
-
-        // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
-        // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.
-        val calledAt = Instant.now()
-        val callMark = TimeSource.Monotonic.markNow()
         val response = try {
-            provider.generate(job.model, request)
+            call(job, task, provider, images)
         } catch (e: ExternalApiException) {
-            val reason = e.message ?: "Provider 호출이 실패했다"
-            // 실패한 호출도 적는다. 타임아웃은 우리만 못 받았을 뿐 저쪽에서는 만들어졌고 과금됐을 수 있다.
-            // 여기서 안 적으면 가장 설명이 필요한 지출이 기록에서 사라진다.
-            record(
-                ProviderCallMapper.failed(
-                    job, task, provider.name, request,
-                    callMark.elapsedMillis(), calledAt, reason, e.kind,
-                ),
-            )
-            stateWriter.fail(taskId, reason, e.retryable)
-            return
+            // 주소로 넘긴 입력을 저쪽이 받아가지 못했다. 같은 입력을 바이트로 실어 한 번만 더 보낸다.
+            // 처음부터 바이트였다면 다시 보내도 같다.
+            if (e.kind != FailureKind.INPUT_UNREACHABLE || images.none { it is ResolvedFile.Url }) {
+                failCall(taskId, e)
+                return
+            }
+            log.warn("Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸다. uuid={}", task.uuid)
+            val inlined = prepareInputs(taskId, job, inline = true) ?: return
+            try {
+                call(job, task, provider, inlined)
+            } catch (retried: ExternalApiException) {
+                failCall(taskId, retried)
+                return
+            }
         }
-
-        // 보관보다 **먼저** 적는다. 돈은 이미 나갔고 그 사실은 뒤에 무엇이 실패하든 남아야 한다.
-        // 파일을 상태보다 먼저 쓰는 것과 같은 순서 — 되돌릴 수 없는 일이 먼저 기록된다.
-        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
 
         val stored = try {
             store(job, response)
@@ -117,6 +104,58 @@ class TaskWorker(
             stored.map { it.storageKey },
         )
     }
+
+    /** 준비에 실패하면 이번 호출은 나가지 않는다 — 나간 돈이 없으므로 지출도 적지 않는다. */
+    private fun prepareInputs(taskId: Long, job: GenerationJob, inline: Boolean): List<ResolvedFile>? =
+        try {
+            fileSourceResolver.resolve(job.ownerUserUuid, job.option, inline)
+        } catch (e: FileSourceUnavailableException) {
+            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
+            null
+        } catch (e: FileStorageException) {
+            stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
+            null
+        }
+
+    /**
+     * Provider 를 한 번 부르고 그 호출을 적는다.
+     *
+     * 실패한 호출도 적는다. 타임아웃은 우리만 못 받았을 뿐 저쪽에서는 만들어졌고 과금됐을 수 있다.
+     * 여기서 안 적으면 가장 설명이 필요한 지출이 기록에서 사라진다.
+     *
+     * 성공은 보관보다 **먼저** 적는다. 돈은 이미 나갔고 그 사실은 뒤에 무엇이 실패하든 남아야 한다.
+     * 파일을 상태보다 먼저 쓰는 것과 같은 순서 — 되돌릴 수 없는 일이 먼저 기록된다.
+     */
+    private fun call(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        provider: ExternalApiProvider,
+        images: List<ResolvedFile>,
+    ): ExternalApiGenerateResponse {
+        val request = ProviderRequestMapper.from(job.option, images)
+
+        // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
+        // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.
+        val calledAt = Instant.now()
+        val callMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            provider.generate(job.model, request)
+        } catch (e: ExternalApiException) {
+            record(
+                ProviderCallMapper.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
+                ),
+            )
+            throw e
+        }
+
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
+        return response
+    }
+
+    private fun failCall(taskId: Long, e: ExternalApiException) =
+        stateWriter.fail(taskId, e.message ?: CALL_FAILED, e.retryable)
 
     /**
      * 지출을 적는다. **실패해도 Task 를 죽이지 않는다.**
@@ -194,5 +233,9 @@ class TaskWorker(
                 providerId = result.providerId,
             ).takeIf { !it.isEmpty },
         )
+    }
+
+    private companion object {
+        const val CALL_FAILED = "Provider 호출이 실패했다"
     }
 }

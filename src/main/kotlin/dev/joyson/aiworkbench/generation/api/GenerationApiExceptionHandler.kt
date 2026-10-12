@@ -2,6 +2,8 @@ package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
+import dev.joyson.aiworkbench.storage.FileStorageException
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  */
 @RestControllerAdvice(assignableTypes = [GenerationJobController::class])
 class GenerationApiExceptionHandler {
+
+    private val log = LoggerFactory.getLogger(javaClass)
 
     /** 다시 보낸다고 달라지지 않으므로 4xx 다. */
     @ExceptionHandler(UnsupportedModelException::class)
@@ -38,4 +42,16 @@ class GenerationApiExceptionHandler {
             title = "쓸 수 없는 입력 이미지"
             setProperty("sourceUuid", e.sourceUuid.toString())
         }
+
+    /**
+     * 올린 파일을 판정하려고 보관소에 갔다가 닿지 못했다. 요청이 아니라 이쪽 사정이라 5xx 다.
+     * 원인 메시지에는 키·버킷 같은 내부 사정이 섞여 있어 응답에는 싣지 않고 로그에만 남긴다.
+     */
+    @ExceptionHandler(FileStorageException::class)
+    fun handleStorageUnavailable(e: FileStorageException): ProblemDetail {
+        log.warn("접수 중 보관소에 닿지 못했다: {}", e.message)
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "입력 이미지를 지금 확인할 수 없다").apply {
+            title = "보관소에 닿지 못함"
+        }
+    }
 }
