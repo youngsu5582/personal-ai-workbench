@@ -423,19 +423,3 @@ Flyway가 이미 스키마가 있는 DB를 V1 지점에서 시작하므로(`base
 ```bash
 docker compose down -v && docker compose up -d postgres
 ```
-
-## 현재 구현 범위
-
-- `User` / `UserIdentity` — 한 사용자에 여러 외부 인증 주체를 연결 (`UNIQUE(issuer, subject)`)
-- `UserRegistry` — user 모듈의 공개 경계 (조회·등록·연결·해제)
-- Google OIDC 로그인과 JIT provisioning, 이메일 allowlist
-- 자체 access token 발급(HS256) 및 `/api/**` Bearer 검증
-- `OwnerContext` — 인증 방식과 무관하게 소유자를 해석
-- Auth Playground 샘플 페이지
-
-다음 단계:
-
-1. refresh token (rotation + reuse detection) 과 로그아웃
-2. GitHub provider 추가 — OIDC가 아니므로 issuer를 상수로 정해야 한다
-3. 계정 연결 (로그인 상태에서 두 번째 provider 붙이기)
-4. `GenerationJob` 모델과 owner scope 조회
