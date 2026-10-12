@@ -33,6 +33,8 @@ class GeneratedFileServiceTest {
             readKeys += key
             return content
         }
+        override fun readRange(key: String, range: LongRange) = error("일부만 읽지 않는다")
+        override fun delete(key: String) = error("지우지 않는다")
     }
 
     private fun finder(result: FileLocation?) = mock(GeneratedFileFinder::class.java).also {

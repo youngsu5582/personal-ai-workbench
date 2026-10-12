@@ -2,8 +2,12 @@ package dev.joyson.aiworkbench.storage.local
 
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
+import dev.joyson.aiworkbench.storage.PartialContent
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.exists
@@ -40,6 +44,42 @@ class LocalFileStorage(
 
     override fun read(key: String): ByteArray? =
         resolve(key).takeIf { it.exists() }?.readBytes()
+
+    /**
+     * 열어 둔 채널에서 크기와 범위를 함께 읽는다. 따로 물으면 그 사이에 파일이 바뀌거나 지워질 수 있다.
+     *
+     * 없는 파일만 `null` 이고 나머지 실패는 [FileStorageException] 이다. `RandomAccessFile` 은 없는 파일과
+     * 권한 없는 파일을 같은 예외로 알려 권한 오류가 "없다" 로 숨겨지므로 쓰지 않는다.
+     */
+    override fun readRange(key: String, range: LongRange): PartialContent? {
+        require(range.first >= 0 && !range.isEmpty()) { "범위는 0 이상에서 시작하고 비어 있지 않아야 한다: $range" }
+        val path = resolve(key)
+        return try {
+            Files.newByteChannel(path).use { channel ->
+                val size = channel.size()
+                val start = minOf(range.first, size)
+                val end = minOf(range.last + 1, size)
+                val buffer = ByteBuffer.allocate((end - start).toInt())
+                channel.position(start)
+                while (buffer.hasRemaining() && channel.read(buffer) >= 0) Unit
+                PartialContent(buffer.array().copyOf(buffer.position()), size)
+            }
+        } catch (e: NoSuchFileException) {
+            null
+        } catch (e: IOException) {
+            // put 과 같은 이유로 재시도 대상으로 둔다.
+            throw FileStorageException(retryable = true, message = "파일의 범위를 읽지 못했다: $key", cause = e)
+        }
+    }
+
+    override fun delete(key: String) {
+        try {
+            Files.deleteIfExists(resolve(key))
+        } catch (e: Exception) {
+            // put 과 같은 이유로 재시도 대상으로 둔다.
+            throw FileStorageException(retryable = true, message = "파일을 지우지 못했다: $key", cause = e)
+        }
+    }
 
     /**
      * 키를 실제 경로로 바꾼다.

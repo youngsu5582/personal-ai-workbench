@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.PartialContent
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -44,6 +45,17 @@ class SharedTestConfig {
         }
 
         override fun read(key: String): ByteArray? = written[key]
+
+        override fun readRange(key: String, range: LongRange): PartialContent? =
+            written[key]?.let {
+                val start = minOf(range.first, it.size.toLong()).toInt()
+                val end = minOf(range.last + 1, it.size.toLong()).toInt()
+                PartialContent(it.copyOfRange(start, end), it.size.toLong())
+            }
+
+        override fun delete(key: String) {
+            written.remove(key)
+        }
     }
 
     companion object {

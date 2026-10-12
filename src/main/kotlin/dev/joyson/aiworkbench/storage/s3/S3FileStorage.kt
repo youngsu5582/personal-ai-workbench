@@ -2,12 +2,15 @@ package dev.joyson.aiworkbench.storage.s3
 
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
+import dev.joyson.aiworkbench.storage.PartialContent
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.awscore.exception.AwsServiceException
 import software.amazon.awssdk.core.exception.SdkException
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
+import software.amazon.awssdk.services.s3.model.GetObjectResponse
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 
@@ -53,6 +56,52 @@ class S3FileStorage(
             throw translate("객체를 읽지 못했다: $key", e)
         }
 
+    override fun readRange(key: String, range: LongRange): PartialContent? {
+        require(range.first >= 0 && !range.isEmpty()) { "범위는 0 이상에서 시작하고 비어 있지 않아야 한다: $range" }
+        return try {
+            val response = client.getObjectAsBytes(
+                GetObjectRequest.builder().bucket(bucket).key(key).range("bytes=${range.first}-${range.last}").build(),
+            )
+            val received = response.asByteArray()
+            when (val total = totalSizeOf(response.response())) {
+                // 범위를 무시하고 전체를 준 서버다. 받은 것이 전부라 그 안에서 범위를 자른다.
+                null -> PartialContent(received.within(range), received.size.toLong())
+                else -> PartialContent(received, total)
+            }
+        } catch (e: NoSuchKeyException) {
+            null
+        } catch (e: SdkException) {
+            // 시작이 객체 끝을 넘으면 416 이다. 객체는 있으므로 빈 바이트와 크기로 답한다.
+            if (e is AwsServiceException && e.statusCode() == 416) emptyAt(key) else throw translate("객체의 범위를 읽지 못했다: $key", e)
+        }
+    }
+
+    override fun delete(key: String) {
+        try {
+            // 없는 키를 지워도 S3 는 성공으로 답한다. 포트의 약속과 같아 따로 거르지 않는다.
+            client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build())
+        } catch (e: SdkException) {
+            throw translate("객체를 지우지 못했다: $key", e)
+        }
+    }
+
+    /**
+     * 범위 요청의 응답에서 전체 크기를 꺼낸다. `Content-Range: bytes 0-11/100` 의 `/` 뒤가 전체다.
+     *
+     * 없으면 `null` 이다. HTTP 는 서버가 범위를 무시하고 전체를 주는 것을 허용하고, 그때는 받은 것이 전부다.
+     */
+    private fun totalSizeOf(response: GetObjectResponse): Long? =
+        response.contentRange()?.substringAfterLast('/')?.toLong()
+
+    private fun emptyAt(key: String): PartialContent? =
+        try {
+            PartialContent(ByteArray(0), client.headObject { it.bucket(bucket).key(key) }.contentLength())
+        } catch (e: NoSuchKeyException) {
+            null
+        } catch (e: SdkException) {
+            throw translate("객체 크기를 읽지 못했다: $key", e)
+        }
+
     /**
      * SDK 예외를 포트의 예외로 바꾼다.
      *
@@ -81,4 +130,11 @@ class S3FileStorage(
         // 연결 자체가 안 된 경우다. 상태 코드가 없다.
         else -> e.javaClass.simpleName
     }
+}
+
+/** [range] 중 이 배열 안에 있는 만큼. */
+private fun ByteArray.within(range: LongRange): ByteArray {
+    val start = minOf(range.first, size.toLong()).toInt()
+    val end = minOf(range.last + 1, size.toLong()).toInt()
+    return copyOfRange(start, end)
 }

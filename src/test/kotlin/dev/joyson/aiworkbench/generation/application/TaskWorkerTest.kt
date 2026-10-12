@@ -80,6 +80,8 @@ class TaskWorkerTest @Autowired constructor(
             reads += 1
             return written[key]
         }
+        override fun readRange(key: String, range: LongRange) = error("일부만 읽지 않는다")
+        override fun delete(key: String) = error("지우지 않는다")
     }
 
     private fun provider(behavior: () -> ExternalApiGenerateResponse) = object : ExternalApiProvider {
@@ -375,6 +377,8 @@ class TaskWorkerTest @Autowired constructor(
         val slowStorage = object : FileStorage {
             override fun put(key: String, content: ByteArray, contentType: String) = Thread.sleep(SLOW_MS)
             override fun read(key: String): ByteArray? = null
+            override fun readRange(key: String, range: LongRange) = error("일부만 읽지 않는다")
+            override fun delete(key: String) = error("지우지 않는다")
         }
 
         workerWith(provider { success() }, fileStorage = slowStorage).process(task.id!!)
