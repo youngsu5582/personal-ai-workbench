@@ -23,11 +23,11 @@ const W = 1280, H = 510
 const PALETTES = {
   light: {
     ink: '#1e1e1e', muted: '#868e96', bad: '#e03131', accent: '#1971c2',
-    service: '#b2f2bb', provider: '#ffec99', hub: '#a5d8ff',
+    service: '#b2f2bb', provider: '#ffec99', hub: '#a5d8ff', fillStyle: 'hachure',
   },
   dark: {
-    ink: '#e9ecef', muted: '#909296', bad: '#ff8787', accent: '#74c0fc',
-    service: '#24502f', provider: '#6b4510', hub: '#1b4a78',
+    ink: '#e9ecef', muted: '#adb5bd', bad: '#ff8787', accent: '#74c0fc',
+    service: '#234a2f', provider: '#4a3412', hub: '#173a5e', fillStyle: 'solid',
   },
 }
 
@@ -50,7 +50,7 @@ function render(p) {
     for (const ch of str) if (ch.trim() && f.charToGlyphIndex(ch) === 0) missing.add(ch)
     const w = f.getAdvanceWidth(str, size)
     const x = align === 'center' ? cx - w / 2 : cx
-    out.push(`<path d="${f.getPath(str, x, baseline, size).toPathData(0)}" fill="${color}"/>`)
+    out.push(`<path d="${f.getPath(str, x, baseline, size).toPathData(0)}" fill="${color}" stroke="${color}" stroke-width="0.7" stroke-linejoin="round"/>`)
   }
   // 상자 안 세로 가운데에 글자를 놓는다
   const centeredBaseline = (cy, size, bold = true) => {
@@ -65,7 +65,7 @@ function render(p) {
     `L${x},${y + r} Q${x},${y} ${x + r},${y} Z`
 
   const box = (x, y, w, h, fill, label, size = 29) => {
-    draw(gen.path(roundedRect(x, y, w, h, 12), opts({ fill, fillStyle: 'hachure', hachureGap: 8, fillWeight: 1.4, disableMultiStrokeFill: true })))
+    draw(gen.path(roundedRect(x, y, w, h, 12), opts({ fill, fillStyle: p.fillStyle, hachureGap: 8, fillWeight: 1.4, disableMultiStrokeFill: true })))
     if (label) text(label, x + w / 2, centeredBaseline(y + h / 2, size), size)
   }
 
