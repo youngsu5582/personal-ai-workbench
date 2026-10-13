@@ -1,0 +1,425 @@
+# 개발 가이드
+
+## 로컬 개발
+
+### 1. PostgreSQL 시작
+
+```bash
+docker compose up -d postgres
+```
+
+기본 연결 정보:
+
+```text
+host: localhost
+port: 5433
+database: personal_ai_workbench
+username: workbench
+password: workbench
+```
+
+### 2. IntelliJ 실행
+
+- Project SDK: JDK 21
+- Gradle JVM: JDK 21
+- Build and run using: Gradle
+- Gradle distribution: Gradle wrapper
+
+**Run/Debug Configurations → Active profiles 에 `local` 을 넣는다.**
+
+`./gradlew bootRun`은 이 프로필을 자동으로 켜지만, IntelliJ는 main 클래스를 직접 실행해서 붙지 않는다.
+없으면 이렇게 된다.
+
+| 없을 때 | 결과 |
+|---|---|
+| `cookie-secure`가 `true` | http인 localhost에서 로그인 쿠키가 실리지 않는다 |
+| 로그 레벨이 `INFO` | 어디까지 진행됐는지 보이지 않는다 |
+
+프로필을 켜면 `application-local.yaml`이 DB 주소까지 채우므로 별도 환경변수는 필요 없다.
+비밀(`.env`)만 있으면 된다.
+
+### 3. 테스트
+
+```bash
+./gradlew test
+```
+
+**Docker가 켜져 있어야 한다.** 테스트는 Testcontainers로 PostgreSQL을 띄우고 거기서 돈다.
+H2를 쓰면 `jsonb`·`uuid`·`timestamp with time zone`·체크 제약이 흉내로만 검증된다.
+
+컨테이너는 JUnit 세션마다 한 번만 뜬다(`PostgresTestDatabase`). 테스트 클래스는 아무것도 하지 않아도 된다.
+같은 곳에서 **테스트가 `application.yaml` 을 상속하지 않게** 끊는다 — 그러지 않으면 `.env` 가 있는 기계에서만
+개발 DB 주소와 실제 API 키가 테스트로 들어와 결과가 기계마다 갈린다.
+
+스프링을 띄우는 테스트는 `IntegrationTest` 를 상속한다. 설정이 같아야 컨텍스트가 재사용되기 때문이다.
+컨테이너·가짜 Provider·인메모리 보관소는 `SharedTestConfig` 한 곳에 있다 — 나중에 MQ·Redis 도 여기 붙는다.
+
+```kotlin
+class MyApiTest @Autowired constructor(...) : IntegrationTest()
+```
+
+상속하지 않는 것은 이유가 있을 때뿐이다 — 빈 DB 가 필요한 `SchemaMigrationTest`,
+실제 포트가 필요한 `HandoffErrorStatusTest`, JSON 매핑만 보는 `ImageSizeTest`.
+Gradle은 passed/skipped/failed 이벤트와 전체 예외를 출력한다.
+
+### 4. 설정 파일
+
+| 파일 | 무엇이 | 커밋 |
+|---|---|---|
+| `application.yaml` | 공통. 반드시 있어야 할 값에는 **기본값을 두지 않는다** | ✓ |
+| `application-local.yaml` | 로컬의 비밀 아닌 값 (DB 주소, 쿠키, 로그 레벨) | ✓ |
+| `.env` | 비밀만 (client secret, jwt secret, allowlist) | ✗ |
+
+기본값을 두면 배포에서 환경변수를 빠뜨렸을 때 조용히 로컬 설정으로 뜬다.
+특히 `jwt-secret`은 어디에도 기본값이 없다 — 두면 저장소에 공개된 키로 서명하게 된다.
+
+`local` 프로필은 `bootRun`만 켠다. jar로 뜨는 배포에는 붙지 않으므로,
+환경변수가 없으면 로컬 값으로 뜨는 것이 아니라 기동에 실패한다.
+
+`.properties`가 아니라 YAML을 쓰는 이유는 인코딩이다. `.properties`는 Java 명세상 ISO-8859-1이라
+IDE가 한글 주석을 깨뜨리는데, YAML은 명세가 UTF-8이라 그 문제가 없다.
+
+### 5. 스키마
+
+스키마는 `src/main/resources/db/migration`이 정한다. 엔티티는 검증받는 쪽이다.
+
+```
+ddl-auto: validate   ← 어디서나. 로컬도 예외가 아니다
+```
+
+엔티티를 고쳤으면 마이그레이션을 **같은 커밋에** 넣는다. 빠뜨리면 기동이 실패하는데,
+그게 배포에서 알게 되는 것보다 낫다.
+
+`ddl-auto: update`가 못 하던 일이 정확히 사고가 나던 자리다 — 기존 행이 있는 테이블에
+NOT NULL 컬럼 추가(WARN으로 삼킨다), 체크 제약 갱신(보지 않는다), 컬럼·제약 삭제(하지 않는다).
+
+JSON 컬럼(`option`, `metadata`)에 저장되는 타입에 **필수 필드를 추가하는 것도 같은 일**이다.
+스키마는 그대로라 `validate`는 통과하지만 기존 행을 못 읽게 된다. 이것도 마이그레이션이 필요하다.
+
+jOOQ 코드는 이 마이그레이션에서 생성된다(`DDLDatabase`). 살아 있는 DB에 붙지 않으므로
+빌드에 DB가 필요 없고, 생성된 코드가 정본과 어긋날 수 없다.
+
+### 6. 로깅
+
+Spring Boot 기본 SLF4J/Logback을 사용한다. 애플리케이션 패키지는 `local` 프로필에서 `DEBUG`,
+그 외에는 `INFO`로 출력한다.
+
+```kotlin
+private val log = LoggerFactory.getLogger(MyService::class.java)
+log.info("job submitted: jobId={}", jobId)
+```
+
+환경변수로 레벨을 조절할 수 있다.
+
+```bash
+LOG_LEVEL_ROOT=INFO LOG_LEVEL_APP=TRACE ./gradlew bootRun
+```
+
+### 7. 종료
+
+```bash
+docker compose down
+```
+
+데이터 볼륨까지 삭제하려면 별도로 `docker compose down -v`를 실행한다.
+Garage 를 함께 띄웠다면 내릴 때도 `COMPOSE_PROFILES=s3` 를 준다 — 프로필에 속한 컨테이너는 그 변수가 있어야 대상에 잡힌다.
+
+## S3 호환 보관소로 돌려보기
+
+결과물은 기본적으로 로컬 디스크(`./var/assets`)에 쌓인다. S3 경로를 확인하려면 [Garage](https://garagehq.deuxfleurs.fr/) 를 띄운다. MinIO 대신 Garage 인 이유는 홈랩 규모를 겨냥해 만들어졌고 라이선스·배포 정책이 안정적이기 때문이다.
+
+### 1. Garage 시작
+
+```bash
+COMPOSE_PROFILES=s3 docker compose up -d
+```
+
+`profiles: ["s3"]` 가 붙어 있어 **평소 `docker compose up -d` 에는 뜨지 않는다.**
+
+### 2. 최초 1회 부트스트랩
+
+Garage 는 분산 스토리지라 노드가 하나여도 **"이 노드에 얼마를 할당한다"(layout)를 선언해야** 데이터를 받는다. 이 단계를 빼면 컨테이너는 떠 있는데 저장이 실패한다.
+
+```bash
+export COMPOSE_PROFILES=s3
+NODE=$(docker compose exec -T garage /garage node id -q | cut -d@ -f1)
+
+docker compose exec -T garage /garage layout assign -z dc1 -c 1G "$NODE"
+docker compose exec -T garage /garage layout apply --version 1
+docker compose exec -T garage /garage bucket create workbench
+docker compose exec -T garage /garage key import --yes -n app-key \
+  GK00000000000000000000dev 0000000000000000000000000000000000000000000000000000000000000001
+docker compose exec -T garage /garage bucket allow --read --write workbench --key app-key
+```
+
+> 명령을 변수(`G="docker compose exec …"`)로 줄여 쓰고 싶어지는데, **zsh 에서는 안 된다.**
+> zsh 는 변수를 단어로 쪼개지 않아 전체가 명령 이름 하나로 취급된다. 길어도 그대로 친다.
+
+볼륨을 지우지 않는 한 **다시 할 필요 없다.** `docker compose down -v` 로 볼륨까지 지웠다면 다시 친다.
+
+> 자동화하지 않은 이유: Garage 이미지에 셸이 없어 init 컨테이너로 명령을 엮을 수 없다. 커스텀 이미지를 만드는 것보다, 평생 한 번인 작업을 문서로 두는 편이 낫다고 판단했다.
+>
+> `key import` 로 값을 정해 넣는다. `key create` 는 자격증명을 **만들어 돌려주므로** 출력을 받아 적어야 한다. 위 값은 **로컬 전용**이다.
+
+### 3. `.env` 에 보관소 설정 추가
+
+```properties
+STORAGE_PROVIDER=s3
+STORAGE_S3_BUCKET=workbench
+STORAGE_S3_REGION=garage
+STORAGE_S3_ENDPOINT=http://localhost:3900
+STORAGE_S3_ACCESS_KEY=GK00000000000000000000dev
+STORAGE_S3_SECRET_KEY=0000000000000000000000000000000000000000000000000000000000000001
+STORAGE_S3_PATH_STYLE_ACCESS=true
+```
+
+`path-style-access` 가 필요한 이유는 가상 호스트 방식(`bucket.localhost`)을 풀어줄 DNS 가 로컬에 없기 때문이다. **실제 AWS S3 나 Cloudflare R2 로 갈 때는 `endpoint` 를 그쪽 주소로, `path-style-access` 를 `false` 로 바꾸면 된다 — 코드는 그대로다.**
+
+`bucket` 이 비어 있으면 기동에 실패한다. 오타를 낸 `provider` 도 가능한 이름과 함께 거절당한다.
+
+### 4. 확인
+
+```bash
+BASE_URL=http://localhost:8080 ./scripts/file.sh --job <job-uuid>
+```
+
+보관소에 따라 응답이 갈리는 것을 그대로 보여준다.
+
+```
+  파일 4e1d2d4e-…
+     앱 응답    302 → http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     내려받기   HTTP 200  2,277,138 bytes  image/png
+     무결성     sha256 일치 (5c7d9395689f04a7…)
+     토큰 없이  HTTP 401
+     previewUrl http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     헤더 없이  HTTP 200  2,277,138 bytes  image/png
+```
+
+마지막 두 줄이 `<img src>` 가 되는지를 답한다 — **헤더 없이 200** 이면 그려진다. `local` 로 띄우면 `앱 응답 200`, `previewUrl 없음` 이 나온다.
+
+무결성 줄은 키가 내용 주소라서 공짜로 얻는 것이다. 파일명이 곧 sha256 이므로 받은 바이트와 대조하면 끝난다.
+
+Garage 에는 웹 콘솔이 없다. 객체는 `mc` 나 AWS CLI 로 본다.
+
+```bash
+aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
+```
+
+키 모양은 `users/{ownerUuid}/blobs/{ab}/{cd}/{sha256}.png` 다 — 자리를 내용이 정하므로 같은 바이트는 한 자리를 쓴다.
+
+### 5. 다운로드가 달라진다
+
+`GET /api/files/{uuid}` 는 주소도 인가도 그대로지만, **응답이 달라진다.**
+
+| 보관소 | 응답 | 바이트가 지나는 길 |
+|---|---|---|
+| `local` | `200` + 이미지 | 보관소 → **앱** → 클라이언트 |
+| `s3` | `302` + `Location` | 보관소 → 클라이언트 (**앱을 안 거친다**) |
+
+```bash
+curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:8080/api/files/<uuid>
+# HTTP/1.1 302
+# Location: http://localhost:3900/workbench/users/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
+```
+
+목록(`GET /api/jobs/{uuid}`)의 파일마다 `previewUrl` 도 함께 온다. 이건 **서명된 절대 주소**라 `<img src>` 에 그대로 넣으면 그려진다 — `url` 은 `Authorization` 헤더가 필요해서 `<img>` 로는 못 쓴다.
+
+| 필드 | 수명 | 쓰임 |
+|---|---|---|
+| `url` | 안 죽는다 | 저장·북마크·스크립트. 302 로 서명 주소에 넘긴다 |
+| `previewUrl` | 짧다(기본 15분) | `<img src>` 로 바로 그린다. 로컬 디스크면 `null` |
+
+발급된 주소는 **그 자체가 통행증**이다. 그래서 소유권 확인은 발급 **전에** 끝나고(남의 파일이면 404), 수명이 짧다(`workbench.storage.presigned-url-ttl`, 기본 5분). 서명 없이 같은 객체를 부르면 보관소가 거부한다.
+
+로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다. **클라이언트는 아무것도 안 바꾼다.**
+
+## 이미지 투 이미지
+
+본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
+`sources[]`는 `{"type": "generated", "uuid": <결과 파일 UUID>}` 또는 `{"type": "uploaded", "uuid": <업로드 UUID>}`다.
+올린 파일은 처음 입력으로 쓰일 때 형식을 확인하며, 맞지 않으면 400이다.
+
+실행 중인 서버에는 다음 스크립트로 요청한다. 입력 UUID는 `GET /api/jobs/{uuid}` 응답의
+`tasks[].files[].uuid`에서 확인한다.
+
+```bash
+./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘"
+./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘" 2 gpt-image-2
+RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <생성-결과파일-uuid> "수채화로"
+```
+
+기본 모델은 `gpt-image-2`, 작업 수는 1, 크기는 `1:1 / 1k`, 품질은 `auto`다.
+`BASE_URL`, `USER_UUID`를 지정할 수 있고, `ACCESS_TOKEN`이 없으면 `dev-token.sh`로 인증한다.
+접수 후 출력되는 `job.sh` 명령으로 진행 상황을 조회한다.
+
+```http
+POST /api/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "option": {
+    "type": "image-to-image",
+    "prompt": "수채화로 바꿔줘",
+    "sources": [{"type": "generated", "uuid": "<generated-file-uuid>"}],
+    "size": {"type": "pixels", "width": 1024, "height": 1024},
+    "quality": "high"
+  },
+  "model": "gpt-image-2",
+  "taskCount": 1
+}
+```
+
+`202 Accepted`의 Job UUID로 `GET /api/jobs/{uuid}`에서 결과를 조회한다.
+존재하지 않거나 다른 사용자 소유인 입력은 접수 시 거절하며, 워커 실행 시에도 소유권을 확인한다.
+
+S3 호환 보관소에서는 워커가 실행·재시도마다 새 presigned GET URL을 발급하고, OpenAI의
+`POST /v1/images/edits`에 JSON `images[].image_url`로 전달한다. 이미지 바이트는 보관소에서
+Provider로 직접 이동하며, URL은 Job 옵션에 저장하거나 로그에 출력하지 않는다.
+URL 발급자가 없는 로컬 저장소에서는 앱이 바이트를 읽어 기존 multipart 전송을 사용한다.
+
+URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. 로컬 Garage의 `localhost:3900`은
+외부 OpenAI에서 접근할 수 없다. 실제 URL 입력을 사용하려면 앱과 Provider 모두 접근 가능한
+보관소 endpoint를 설정한다. 실제 OpenAI URL 편집 호출은 아직 미검증이며, 전송 계약은 대역 테스트로 검증한다.
+[OpenAI 공식 편집 API 계약](https://developers.openai.com/api/reference/resources/images/methods/edit)
+
+## 직접 업로드 URL 발급
+
+S3 호환 보관소에서는 Bearer 토큰으로 `POST /api/uploads`를 호출한다.
+
+```http
+POST /api/uploads
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"contentType":"image/png","contentLength":1024}
+```
+
+`200 OK` 응답:
+
+```json
+{
+  "uuid": "<upload-uuid>",
+  "url": "http://<storage>/<bucket>/users/<owner>/uploads/<upload-uuid>?<signature>",
+  "method": "PUT",
+  "headers": {"Content-Type": "image/png", "Content-Length": "1024"}
+}
+```
+
+반환된 URL로 파일 바이트를 PUT한다. 앱의 Bearer 토큰은 보관소에 보내지 않는다.
+형식과 크기는 서명에 포함돼 실제 요청과 같아야 한다. 브라우저에서는 `Content-Length`를
+직접 설정하지 않고 `File`/`Blob`을 본문으로 보내 브라우저가 계산하게 한다.
+PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인증은 401,
+직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
+
+올린 파일은 `SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드 UUID> "<프롬프트>"`로 i2i 입력에 쓴다.
+설계와 그 이유는 [`docs/architecture/direct-upload.md`](architecture/direct-upload.md)에 정리한다.
+
+### 스크립트로 발급 → 업로드 확인
+
+위의 Garage 부트스트랩과 `.env` 보관소 설정을 마친 후 앱을 실행한다.
+`curl`과 `python3`가 필요하다. 이미지 파일 경로는 명령을 실행하는 디렉터리 기준이다.
+
+```bash
+./scripts/upload.sh ./image.png
+BASE_URL=http://localhost:8099 ./scripts/upload.sh './images/my photo.jpg'
+```
+
+기본 인증은 `dev-token.sh`를 사용하므로, 먼저 한 번 로그인해 DB에 사용자를 등록한다.
+특정 사용자는 `USER_UUID`로 지정하고, 이미 가진 토큰은 `ACCESS_TOKEN` 환경변수로 전달할 수 있다.
+파일 헤더로 PNG·JPEG·WebP를 판별하고 크기를 확인한 뒤, `POST /api/uploads` 응답의 주소로
+파일을 직접 PUT한다. 발급 UUID·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
+Bearer 토큰은 앱에만 보낸다.
+
+### 샘플 페이지에서 발급 → 업로드 확인
+
+브라우저가 앱과 다른 origin의 보관소로 PUT하려면 **보관소 버킷의 CORS** 설정이 필요하다.
+앱에 CORS를 추가하는 것으로는 해결되지 않는다.
+[Garage도 PutBucketCors를 지원한다](https://github.com/deuxfleurs-org/garage/blob/main-v2/doc/book/reference-manual/s3-compatibility.md).
+
+```bash
+# 로컬 Garage에서는 설정에 사용하는 키에 버킷 owner 권한이 필요하다.
+docker compose --profile s3 exec -T garage /garage bucket allow --owner workbench --key app-key
+# AWS CLI·curl과 .env의 STORAGE_S3_* 설정을 사용한다.
+./scripts/upload-cors.sh
+# 앱을 다른 포트로 실행했다면 페이지 origin을 정확히 지정한다.
+./scripts/upload-cors.sh http://localhost:8099
+```
+
+스크립트는 해당 origin의 PUT·Content-Type 허용 규칙을 추가한다. 동일 origin의 샘플 규칙만
+갱신하고 다른 기존 규칙은 유지한다. 와일드카드 origin은 허용하지 않는다.
+브라우저 preflight가 보내는 소문자 `content-type`을 허용하며, 설정 적용 후 실제 OPTIONS
+요청까지 성공해야 스크립트가 성공으로 종료한다. 이 확인은 파일 PUT 권한·전송 성공과는 별개다.
+
+앱의 `http://localhost:8080/`에서 Google 로그인 후 **이미지 직접 업로드** 영역에 파일을 선택하고
+**URL 발급 후 업로드**를 누른다. 발급 단계·전송 진행률·보관소 응답을 확인할 수 있다.
+`Content-Length`는 JavaScript에서 설정하지 않고 브라우저가 `File`의 크기로 계산한다.
+화면의 이미지는 선택한 원본 미리보기이며, 업로드 성공은 보관소의 PUT 수락을 의미한다.
+네트워크 오류가 나면 페이지 origin과 CORS 설정, 브라우저에서 접근 가능한 보관소 주소를 확인한다.
+
+## 도메인 문서
+
+구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](domain/domain-model.md)에 정리한다.
+
+## 아키텍처 학습 문서
+
+모듈러 모놀리스·Spring Modulith·DDD·모듈 간 의존성 원칙은 [`docs/architecture/modular-monolith-and-modulith.md`](architecture/modular-monolith-and-modulith.md)에 정리한다.
+
+현재는 `ApplicationModules.verify()` 기반의 모듈 경계 검증 테스트를 사용한다.
+
+## 인증
+
+Google 로그인으로 사용자를 확인하고, **그 다음부터는 이 서비스가 직접 발급한 JWT** 로 API를 호출한다.
+Google은 로그인 순간에만 관여하고 이후 흐름에서 빠진다.
+
+### 1. Google OAuth client 발급
+
+Google Cloud Console > APIs & Services > Credentials > OAuth client ID (Web application).
+Authorized redirect URI에 아래를 **정확히** 등록한다.
+
+```text
+http://localhost:8080/login/oauth2/code/google
+```
+
+### 2. 환경변수
+
+```bash
+cp .env.example .env   # .env 는 gitignore 된다
+```
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+AUTH_JWT_SECRET=$(openssl rand -base64 48)   # HS256, 최소 32바이트
+AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된다
+```
+
+`AUTH_ALLOWED_EMAILS`를 비운 채로 외부에 노출하면 구글 계정이 있는 누구나 로그인해 Provider 크레딧을 쓴다.
+
+### 3. 확인
+
+`http://localhost:8080` 의 Auth Playground에서 로그인 → 발급된 토큰의 claim 확인 → `GET /api/me` 호출까지 한 페이지에서 된다.
+
+```text
+브라우저 → /oauth2/authorization/google
+        → Google 동의
+        → /login/oauth2/code/google   (Spring이 code 교환·ID token 검증·userinfo 조회)
+        → (issuer, subject) 로 User 해석 또는 신규 등록
+        → 내 access token 발급 → 60초짜리 HttpOnly 쿠키로 전달
+        → 페이지가 GET /auth/handoff 로 한 번 교환 (이후 토큰은 메모리에만)
+        → Authorization: Bearer <token> 으로 /api/me
+```
+
+토큰은 URL에도 localStorage에도 저장하지 않는다. 새로고침하면 사라지는 것이 정상이다.
+
+### 기존 DB를 쓰고 있었다면
+
+Flyway가 이미 스키마가 있는 DB를 V1 지점에서 시작하므로(`baseline-on-migrate`) 그냥 띄우면 된다.
+`flyway_schema_history`에 BASELINE 한 줄이 생기고 V1은 다시 돌지 않는다.
+
+`ddl-auto=update`가 지우지 못해 남은 것들(예: `users.external_subject`)은 그대로 있다.
+`validate`는 여분 컬럼을 문제 삼지 않으므로 기동에는 영향이 없다. 깔끔하게 시작하려면 비우면 된다.
+
+```bash
+docker compose down -v && docker compose up -d postgres
+```

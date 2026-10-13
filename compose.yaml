@@ -20,7 +20,7 @@ services:
   # 보관소 기본값이 local 이라 대부분의 개발에는 필요 없고, 늘 띄우면 포트와 메모리를 그냥 먹는다.
   # 홈서버처럼 항상 켜두고 싶은 곳은 환경에 COMPOSE_PROFILES=s3 를 박아두면 된다.
   #
-  # 최초 1회는 손으로 layout 을 잡아줘야 한다 — README 의 "S3 호환 보관소로 돌려보기" 참고.
+  # 최초 1회는 손으로 layout 을 잡아줘야 한다 — docs/development.md 의 "S3 호환 보관소로 돌려보기" 참고.
   # 이미지에 셸이 없어서 init 컨테이너로 명령을 엮을 수 없다. 대신 평생 한 번이다.
   garage:
     image: dxflrs/garage:v2.4.1

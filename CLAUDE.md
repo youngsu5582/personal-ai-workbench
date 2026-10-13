@@ -96,8 +96,8 @@ DB JSON 컬럼과 API 에 나가는 enum 은 `@get:JsonValue` 로 표기를 정�
 | | **체크 제약 갱신** (아예 보지 않는다) |
 | | **컬럼·제약 삭제** |
 
-마이그레이션은 PostgreSQL 문법이라 H2 를 쓰는 테스트에서는 돌지 않는다.
-`SchemaMigrationTest` 하나만 Testcontainers 로 진짜 PostgreSQL 에 걸어 엔티티와 대조한다.
+테스트도 모두 Testcontainers 로 띄운 진짜 PostgreSQL 에서 돈다 — H2 는 `jsonb` · 체크 제약을 흉내로만 검증한다.
+`SchemaMigrationTest` 는 빈 DB 에 마이그레이션을 걸어 엔티티와 대조한다.
 
 ## 작업 도구
 

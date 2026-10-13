@@ -58,7 +58,7 @@ object GarageTestStorage {
 
     /**
      * 셸이 없는 이미지라 명령을 엮을 수 없다. 한 줄씩 부르고 노드 ID 는 여기서 판다.
-     * compose 에서는 같은 일을 사람이 한 번 손으로 한다(README).
+     * compose 에서는 같은 일을 사람이 한 번 손으로 한다(docs/development.md).
      */
     private fun GenericContainer<*>.bootstrap() {
         fun run(vararg args: String) = execInContainer(*args).also {
