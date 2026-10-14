@@ -8,6 +8,7 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Instant
@@ -19,7 +20,10 @@ import java.util.UUID
  * **주소를 발급할 때** 만들어진다. 앱은 업로드를 보지 못해서, 올라왔는지와 정말 선언한 형식인지는 [status] 가 나중에 말한다.
  */
 @Entity
-@Table(name = "uploaded_files")
+@Table(
+    name = "uploaded_files",
+    uniqueConstraints = [UniqueConstraint(name = "uk_uploaded_files_owner_sha256", columnNames = ["owner_user_uuid", "sha256"])],
+)
 class UploadedFile(
 
     @Id
@@ -34,13 +38,17 @@ class UploadedFile(
     @Column(name = "owner_user_uuid", nullable = false, updatable = false)
     val ownerUserUuid: UUID,
 
+    /** 옛 행은 내용을 읽지 않고 해시를 채울 수 없어 null 로 남긴다. 신규 발급에는 SHA-256 이 필수다. */
+    @Column(length = 64, updatable = false)
+    val sha256: String? = null,
+
     /** 보관소에서의 위치. **이 모듈 밖으로 내보내지 않는다** — 바이트나 읽기 주소가 필요한 쪽은 이 모듈에 부탁한다. */
-    @Column(name = "storage_key", nullable = false, unique = true, updatable = false)
+    @Column(name = "storage_key", nullable = false, unique = true)
     val storageKey: String,
 
     /** 이 파일이 **무엇인가**. [status] 가 PENDING 이면 발급 때 선언한 값이고, READY 면 확인된 사실이다. */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     val metadata: UploadedFileMetadata,
 
     /**
@@ -68,6 +76,6 @@ enum class UploadStatus {
     /** 올라온 바이트가 선언한 형식이다. 입력으로 쓸 수 있다. */
     READY,
 
-    /** 올라온 바이트가 선언한 형식이 아니다. 객체는 지운다. */
+    /** 올라온 바이트가 선언 조건과 다르다. 객체를 지우고, 형식을 정정한 발급 요청만 PENDING 으로 다시 연다. */
     REJECTED,
 }

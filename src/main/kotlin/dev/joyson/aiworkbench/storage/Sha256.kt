@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.storage
 
 import java.security.MessageDigest
+import java.util.Base64
 
 /**
  * 바이트의 SHA-256 요약.
@@ -12,6 +13,9 @@ import java.security.MessageDigest
 value class Sha256 private constructor(val hex: String) {
 
     override fun toString(): String = hex
+
+    /** S3 체크섬 헤더는 hex 문자열이 아니라 원본 32바이트의 Base64 를 받는다. */
+    fun base64(): String = Base64.getEncoder().encodeToString(hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray())
 
     companion object {
         private const val ALGORITHM = "SHA-256"

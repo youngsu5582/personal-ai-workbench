@@ -151,7 +151,7 @@ class UploadedFilesTest @Autowired constructor(
         // 앞부분을 읽는 순간 다른 요청이 REJECTED 로 정했다고 친다. 이쪽은 정상 PNG 를 본다.
         val racing = object : FileStorage by fileStorage {
             override fun readRange(key: String, range: LongRange): PartialContent {
-                uploadedFileWriter.settle(requireNotNull(file.id), UploadStatus.REJECTED)
+                uploadedFileWriter.settle(file, UploadStatus.REJECTED)
                 return PartialContent(png.copyOfRange(range.first.toInt(), range.last.toInt() + 1), png.size.toLong())
             }
 

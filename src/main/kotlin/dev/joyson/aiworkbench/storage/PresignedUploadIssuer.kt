@@ -28,11 +28,12 @@ fun interface PresignedUploadIssuer {
      *
      * 다만 이것은 **선언이지 내용이 아니다.** 진짜 그 형식의 바이트인지는 올라온 뒤에 확인해야 한다.
      * [contentLength] 도 서명에 포함돼 발급 때 허용한 크기보다 큰 파일을 올릴 수 없다.
+     * [digest] 를 체크섬 헤더에 서명하므로 보관소는 다른 바이트를 거부한다. 같은 주소로 다시 PUT 해도 내용은 고정된다.
      *
      * 수명은 발급자가 안다 — [PresignedUrlIssuer.issue] 와 같은 이유다. 다만 읽기와 달리
      * 이 주소는 **전송이 끝날 때까지** 살아 있어야 해서, 느린 회선에서 짧은 수명이 먼저 문제가 된다.
      */
-    fun issueUpload(key: String, contentType: String, contentLength: Long): URI
+    fun issueUpload(key: String, contentType: String, contentLength: Long, digest: Sha256): URI
 }
 
 /**

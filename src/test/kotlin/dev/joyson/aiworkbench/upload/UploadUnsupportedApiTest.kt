@@ -30,7 +30,7 @@ class UploadUnsupportedApiTest @Autowired constructor(
         mockMvc.post("/api/uploads") {
             header("Authorization", "Bearer $token")
             contentType = MediaType.APPLICATION_JSON
-            content = """{"contentType":"image/png","contentLength":1}"""
+            content = """{"contentType":"image/png","contentLength":1,"sha256":"${"a".repeat(64)}"}"""
         }.andExpect {
             status { isNotImplemented() }
             content { contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON) }

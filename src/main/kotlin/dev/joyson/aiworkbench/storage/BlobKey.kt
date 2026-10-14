@@ -25,10 +25,18 @@ value class BlobKey private constructor(val value: String) {
         private const val FANOUT_SEGMENTS = 2
 
         fun of(ownerUuid: UUID, digest: Sha256, mimeType: String): BlobKey {
+            return contentKey(ownerUuid, digest, mimeType, "blobs")
+        }
+
+        /** 업로드 쓰기 권한으로 생성 결과물을 덮어쓰지 못하게 자리를 나눈다. */
+        fun uploaded(ownerUuid: UUID, digest: Sha256, mimeType: String): BlobKey =
+            contentKey(ownerUuid, digest, mimeType, "uploads")
+
+        private fun contentKey(ownerUuid: UUID, digest: Sha256, mimeType: String, area: String): BlobKey {
             val hex = digest.hex
 
             // 소유자로 먼저 가른다 — 계정 정리가 접두사 하나로 끝나고, 남의 바이트 보관 여부를 키로 떠볼 수 없다.
-            val prefix = "users/$ownerUuid/blobs"
+            val prefix = "users/$ownerUuid/$area"
 
             // 로컬 디스크의 한 디렉토리에 파일이 몰리지 않게 해시 앞 네 글자로 나눈다.
             val fanout = hex.chunked(FANOUT_DEPTH).take(FANOUT_SEGMENTS).joinToString("/")
