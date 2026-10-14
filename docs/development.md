@@ -411,15 +411,3 @@ AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된�
 ```
 
 토큰은 URL에도 localStorage에도 저장하지 않는다. 새로고침하면 사라지는 것이 정상이다.
-
-### 기존 DB를 쓰고 있었다면
-
-Flyway가 이미 스키마가 있는 DB를 V1 지점에서 시작하므로(`baseline-on-migrate`) 그냥 띄우면 된다.
-`flyway_schema_history`에 BASELINE 한 줄이 생기고 V1은 다시 돌지 않는다.
-
-`ddl-auto=update`가 지우지 못해 남은 것들(예: `users.external_subject`)은 그대로 있다.
-`validate`는 여분 컬럼을 문제 삼지 않으므로 기동에는 영향이 없다. 깔끔하게 시작하려면 비우면 된다.
-
-```bash
-docker compose down -v && docker compose up -d postgres
-```
