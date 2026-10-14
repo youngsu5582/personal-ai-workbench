@@ -19,22 +19,9 @@
 
 반대로 패키지만 나누고 모든 모듈이 서로의 Entity와 Repository를 자유롭게 참조하면, 이름만 모듈러 모놀리스인 결합된 모놀리스가 된다.
 
-## 2. 현재 프로젝트의 모듈 후보
+## 2. 이 프로젝트의 모듈
 
-> ⚠️ **아래 목록은 2026-09-13 시점의 초기 구상이다. 실제 모듈은 코드가 정본이다.**
-> `asset` 은 만들어진 적이 없고(저장소는 `storage`, 결과물은 `generation` 이 가져갔다),
-> 그 뒤 `usage` 가 새로 생겼다.
-
-```text
-dev.joyson.aiworkbench
-├── ownership       인증 주체에서 소유자 컨텍스트를 해석
-├── user            User Entity와 사용자 저장·조회
-├── generation      GenerationJob과 생성 유스케이스
-├── asset           결과 이미지와 저장소
-└── provider        외부 AI Provider adapter
-```
-
-처음부터 모든 모듈을 만들 필요는 없다. 현재는 실제 코드가 있는 `ownership`과 `user`를 모듈로 인식시키고, `generation`이 추가될 때 경계를 확장한다.
+기준 패키지 바로 아래 패키지 하나가 모듈이다. 어떤 모듈이 있는지는 코드가 정본이고, 경계는 `ModularityTest` 가 PR 마다 검사한다.
 
 ## 3. Spring Modulith가 하는 일
 
@@ -181,24 +168,7 @@ Usage 모듈이 사용량 기록
 
 이 판단 없이 이벤트를 사용하면 흐름을 찾기 어려운 분산된 코드가 된다.
 
-## 8. 단계별 적용 순서
-
-> ⚠️ **아래 순서는 2026-09-13 시점의 계획이다.** 어디까지 왔는지는 [로드맵](../roadmap.md)이 정본이다.
-
-### 지금
-
-1. `user`, `ownership` 패키지를 기능 경계로 유지한다.
-2. `ModularityTest`를 계속 전체 테스트에 포함한다.
-3. 모듈 내부 Entity와 Repository를 다른 모듈에서 직접 사용하지 않는다.
-
-### 다음 기능
-
-1. `default-user seed`를 User 모듈 안에 구현한다.
-2. `GenerationJob`은 generation 모듈의 소유로 만든다.
-3. owner scope 조회는 Controller가 아니라 Application Service에서 조정한다.
-4. Provider interface는 generation domain의 port로 둔다.
-
-### 나중
+## 8. 필요해지면 하는 것
 
 1. 실제 의존성이 생겼을 때 모듈 공개 API를 더 좁힌다.
 2. 필요하면 모듈별 허용 의존성을 명시한다.
