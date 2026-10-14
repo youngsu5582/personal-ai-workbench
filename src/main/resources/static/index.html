@@ -159,6 +159,15 @@
     ] ?? '');
   }
 
+  function detectedImageContentType(bytes) {
+    const startsWith = signature => signature.every((byte, index) => bytes[index] === byte);
+    if (startsWith([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) return 'image/png';
+    if (startsWith([0xFF, 0xD8, 0xFF])) return 'image/jpeg';
+    if (startsWith([0x52, 0x49, 0x46, 0x46])
+        && [0x57, 0x45, 0x42, 0x50].every((byte, index) => bytes[index + 8] === byte)) return 'image/webp';
+    throw new Error('파일 내용이 PNG·JPEG·WebP가 아니다.');
+  }
+
   function validateImage(file) {
     if (!file) throw new Error('이미지를 선택한다.');
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(imageContentType(file))) {
@@ -239,11 +248,16 @@
       validateImage(file);
       if (!accessToken) throw new Error('먼저 로그인한다.');
       setStatus($('uploadStatus'), '1/2 · 업로드 주소 발급 중', 'idle');
+      const content = await file.arrayBuffer();
+      const contentType = detectedImageContentType(new Uint8Array(content));
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', content));
+      const sha256 = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+      const checksum = btoa(String.fromCharCode(...digest));
       const res = await fetch('/api/uploads', {
         method: 'POST',
         credentials: 'omit',
         headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentType: imageContentType(file), contentLength: file.size }),
+        body: JSON.stringify({ contentType, contentLength: file.size, sha256 }),
       });
       if (!res.ok) {
         const hint = res.status === 401 ? '다시 로그인한다.'
@@ -251,10 +265,18 @@
         throw new Error(`주소 발급 실패: HTTP ${res.status}. ${hint}`);
       }
       const issued = await res.json();
+      if (issued.uploadRequired === false) {
+        $('uploadProgress').value = 100;
+        $('uploadResult').textContent = `uuid: ${issued.uuid}\n검증된 기존 파일을 재사용한다.`;
+        setStatus($('uploadStatus'), '같은 파일이 있어 전송을 생략했다.', 'ok');
+        return;
+      }
       const url = new URL(issued.url);
       if (issued.method !== 'PUT' || !['http:', 'https:'].includes(url.protocol)
-          || issued.headers?.['Content-Type'] !== imageContentType(file)
-          || issued.headers?.['Content-Length'] !== String(file.size)) {
+          || issued.headers?.['Content-Type'] !== contentType
+          || issued.headers?.['Content-Length'] !== String(file.size)
+          || issued.headers?.['x-amz-checksum-sha256'] !== checksum
+          || issued.headers?.['x-amz-sdk-checksum-algorithm'] !== 'SHA256') {
         throw new Error('발급 응답의 메서드·주소·헤더가 요청과 다르다.');
       }
       $('uploadResult').textContent = `발급 HTTP ${res.status}\nuuid: ${issued.uuid}\nPUT ${url.origin}${url.pathname} [서명 생략]\n`
