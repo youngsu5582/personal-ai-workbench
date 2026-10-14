@@ -6,7 +6,7 @@ import java.io.File
  * 상대 링크가 가리키는 파일과 제목이 있는지 본다. 바깥 주소는 열어 보지 않는다.
  *
  * 줄 번호로 가리키는 링크는 걸린다 — 줄은 코드가 바뀌면 조용히 어긋나고 링크는 여전히 열린다.
- * 커밋 SHA 로 고정한 주소는 과거를 가리키므로 통과한다.
+ * 바깥 주소도 플랫폼을 따지지 않고 같다. 경로에 커밋 SHA 가 있으면 과거를 가리키므로 통과한다.
  */
 internal object LinkCheck {
 
@@ -15,7 +15,7 @@ internal object LinkCheck {
     }
 
     private fun problemOf(target: String, doc: MarkdownDocument): String? {
-        if (EXTERNAL.containsMatchIn(target)) return checkBranchLine(target)
+        if (EXTERNAL.containsMatchIn(target)) return checkExternalLine(target)
         val path = target.substringBefore('#')
         val anchor = target.substringAfter('#', "")
         return when {
@@ -25,9 +25,10 @@ internal object LinkCheck {
         }
     }
 
-    private fun checkBranchLine(target: String): String? {
-        val ref = BLOB_LINE.find(target)?.groupValues?.get(1) ?: return null
-        return if (SHA.matches(ref)) null else "($target) — 브랜치의 줄 번호로 가리킨다. 줄은 코드가 바뀌면 조용히 어긋난다"
+    private fun checkExternalLine(target: String): String? {
+        if (!LINE_ANCHOR.matches(target.substringAfter('#', ""))) return null
+        val pinned = target.substringBefore('#').split('/').any { SHA.matches(it) }
+        return if (pinned) null else "($target) — 커밋으로 고정하지 않은 줄 번호로 가리킨다. 줄은 코드가 바뀌면 조용히 어긋난다"
     }
 
     private fun checkFile(target: String, file: File, anchor: String) = when {
@@ -44,6 +45,5 @@ internal object LinkCheck {
 
     private val EXTERNAL = Regex("^(https?:|mailto:)")
     private val LINE_ANCHOR = Regex("L\\d+(-L\\d+)?")
-    private val BLOB_LINE = Regex("github\\.com/[^/]+/[^/]+/blob/([^/]+)/[^#]*#L\\d+")
     private val SHA = Regex("[0-9a-f]{7,40}")
 }

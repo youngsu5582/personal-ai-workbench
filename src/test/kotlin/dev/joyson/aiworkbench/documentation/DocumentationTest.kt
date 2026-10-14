@@ -45,6 +45,9 @@ class DocumentationTest {
         "`UserRegistryTest.마지막 로그인 수단은 해제할 수 없다` 도 있다" to false,
         "`owner_user_uuid` 와 `users.uuid` 도 있다" to false,
         "우리 코드가 쓰는 `Long` 과 남의 이름 `Authorization` 도 된다" to false,
+        "숫자가 섞인 `S3FileStorageTest` 도 있다. 전부 대문자인 `UUID` 는 이름으로 보지 않는다" to false,
+        "`S3NoSuchStorage` 는 없다" to true,
+        "`no_such_table.status` 는 없다" to true,
         "`NoSuchThing` 은 없다" to true,
         "`UserWriter.noSuchMember` 는 없다" to true,
         "`UserRegistryTest.없는 테스트 이름` 은 없다" to true,
@@ -62,6 +65,8 @@ class DocumentationTest {
         "[다른 문서의 없는 제목](README.md#없는-제목)" to true,
         "[줄 번호](README.md#L3)" to true,
         "[브랜치의 줄](https://github.com/o/r/blob/main/README.md#L3)" to true,
+        "[GitLab 브랜치의 줄](https://gitlab.com/o/r/-/blob/main/file.kt#L42)" to true,
+        "[GitLab 도 SHA 로 고정하면](https://gitlab.com/o/r/-/blob/3fc5697ab/file.kt#L42) 된다" to false,
     )
 
     @Test

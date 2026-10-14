@@ -4,6 +4,7 @@ package dev.joyson.aiworkbench.documentation
  * 백틱 속 이름을 모양으로 갈라 코드와 스키마에 대조한다.
  *
  * 코드 이름 모양이 아니면(`202` · `ddl-auto: validate` · 경로) 보지 않는다. 파일 이름(`*.kt` 등)도 아직 보지 않는다.
+ * 클래스 이름은 대문자로 시작하고 소문자가 하나 이상 섞인 것이다 — `S3FileStorageTest` 는 보고, 전부 대문자인 약어는 보지 않는다.
  */
 internal class NameCheck(private val code: CodeNames, private val schema: SchemaNames) {
 
@@ -31,9 +32,9 @@ internal class NameCheck(private val code: CodeNames, private val schema: Schema
         else -> "`$raw` — $type 에 $member 가 없다"
     }
 
-    /** `compose.yaml` 처럼 테이블이 아닌 것도 이 모양이라, 아는 테이블일 때만 컬럼을 본다. */
+    /** 파일 이름은 앞에서 걸렀으므로, 이 모양인데 모르는 테이블이면 테이블이 사라진 것이다. */
     private fun checkColumn(raw: String, table: String, column: String): String? {
-        val columns = schema.columnsOf(table) ?: return null
+        val columns = schema.columnsOf(table) ?: return "`$raw` — 지금 스키마에 $table 테이블이 없다"
         return if (column in columns) null else "`$raw` — $table 테이블에 $column 컬럼이 없다"
     }
 
@@ -50,12 +51,14 @@ internal class NameCheck(private val code: CodeNames, private val schema: Schema
             "Location" to "HTTP 헤더",
             "Blob" to "브라우저 타입",
             "MultipartFile" to "일부러 쓰지 않는 Spring 타입 — 직접 업로드를 택한 이유에 나온다",
+            "DDLDatabase" to "jOOQ 코드 생성기가 마이그레이션을 읽는 해석기 — build.gradle.kts 만 쓴다",
+            "bucket.localhost" to "S3 가상 호스트 방식의 주소 예시",
         )
 
-        private val QUALIFIED = Regex("([A-Z][a-z][A-Za-z0-9]*)\\.(.+)")
-        private val TYPE = Regex("[A-Z][a-z][A-Za-z0-9]*")
+        private val QUALIFIED = Regex("([A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*)\\.(.+)")
+        private val TYPE = Regex("[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*")
         private val TABLE_COLUMN = Regex("([a-z][a-z0-9_]*)\\.([a-z][a-z0-9_]*)")
         private val SNAKE = Regex("[a-z][a-z0-9]*(_[a-z0-9]+)+")
-        private val FILE = Regex("\\.(kt|kts|java|md|sql|ya?ml|json|sh|ts|cjs|svg|png|toml|properties|txt|html)$")
+        private val FILE = Regex("\\.(kt|kts|java|md|sql|ya?ml|json|sh|ts|cjs|svg|png|toml|properties|txt|html|gradle)$")
     }
 }
