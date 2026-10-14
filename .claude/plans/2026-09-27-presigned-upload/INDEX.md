@@ -103,11 +103,11 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
   - [x] 5. 스크립트(`SOURCE_TYPE=uploaded`)와 문서(`direct-upload.md` 재구성)
   - [x] 6. 폴백 — 주소로 실패하면 바이트로 다시 보낸다(D13)
   - [x] 라이브 확인 — 로컬 Garage + OpenAI 로 `upload.sh` → `i2i.sh`. 주소 실패(1.1초, 과금 없음) → 바이트로 성공(12.3초)
-- [ ] **해시 PR** — 아래 순서
+- [x] **해시 구현** — `feat/upload-checksum`
   - [x] Garage 실험 — SHA-256 도 강제된다(F7). SHA-256 으로 간다
-  - [ ] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
-  - [ ] 서명에 해시(F5) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
-  - [ ] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
+  - [x] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
+  - [x] 서명에 해시(F7) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
+  - [x] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
 - [ ] (선택) 한 번도 참조되지 않은 PENDING 정리 — DB 기준. 자리를 옮기지 않으므로(D4) prefix lifecycle 로는 READY 까지 지워진다
 
 ## 함정
@@ -118,12 +118,22 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
 - **`ByteArrayResource.getFilename()` 은 기본이 null** — override 하지 않으면 파트가 파일로 안 나가고, 증상은 저쪽의 400 이라 원인이 멀다
 - **`spring.servlet.multipart` 설정은 이 경로에 필요 없다** — 앱이 파일을 받지 않는다
 - **`contentLength` 를 서명에 넣으면 스트리밍 업로드가 불가능해진다** — 올리는 쪽이 정확한 크기를 미리 알아야 한다
-- **F3 의 창은 해시 PR 전까지 열려 있다** — 주소 수명(기본 15m) 동안 같은 크기·형식의 다른 바이트로 덮어쓸 수 있고, READY 는 다시 보지 않는다. 재사용한 Job 들이 서로 다른 입력으로 돌았을 수 있다
+- **기존 발급 URL 에 해시를 소급해 넣을 수는 없다** — 해시 구현 이후 신규 주소는 내용이 고정된다. 기존 행은 nullable 해시와 UUID 경로로 유지한다
 
 ## Resume Point
 
-**다음은 해시 PR** — SHA-256 으로 간다(F7). 실험 코드는 `S3FileStorageTest` 처럼 사실을 고정하는 테스트로 다시 쓴다.
-Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)이 이 PR 로 닫힌다. 업로드를 i2i 입력으로 쓰는 일은 #45·#46 으로 끝났다.
+**해시 구현 완료** — 워크트리 `upload-checksum`, 브랜치 `feat/upload-checksum`.
+- 신규 발급 요청은 소문자 hex `sha256` 이 필수. 서명에는 원본 digest 의 Base64 를 쓴다.
+- READY 는 `uploadRequired=false` 와 기존 UUID, PENDING 은 주소를 재발급하고 올라온 객체가 있으면 판정한다.
+- REJECTED 의 다른 형식 재선언은 같은 UUID 의 metadata·키를 바꾸고 PENDING 으로 연다.
+- 동시 최초 발급은 유니크 제약 + INSERT ON CONFLICT, 옛 판정은 상태와 updated_at 조건으로 막는다.
+- 2026-10-15 `.claude/scripts/test.sh`: 328개 · 실패 0개 (과금 테스트 2개 건너뜀).
+- 실제 Garage: 변경한 바이트·체크섬·헤더 누락 거절, 원본 보존과 동일 내용 재전송 확인.
+- V6 기존 행이 있는 PostgreSQL → V7 마이그레이션, 동시 발급 4건 → UUID 1개, 보관소 장애 503 확인.
+- 샘플 페이지 JS 와 upload.sh 는 로컬 fixture 로 해시·헤더·중복 PUT 생략 확인.
+- 기존 버킷은 `scripts/upload-cors.sh` 재실행이 필요하다. 실제 운영 버킷 설정은 이 작업에서 바꾸지 않았다.
+
+후속 후보: 쓰이지 않은 PENDING 정리. Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)은 신규 체크섬 발급으로 막는다.
 
 ## Files
 
