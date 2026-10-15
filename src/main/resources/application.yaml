@@ -46,6 +46,10 @@ spring:
               - profile
               - email
 
+server:
+  # Traefik이 전달한 https 스킴과 호스트를 OAuth callback·Secure cookie가 보도록 한다.
+  forward-headers-strategy: framework
+
 # 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
 workbench:
   auth:
@@ -84,6 +88,17 @@ workbench:
     # OpenAI 를 쓰지 않는 환경이 정상이기 때문이다.
     openai:
       api-key: "${WORKBENCH_PROVIDER_OPENAI_API_KEY:}"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
 
 logging:
   level:
