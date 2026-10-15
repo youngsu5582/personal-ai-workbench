@@ -49,8 +49,17 @@ class SecurityConfig {
             .authorizeHttpRequests {
                 // "/error" 가 빠지면 컨트롤러가 던진 401 이 ERROR dispatch 로 /error 에 재진입하고,
                 // 그게 인증 대상이라 로그인 진입점이 302 로 바꿔버린다. 상태 코드가 조용히 뒤집힌다.
-                it.requestMatchers("/", "/index.html", "/favicon.ico", "/error", HandoffCookie.PATH, "/login/**", "/oauth2/**")
-                    .permitAll()
+                it.requestMatchers(
+                    "/",
+                    "/index.html",
+                    "/favicon.ico",
+                    "/error",
+                    "/actuator/health",
+                    "/actuator/health/**",
+                    HandoffCookie.PATH,
+                    "/login/**",
+                    "/oauth2/**",
+                ).permitAll()
                     .anyRequest().authenticated()
             }
             .oauth2Login { login ->

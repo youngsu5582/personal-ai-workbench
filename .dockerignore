@@ -1,0 +1,9 @@
+.git
+.github
+.gradle
+build
+.env
+.env.*
+!.env.example
+var
+**/.DS_Store
