@@ -79,6 +79,11 @@ tasks.bootRun {
 	systemProperty("spring.profiles.active", "local")
 }
 
+// 일회성 데이터 변환 도구도 앱과 같은 Flyway·JDBC 버전을 사용한다.
+tasks.register("fileHashMigrationClasspath") {
+    doLast { println(configurations.runtimeClasspath.get().asPath) }
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
 
@@ -92,6 +97,9 @@ tasks.withType<Test> {
 	// 이름을 바꿔 아예 다른 파일을 읽게 한다. 테스트가 쓰는 설정은 application-test.yaml 에만 있다.
 	// 리스너가 아니라 여기 두는 이유는, 리스너가 없어도 상속은 끊겨 있어야 하기 때문이다.
 	systemProperty("spring.config.name", "application-test")
+    doFirst {
+        systemProperty("workbench.migration.classpath", configurations.runtimeClasspath.get().asPath)
+    }
 	testLogging {
 		events("passed", "skipped", "failed")
 		showStandardStreams = true

@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -81,12 +82,12 @@ class TaskStateWriterTest @Autowired constructor(
         val (jobId, taskIds) = newJob(taskCount = 2)
         writer.claim(limit = 2)
 
-        writer.succeed(taskIds[0], listOf(StoredFile(UUID.randomUUID(), "k0", metadata())))
+        writer.succeed(taskIds[0], listOf(StoredFile(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "k0", metadata())))
 
         // 아직 남은 Task 가 있으면 닫히지 않는다.
         assertEquals(JobLifecycle.PENDING, jobRepository.findById(jobId).get().status)
 
-        writer.succeed(taskIds[1], listOf(StoredFile(UUID.randomUUID(), "k1", metadata())))
+        writer.succeed(taskIds[1], listOf(StoredFile(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "k1", metadata())))
 
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(jobId).get().status)
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(taskIds[0]).get().status)

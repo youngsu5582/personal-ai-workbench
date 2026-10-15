@@ -27,7 +27,7 @@ class UploadService(
         val file = prepare(findOrCreate(ownerUuid, key, spec), key, spec)
 
         return when (file.status) {
-            UploadStatus.READY -> UploadUrl(file.uuid, null)
+            UploadStatus.READY -> UploadUrl(file.sha256, null)
             UploadStatus.PENDING -> issuePending(issuer, file, spec)
             UploadStatus.REJECTED -> throw UploadStateChangedException()
         }
@@ -38,7 +38,7 @@ class UploadService(
             ?: return uploadedFileWriter.createOrFind(ownerUuid, key, spec)
 
         if (existing.status != UploadStatus.PENDING) return existing
-        uploadedFiles.findUsable(existing.uuid, ownerUuid)
+        uploadedFiles.findUsable(existing.sha256, ownerUuid)
         return reload(existing)
     }
 
@@ -66,18 +66,18 @@ class UploadService(
         }
         val url = issuer.issueUpload(file.storageKey, spec.contentType, spec.contentLength, spec.digest)
         log.info(
-            "업로드 주소를 발급했다. uuid={} ownerUuid={} type={} bytes={}",
-            file.uuid, file.ownerUserUuid, spec.contentType, spec.contentLength,
+            "업로드 주소를 발급했다. sha256={} ownerUuid={} type={} bytes={}",
+            file.sha256, file.ownerUserUuid, spec.contentType, spec.contentLength,
         )
-        return UploadUrl(file.uuid, url)
+        return UploadUrl(file.sha256, url)
     }
 
     private fun reload(file: UploadedFile): UploadedFile =
-        requireNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, file.ownerUserUuid))
+        requireNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(file.ownerUserUuid, file.sha256))
 }
 
 data class UploadUrl(
-    val uuid: UUID,
+    val sha256: String,
     /** null 이면 검증된 기존 파일이라 업로드할 필요가 없다. */
     val url: URI?,
 )

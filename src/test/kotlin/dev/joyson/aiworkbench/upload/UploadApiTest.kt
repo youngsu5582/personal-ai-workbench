@@ -104,59 +104,59 @@ class UploadApiTest @Autowired constructor(
     @Test
     fun `발급하면 SHA-256 과 선언 조건을 DB 에 남긴다`() {
         val body = issue()
-        val uuid = UUID.fromString(body.get("uuid").asText())
+        val uuid = body.get("sha256").asText()
         em.flush()
         em.clear()
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         assertEquals(UploadStatus.PENDING, file.status)
         assertEquals(digest.hex, file.sha256)
         assertEquals(BlobKey.uploaded(user.uuid, digest, "image/png").value, file.storageKey)
         assertEquals(png.size.toLong(), file.metadata.fileSize)
-        assertNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, UUID.randomUUID()))
+        assertNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(UUID.randomUUID(), uuid))
     }
 
     @Test
-    fun `아직 올리지 않은 같은 파일은 UUID 를 재사용하고 주소를 발급한다`() {
+    fun `아직 올리지 않은 같은 파일은 해시를 재사용하고 주소를 발급한다`() {
         val first = issue()
         val second = issue()
-        assertEquals(first.get("uuid").asText(), second.get("uuid").asText())
+        assertEquals(first.get("sha256").asText(), second.get("sha256").asText())
         assertTrue(second.get("uploadRequired").asBoolean())
     }
 
     @Test
     fun `이미 올라온 파일은 발급 시 판정하고 PUT 없이 재사용한다`() {
         val first = issue()
-        val uuid = UUID.fromString(first.get("uuid").asText())
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val uuid = first.get("sha256").asText()
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         fileStorage.put(file.storageKey, png, "image/png")
 
         request().andExpect {
             status { isOk() }
-            jsonPath("$.uuid") { value(uuid.toString()) }
+            jsonPath("$.sha256") { value(uuid.toString()) }
             jsonPath("$.uploadRequired") { value(false) }
             jsonPath("$.url") { doesNotExist() }
             jsonPath("$.method") { doesNotExist() }
             jsonPath("$.headers") { isEmpty() }
         }
-        assertEquals(UploadStatus.READY, uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid)?.status)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
     }
 
     @Test
-    fun `잘못된 선언을 정정하면 같은 UUID 로 다시 올릴 수 있다`() {
+    fun `잘못된 선언을 정정하면 같은 해시 로 다시 올릴 수 있다`() {
         val first = issue(payload(type = "image/jpeg"))
-        val uuid = UUID.fromString(first.get("uuid").asText())
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val uuid = first.get("sha256").asText()
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         fileStorage.put(file.storageKey, png, "image/jpeg")
 
         // 같은 형식의 재요청은 불합격을 다시 열지 않는다.
         request(payload(type = "image/jpeg")).andExpect { status { isBadRequest() } }
-        assertEquals(UploadStatus.REJECTED, uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid)?.status)
+        assertEquals(UploadStatus.REJECTED, uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
         assertNull(fileStorage.read(file.storageKey))
 
         val corrected = issue()
-        assertEquals(uuid.toString(), corrected.get("uuid").asText())
+        assertEquals(uuid.toString(), corrected.get("sha256").asText())
         assertTrue(corrected.get("uploadRequired").asBoolean())
-        val reopened = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val reopened = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         assertEquals(UploadStatus.PENDING, reopened.status)
         assertEquals("image/png", reopened.metadata.mimeType)
         assertEquals(BlobKey.uploaded(user.uuid, digest, "image/png").value, reopened.storageKey)

@@ -39,13 +39,16 @@ class JooqGeneratedFileFinder(
     private val mimeType: Field<String> =
         DSL.field("{0} ->> 'mimeType'", SQLDataType.VARCHAR, GENERATED_FILES.METADATA)
 
-    override fun findOwned(fileUuid: UUID, ownerUuid: UUID): FileLocation? =
+    override fun findOwned(sha256: String, ownerUuid: UUID): FileLocation? =
         dsl.select(GENERATED_FILES.STORAGE_KEY, mimeType)
             .from(GENERATED_FILES)
             .join(GENERATION_JOB_TASKS).on(GENERATION_JOB_TASKS.ID.eq(GENERATED_FILES.TASK_ID))
             .join(GENERATION_JOBS).on(GENERATION_JOBS.ID.eq(GENERATION_JOB_TASKS.JOB_ID))
-            .where(GENERATED_FILES.UUID.eq(fileUuid))
+            .where(GENERATED_FILES.SHA256.eq(sha256))
             .and(GENERATION_JOBS.OWNER_USER_UUID.eq(ownerUuid))
+            // 같은 내용의 여러 생성 이력 중 하나만 필요하다. 인가는 모든 후보에 먼저 적용된다.
+            .orderBy(GENERATED_FILES.ID)
+            .limit(1)
             .fetchOne()
             ?.let { (storageKey, mimeType) ->
                 FileLocation(storageKey = storageKey!!, mimeType = mimeType!!)

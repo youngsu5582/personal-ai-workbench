@@ -49,10 +49,10 @@ class GeneratedFileService(
      * 두 길을 순서대로 시도한다 — **보관소가 직접 내줄 수 있으면 그쪽이 낫다.**
      * 발급자가 있으면 바이트를 읽지 않아, 수 MB 가 앱 힙에 올라왔다 내려가는 일이 사라진다.
      */
-    fun download(fileUuid: UUID, ownerUuid: UUID): FileDownload? {
+    fun download(sha256: String, ownerUuid: UUID): FileDownload? {
         // 인가는 여기 한 곳뿐이다. 아래 두 길은 이미 확인된 위치만 받는다.
-        val location = generatedFileFinder.findOwned(fileUuid, ownerUuid) ?: return null
-        val fileName = downloadFileNameOf(fileUuid, location.mimeType)
+        val location = generatedFileFinder.findOwned(sha256, ownerUuid) ?: return null
+        val fileName = downloadFileNameOf(sha256, location.mimeType)
 
         return redirectTo(location, fileName) ?: streamFrom(location, fileName)
     }

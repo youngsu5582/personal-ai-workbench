@@ -179,7 +179,8 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(1, files.map { it.storageKey }.toSet().size)
         // 행은 따로 남는다. 키를 공유해도 각자 자기 식별자를 갖는다.
         assertEquals(2, files.size)
-        assertEquals(2, files.map { it.uuid }.toSet().size)
+        assertEquals(2, files.map { it.id }.toSet().size)
+        assertEquals(1, files.map { it.sha256 }.toSet().size)
     }
 
     @Test
@@ -540,7 +541,7 @@ class TaskWorkerTest @Autowired constructor(
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
 
-        val (_, editTask) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, editTask) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
         var captured: ExternalApiGenerateRequest? = null
 
         workerWith(
@@ -564,7 +565,7 @@ class TaskWorkerTest @Autowired constructor(
     @Test
     fun `참조한 이미지가 없으면 재시도하지 않는다`() {
         // 접수 때는 있었지만 그 사이 지워졌을 수 있다. 다시 읽어도 없으므로 그 자리에서 닫는다.
-        val (_, task) = newTask(option = editOption(UUID.randomUUID()))
+        val (_, task) = newTask(option = editOption(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex))
 
         workerWith(provider { success() }).process(task.id!!)
 
@@ -575,7 +576,7 @@ class TaskWorkerTest @Autowired constructor(
     /** 부르지 못했으니 나간 돈도 없다. 지출로 적히면 없는 비용이 집계에 섞인다. */
     @Test
     fun `입력을 읽지 못한 실패는 지출로 적히지 않는다`() {
-        val (_, task) = newTask(option = editOption(UUID.randomUUID()))
+        val (_, task) = newTask(option = editOption(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex))
 
         workerWith(provider { success() }).process(task.id!!)
 
@@ -589,7 +590,7 @@ class TaskWorkerTest @Autowired constructor(
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
 
-        val (_, editTask) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, editTask) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
         var attempts = 0
         val worker = workerWith(
             provider {
@@ -612,12 +613,12 @@ class TaskWorkerTest @Autowired constructor(
         val (first, firstTask) = newTask()
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
-        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, task) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
         val urls = mutableListOf<URI>()
         var issued = 0
         val signer = PresignedUrlIssuer { key, filename ->
             assertEquals(source.storageKey, key)
-            assertEquals("${source.uuid}.png", filename)
+            assertEquals("${source.sha256}.png", filename)
             URI.create("https://storage.test/$key?X-Amz-Signature=attempt-${++issued}")
         }
         val provider = object : ExternalApiProvider {
@@ -647,7 +648,7 @@ class TaskWorkerTest @Autowired constructor(
         val (_, firstTask) = newTask()
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
-        val (_, task) = newTask(option = editOption(source.uuid))
+        val (_, task) = newTask(option = editOption(source.sha256))
 
         workerWith(
             provider { error("Provider를 호출하면 안 된다") },
@@ -663,7 +664,7 @@ class TaskWorkerTest @Autowired constructor(
         val (first, firstTask) = newTask()
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
-        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, task) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
 
         workerWith(
             provider { error("Provider를 호출하면 안 된다") },
@@ -678,17 +679,17 @@ class TaskWorkerTest @Autowired constructor(
     @Test
     fun `올린 이미지는 upload 모듈이 발급한 주소로 넘기고 바이트를 읽지 않는다`() {
         val owner = UUID.randomUUID()
-        val uploadUuid = UUID.randomUUID()
+        val uploadUuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val uploads = object : UploadedFiles {
-            override fun findUsable(uuid: UUID, ownerUuid: UUID) =
-                UsableUpload("image/png").takeIf { uuid == uploadUuid && ownerUuid == owner }
+            override fun findUsable(sha256: String, ownerUuid: UUID) =
+                UsableUpload("image/png").takeIf { sha256 == uploadUuid && ownerUuid == owner }
 
-            override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI {
+            override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI {
                 assertEquals("$uploadUuid.png", fileName)
                 return URI.create("https://storage.test/upload?X-Amz-Signature=upload")
             }
 
-            override fun readContent(uuid: UUID, ownerUuid: UUID) = error("주소로 넘길 수 있으면 바이트를 읽지 않는다")
+            override fun readContent(sha256: String, ownerUuid: UUID) = error("주소로 넘길 수 있으면 바이트를 읽지 않는다")
         }
         var sent: URI? = null
         val provider = object : ExternalApiProvider {
@@ -712,11 +713,11 @@ class TaskWorkerTest @Autowired constructor(
     @Test
     fun `쓸 수 없는 업로드는 주소를 받지 않고 Provider 도 부르지 않는다`() {
         val uploads = object : UploadedFiles {
-            override fun findUsable(uuid: UUID, ownerUuid: UUID): UsableUpload? = null
-            override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String) = error("주소를 받으면 안 된다")
-            override fun readContent(uuid: UUID, ownerUuid: UUID) = error("바이트를 읽으면 안 된다")
+            override fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload? = null
+            override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String) = error("주소를 받으면 안 된다")
+            override fun readContent(sha256: String, ownerUuid: UUID) = error("바이트를 읽으면 안 된다")
         }
-        val (_, task) = newTask(option = editOption(FileSource.Uploaded(UUID.randomUUID())))
+        val (_, task) = newTask(option = editOption(FileSource.Uploaded(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)))
 
         workerWith(provider { error("Provider를 호출하면 안 된다") }, uploadedFiles = uploads).process(task.id!!)
 
@@ -742,7 +743,7 @@ class TaskWorkerTest @Autowired constructor(
         val (first, firstTask) = newTask()
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
-        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, task) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
         val sent = mutableListOf<ExternalApiFileInput>()
         val signer = PresignedUrlIssuer { key, _ -> URI.create("https://storage.test/$key?X-Amz-Signature=s") }
 
@@ -760,15 +761,15 @@ class TaskWorkerTest @Autowired constructor(
     @Test
     fun `올린 이미지도 주소로 실패하면 upload 모듈에서 바이트를 받아 다시 보낸다`() {
         val owner = UUID.randomUUID()
-        val uploadUuid = UUID.randomUUID()
+        val uploadUuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val uploads = object : UploadedFiles {
-            override fun findUsable(uuid: UUID, ownerUuid: UUID) =
-                UsableUpload("image/png").takeIf { uuid == uploadUuid && ownerUuid == owner }
+            override fun findUsable(sha256: String, ownerUuid: UUID) =
+                UsableUpload("image/png").takeIf { sha256 == uploadUuid && ownerUuid == owner }
 
-            override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI =
+            override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI =
                 URI.create("https://storage.test/upload?X-Amz-Signature=upload")
 
-            override fun readContent(uuid: UUID, ownerUuid: UUID) = image.takeIf { uuid == uploadUuid && ownerUuid == owner }
+            override fun readContent(sha256: String, ownerUuid: UUID) = image.takeIf { sha256 == uploadUuid && ownerUuid == owner }
         }
         val sent = mutableListOf<ExternalApiFileInput>()
         val (_, task) = newTask(option = editOption(FileSource.Uploaded(uploadUuid)), ownerUuid = owner)
@@ -785,7 +786,7 @@ class TaskWorkerTest @Autowired constructor(
         val (first, firstTask) = newTask()
         workerWith(provider { success() }).process(firstTask.id!!)
         val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
-        val (_, task) = newTask(option = editOption(source.uuid), ownerUuid = first.ownerUserUuid)
+        val (_, task) = newTask(option = editOption(source.sha256), ownerUuid = first.ownerUserUuid)
         var calls = 0
 
         workerWith(
@@ -799,7 +800,7 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
     }
 
-    private fun editOption(sourceUuid: UUID) = editOption(FileSource.Generated(sourceUuid))
+    private fun editOption(sourceSha256: String) = editOption(FileSource.Generated(sourceSha256))
 
     private fun editOption(source: FileSource) = ImageToImageOption(
         prompt = "수채화로",

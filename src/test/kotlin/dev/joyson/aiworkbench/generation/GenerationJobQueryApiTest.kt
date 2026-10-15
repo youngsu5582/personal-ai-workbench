@@ -128,14 +128,14 @@ class GenerationJobQueryApiTest @Autowired constructor(
 
         val bytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 1, 2, 3)
         // 워커와 같은 방식으로 키를 만든다 — 자리는 내용이 정하고, 행 식별자는 따로 둔다.
-        val fileUuid = UUID.randomUUID()
+        val fileUuid = Sha256.of(bytes).hex
         val key = BlobKey.of(job.ownerUserUuid, Sha256.of(bytes), MIME).value
         fileStorage.put(key, bytes, MIME)
 
         succeed(tasks[0])
         fileRepository.save(
             GeneratedFile(
-                uuid = fileUuid,
+                sha256 = fileUuid,
                 taskId = tasks[0].id!!,
                 storageKey = key,
                 metadata = FileMetadata(width = 1024, height = 1024, mimeType = MIME, fileSize = bytes.size),
@@ -212,6 +212,36 @@ class GenerationJobQueryApiTest @Autowired constructor(
         val url = fileUrlOf(jobUuid, token)
         mockMvc.get(url) { header("Authorization", "Bearer ${tokenOf("download-stranger")}") }
             .andExpect { status { isNotFound() } }
+    }
+
+    @Test
+    fun `파일 목록은 해시와 해시 조회 주소를 주고 UUID 는 주지 않는다`() {
+        val token = tokenOf("hash-list-owner")
+        val (jobUuid, bytes) = jobWithOneSuccessAndOneFailure(token)
+        val hash = Sha256.of(bytes).hex
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].files[0].sha256") { value(hash) }
+            jsonPath("$.tasks[0].files[0].uuid") { doesNotExist() }
+            jsonPath("$.tasks[0].files[0].url") { value("/api/files/$hash") }
+        }
+        // 같은 내용의 다른 결과 행도 조회가 모호해지지 않아야 한다.
+        val original = fileRepository.findAll().single()
+        fileRepository.saveAndFlush(GeneratedFile(
+            taskId = original.taskId, sha256 = original.sha256,
+            storageKey = original.storageKey, metadata = original.metadata,
+        ))
+        mockMvc.get("/api/files/$hash") { header("Authorization", "Bearer $token") }
+            .andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `해시 자리에 UUID 나 잘못된 해시를 보내면 400 이다`() {
+        val token = tokenOf("invalid-hash-owner")
+        listOf(UUID.randomUUID().toString(), "A".repeat(64), "abc").forEach { invalid ->
+            mockMvc.get("/api/files/$invalid") { header("Authorization", "Bearer $token") }
+                .andExpect { status { isBadRequest() } }
+        }
     }
 
     /** 주소를 테스트가 지어내지 않는다 — 응답이 준 것을 그대로 쓴다. */
