@@ -135,6 +135,18 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
 
 후속 후보: 쓰이지 않은 PENDING 정리. Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)은 신규 체크섬 발급으로 막는다.
 
+## 파일 식별자 후속 변경 (2026-10-15)
+
+D10 의 외부 UUID 결정은 후속 PR 에서 변경한다. 완성된 파일은 업로드·생성 결과 모두 SHA-256 을 공개 식별자로 쓴다.
+사용자·Job·Task 의 UUID 는 유지하고, 파일 입력 JSON 은 `{type, sha256}`, 다운로드는 `/api/files/{sha256}` 이다.
+
+- 첫 브랜치 `feat/upload-checksum` → main: 체크섬 검증·사용자별 중복 제거. UploadService 메소드 분리는 독립 커밋.
+- 후속 `feat/file-hash-identifiers` → `feat/upload-checksum`: 공개 식별자·입력 참조 변경 + V8/V9 + 로컬 변환 도구.
+- 전체 테스트 331개 실패 0개(과금 테스트 2개 건너뜀). 변환 테스트는 기존 V6 데이터·중복 업로드·유실 파일·재실행까지 확인.
+- 로컬 변환 실행 완료. 생성 파일 6개·업로드 2개를 유지하고 입력 참조 4건을 변환했다. 원본 없는 업로드 3개와 연결 요청 3개는 백업 후 제외.
+- 백업·매핑·변환 SQL·검증은 `var/file-hash-migration-20261015-220307/` 에 보관. 재실행은 already_converted 로 종료.
+- 앱을 시작하기 전에 기존 DB 를 변환해야 한다. 절차는 [직접 업로드 설계](../../../docs/architecture/direct-upload.md#기존-데이터).
+
 ## Files
 
 - `INDEX.md` — 이 문서. 결정과 진행 상황

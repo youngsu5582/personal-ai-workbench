@@ -267,7 +267,7 @@
       const issued = await res.json();
       if (issued.uploadRequired === false) {
         $('uploadProgress').value = 100;
-        $('uploadResult').textContent = `uuid: ${issued.uuid}\n검증된 기존 파일을 재사용한다.`;
+        $('uploadResult').textContent = `sha256: ${issued.sha256}\n검증된 기존 파일을 재사용한다.`;
         setStatus($('uploadStatus'), '같은 파일이 있어 전송을 생략했다.', 'ok');
         return;
       }
@@ -279,7 +279,7 @@
           || issued.headers?.['x-amz-sdk-checksum-algorithm'] !== 'SHA256') {
         throw new Error('발급 응답의 메서드·주소·헤더가 요청과 다르다.');
       }
-      $('uploadResult').textContent = `발급 HTTP ${res.status}\nuuid: ${issued.uuid}\nPUT ${url.origin}${url.pathname} [서명 생략]\n`
+      $('uploadResult').textContent = `발급 HTTP ${res.status}\nsha256: ${issued.sha256}\nPUT ${url.origin}${url.pathname} [서명 생략]\n`
         + JSON.stringify(issued.headers, null, 2);
       setStatus($('uploadStatus'), '2/2 · 보관소로 전송 중', 'idle');
       const status = await putImage(issued, file);
