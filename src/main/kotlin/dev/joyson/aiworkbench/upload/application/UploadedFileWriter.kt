@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.upload.domain.UploadSpec
 import dev.joyson.aiworkbench.upload.domain.UploadStatus
 import dev.joyson.aiworkbench.upload.domain.UploadedFile
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
+import dev.joyson.aiworkbench.upload.domain.UploadedFileWriteRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -13,12 +14,12 @@ import java.util.UUID
 @Service
 class UploadedFileWriter(
     private val uploadedFileRepository: UploadedFileRepository,
+    private val uploadedFileWriteRepository: UploadedFileWriteRepository,
 ) {
     @Transactional
     fun createOrFind(owner: UUID, key: String, spec: UploadSpec): UploadedFile {
-        uploadedFileRepository.insertIfAbsent(
-            uuid = UUID.randomUUID(), owner = owner, key = key, sha256 = spec.digest.hex,
-            metadata = metadataJson(spec), at = Instant.now(),
+        uploadedFileWriteRepository.insertIfAbsent(
+            uuid = UUID.randomUUID(), owner = owner, key = key, spec = spec, at = Instant.now(),
         )
         return requireNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(owner, spec.digest.hex))
     }
@@ -33,10 +34,7 @@ class UploadedFileWriter(
 
     @Transactional
     fun reopen(file: UploadedFile, key: String, spec: UploadSpec): Boolean =
-        uploadedFileRepository.reopen(
-            requireNotNull(file.id), file.updatedAt, key, metadataJson(spec), Instant.now(),
+        uploadedFileWriteRepository.reopen(
+            requireNotNull(file.id), file.updatedAt, key, spec, Instant.now(),
         ) > 0
-
-    private fun metadataJson(spec: UploadSpec): String =
-        """{"mimeType":"${spec.contentType}","fileSize":${spec.contentLength}}"""
 }

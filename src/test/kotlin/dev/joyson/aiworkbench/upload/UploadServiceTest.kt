@@ -13,6 +13,8 @@ import dev.joyson.aiworkbench.upload.domain.UploadStatus
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import java.net.URI
@@ -34,6 +36,7 @@ class UploadServiceTest @Autowired constructor(
     private val storage: FileStorage,
     private val files: DefaultUploadedFiles,
     private val jdbc: JdbcTemplate,
+    private val transactionManager: PlatformTransactionManager,
 ) : IntegrationTest() {
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0)
     private val digest = Sha256.of(png)
@@ -86,6 +89,19 @@ class UploadServiceTest @Autowired constructor(
         assertFalse(writer.reopen(rejected, "stale-key", wrongSpec))
         assertEquals("image/png", corrected.metadata.mimeType)
         assertEquals(UploadStatus.PENDING, repository.findByUuidAndOwnerUserUuid(issued.uuid, owner)?.status)
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    fun `jOOQ 로 만든 업로드도 같은 트랜잭션에서 롤백된다`() {
+        val owner = UUID.randomUUID()
+        val key = BlobKey.uploaded(owner, digest, "image/png").value
+        TransactionTemplate(transactionManager).executeWithoutResult { transaction ->
+            writer.createOrFind(owner, key, spec)
+            assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, digest.hex))
+            transaction.setRollbackOnly()
+        }
+        assertNull(repository.findByOwnerUserUuidAndSha256(owner, digest.hex))
     }
 
     @Test
