@@ -16,6 +16,11 @@ class Sha256Test {
     }
 
     @Test
+    fun `S3 체크섬은 원본 digest 를 Base64 로 쓴다`() {
+        assertEquals("ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=", Sha256.of("abc".toByteArray()).base64())
+    }
+
+    @Test
     fun `같은 바이트는 같은 값을 준다`() {
         assertEquals(Sha256.of(byteArrayOf(1, 2, 3)), Sha256.of(byteArrayOf(1, 2, 3)))
     }

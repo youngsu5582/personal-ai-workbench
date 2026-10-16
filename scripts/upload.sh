@@ -23,7 +23,7 @@ done
 
 # 확장자 대신 파일 헤더로 형식을 정한다. 서버의 업로드 후 내용 검증을 대신하지는 않는다.
 METADATA=$(python3 - "$IMAGE" <<'PY'
-import os, sys
+import hashlib, os, sys
 path = sys.argv[1]
 if not os.path.isfile(path):
     sys.exit("읽을 수 있는 이미지 파일이 필요하다.")
@@ -31,7 +31,8 @@ size = os.path.getsize(path)
 if not 1 <= size <= 20 * 1024 * 1024:
     sys.exit("이미지는 1바이트~20MiB여야 한다.")
 with open(path, "rb") as image:
-    header = image.read(12)
+    content = image.read()
+    header = content[:12]
 if header.startswith(b"\x89PNG\r\n\x1a\n"):
     content_type = "image/png"
 elif header.startswith(b"\xff\xd8\xff"):
@@ -40,10 +41,10 @@ elif header[:4] == b"RIFF" and header[8:12] == b"WEBP":
     content_type = "image/webp"
 else:
     sys.exit("PNG·JPEG·WebP 파일만 지원한다.")
-print(content_type, size)
+print(content_type, size, hashlib.sha256(content).hexdigest())
 PY
 )
-read -r CONTENT_TYPE CONTENT_LENGTH <<< "$METADATA"
+read -r CONTENT_TYPE CONTENT_LENGTH SHA256 <<< "$METADATA"
 TOKEN="${ACCESS_TOKEN:-}"
 if [ -z "$TOKEN" ]; then
   TOKEN="$("$REPO_ROOT/scripts/dev-token.sh" "${USER_UUID:-}")"
@@ -52,9 +53,9 @@ fi
 TMP_DIR="$(mktemp -d -t workbench-upload.XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-BODY=$(python3 - "$CONTENT_TYPE" "$CONTENT_LENGTH" <<'PY'
+BODY=$(python3 - "$CONTENT_TYPE" "$CONTENT_LENGTH" "$SHA256" <<'PY'
 import json, sys
-print(json.dumps({"contentType": sys.argv[1], "contentLength": int(sys.argv[2])}))
+print(json.dumps({"contentType": sys.argv[1], "contentLength": int(sys.argv[2]), "sha256": sys.argv[3]}))
 PY
 )
 echo "  발급 요청  POST $BASE_URL/api/uploads · $CONTENT_TYPE · $CONTENT_LENGTH bytes"
@@ -69,38 +70,56 @@ if [ "$STATUS" != "200" ]; then
 fi
 
 # 응답의 서명 URL은 출력하지 않고 전송에만 사용한다.
-python3 - "$TMP_DIR/response.json" "$CONTENT_TYPE" "$CONTENT_LENGTH" > "$TMP_DIR/issued" <<'PY'
-import json, sys, urllib.parse, uuid
+python3 - "$TMP_DIR/response.json" "$CONTENT_TYPE" "$CONTENT_LENGTH" "$SHA256" > "$TMP_DIR/issued" <<'PY'
+import base64, json, sys, urllib.parse, uuid
 with open(sys.argv[1]) as response:
     issued = json.load(response)
+print(uuid.UUID(issued["uuid"]))
+if issued["uploadRequired"] is False:
+    print("reused")
+    sys.exit(0)
+print("upload")
 headers = issued["headers"]
+checksum = base64.b64encode(bytes.fromhex(sys.argv[4])).decode()
 url = urllib.parse.urlsplit(issued["url"])
 if (issued["method"] != "PUT" or url.scheme not in ("http", "https") or not url.netloc
         or headers.get("Content-Type") != sys.argv[2]
-        or headers.get("Content-Length") != sys.argv[3]):
+        or headers.get("Content-Length") != sys.argv[3]
+        or headers.get("x-amz-checksum-sha256") != checksum
+        or headers.get("x-amz-sdk-checksum-algorithm") != "SHA256"):
     sys.exit("발급 응답의 메서드·주소·헤더가 요청과 다르다.")
-print(uuid.UUID(issued["uuid"]))
 print(issued["url"])
 print(urllib.parse.urlunsplit((url.scheme, url.netloc, url.path, "", "")))
+print(checksum)
 PY
 {
   IFS= read -r UPLOAD_UUID
-  IFS= read -r UPLOAD_URL
-  IFS= read -r MASKED_URL
+  IFS= read -r UPLOAD_KIND
+  if [ "$UPLOAD_KIND" = upload ]; then
+    IFS= read -r UPLOAD_URL
+    IFS= read -r MASKED_URL
+    IFS= read -r CHECKSUM_BASE64
+  fi
 } < "$TMP_DIR/issued"
 
 echo "  발급 성공  HTTP $STATUS · uuid=$UPLOAD_UUID"
-echo "  직접 업로드 PUT $MASKED_URL [서명 생략]"
+if [ "$UPLOAD_KIND" = reused ]; then
+  echo "  검증된 기존 파일을 재사용한다. PUT 전송을 생략한다."
+else
+  echo "  직접 업로드 PUT $MASKED_URL [서명 생략]"
 # Bearer는 앱 API에만 보낸다. --upload-file은 파일을 스트리밍하고 PUT을 사용한다.
 STATUS=$(curl --silent --show-error --connect-timeout 10 --max-time 300 \
   --output "$TMP_DIR/put-response" --write-out '%{http_code}' \
   --header "Content-Type: $CONTENT_TYPE" --header "Content-Length: $CONTENT_LENGTH" \
+  --header "x-amz-checksum-sha256: $CHECKSUM_BASE64" \
+  --header "x-amz-sdk-checksum-algorithm: SHA256" \
   --upload-file "$IMAGE" "$UPLOAD_URL")
 case "$STATUS" in
   2??) echo "  업로드 성공 HTTP $STATUS · $CONTENT_LENGTH bytes" ;;
   *) echo "  업로드 실패 HTTP $STATUS (주소 만료 또는 파일 형식·크기 변경을 확인한다)" >&2; exit 1 ;;
 esac
 echo "  보관소가 PUT을 수락했다. 형식 확인은 이 파일을 처음 입력으로 쓸 때 앱이 한다."
+fi
 echo
 printf '  SOURCE_TYPE=uploaded BASE_URL=%q ' "$BASE_URL"
 if [ -n "${USER_UUID:-}" ]; then

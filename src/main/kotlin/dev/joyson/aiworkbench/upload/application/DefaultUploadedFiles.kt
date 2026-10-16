@@ -17,7 +17,7 @@ import java.util.UUID
  * 올린 파일을 처음 쓰일 때 판정한다 — 있는가, 선언한 크기인가, 앞부분이 선언한 형식의 매직넘버인가.
  * 판정을 통과한 파일에만 읽기 주소를 낸다.
  *
- * 판정은 한 번이다. READY 와 REJECTED 는 다시 보지 않는다.
+ * READY 와 REJECTED 는 다시 보지 않는다. 형식 선언이 정정돼 PENDING 으로 열리면 새 조건으로 판정한다.
  */
 @Service
 class DefaultUploadedFiles(
@@ -59,8 +59,8 @@ class DefaultUploadedFiles(
         val matches = leading.totalSize == file.metadata.fileSize && detected == file.metadata.mimeType
         val next = if (matches) UploadStatus.READY else UploadStatus.REJECTED
 
-        if (!uploadedFileWriter.settle(requireNotNull(file.id), next)) {
-            // 다른 요청이 먼저 정했다. 같은 바이트를 봤다면 판정도 같지만, 그 사이 덮어쓰였을 수 있어 그쪽을 따른다.
+        if (!uploadedFileWriter.settle(file, next)) {
+            // 다른 요청이 먼저 판정했거나 형식을 정정했다. 지금 READY 인 파일만 반환한다.
             return uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, file.ownerUserUuid)
                 ?.takeIf { it.status == UploadStatus.READY }
                 ?.toUsable()

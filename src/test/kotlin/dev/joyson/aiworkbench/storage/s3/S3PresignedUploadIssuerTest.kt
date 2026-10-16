@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.storage.s3
 
+import dev.joyson.aiworkbench.storage.Sha256
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -36,10 +37,16 @@ class S3PresignedUploadIssuerTest {
         ttl = ttl,
     )
 
-    private fun put(url: URI, body: ByteArray, contentType: String): HttpResponse<String> =
+    private fun put(url: URI, body: ByteArray, contentType: String, checksum: String? = Sha256.of(body).base64()): HttpResponse<String> =
         HttpClient.newHttpClient().send(
             HttpRequest.newBuilder(url)
                 .header("Content-Type", contentType)
+                .apply {
+                    if (checksum != null) {
+                        header("x-amz-checksum-sha256", checksum)
+                        header("x-amz-sdk-checksum-algorithm", "SHA256")
+                    }
+                }
                 .PUT(HttpRequest.BodyPublishers.ofByteArray(body))
                 .build(),
             HttpResponse.BodyHandlers.ofString(),
@@ -49,7 +56,7 @@ class S3PresignedUploadIssuerTest {
     fun `발급한 주소로 올린 바이트를 보관소가 그대로 갖는다`() {
         val key = "uploads/a/aaaa.png"
 
-        val response = put(issuer().issueUpload(key, "image/png", png.size.toLong()), png, "image/png")
+        val response = put(issuer().issueUpload(key, "image/png", png.size.toLong(), Sha256.of(png)), png, "image/png")
 
         assertEquals(200, response.statusCode())
         // 앱을 통과하지 않고 들어온 바이트다.
@@ -65,7 +72,7 @@ class S3PresignedUploadIssuerTest {
     @Test
     fun `서명한 형식과 다르게 올리면 거부된다`() {
         val key = "uploads/a/bbbb.png"
-        val url = issuer().issueUpload(key, "image/png", png.size.toLong())
+        val url = issuer().issueUpload(key, "image/png", png.size.toLong(), Sha256.of(png))
 
         val response = put(url, png, "text/plain")
 
@@ -77,10 +84,29 @@ class S3PresignedUploadIssuerTest {
     @Test
     fun `서명한 크기와 다르게 올리면 거부된다`() {
         val key = "uploads/a/wrong-length.png"
-        val url = issuer().issueUpload(key, "image/png", png.size.toLong())
+        val url = issuer().issueUpload(key, "image/png", png.size.toLong(), Sha256.of(png))
 
         assertNotEquals(200, put(url, png + byteArrayOf(1), "image/png").statusCode())
         assertNull(storage.read(key), "거부됐는데 보관소에 남았다")
+    }
+
+    @Test
+    fun `같은 주소로 다른 내용을 올려도 검증된 원본은 그대로다`() {
+        val key = "uploads/a/checksum-original.png"
+        val url = issuer().issueUpload(key, "image/png", png.size.toLong(), Sha256.of(png))
+        assertEquals(200, put(url, png, "image/png").statusCode())
+        val changed = png.copyOf().also { it[3] = 0 }
+
+        // 서명된 헤더를 유지하면 내용 해시가 달라 거절한다.
+        assertNotEquals(200, put(url, changed, "image/png", Sha256.of(png).base64()).statusCode())
+        assertContentEquals(png, storage.read(key))
+        // 내용을 따라 헤더도 바꾸면 서명이 달라 거절한다.
+        assertNotEquals(200, put(url, changed, "image/png").statusCode())
+        assertContentEquals(png, storage.read(key))
+        assertNotEquals(200, put(url, png, "image/png", checksum = null).statusCode())
+        assertContentEquals(png, storage.read(key))
+        // 같은 바이트의 재전송은 허용한다.
+        assertEquals(200, put(url, png, "image/png").statusCode())
     }
 
     @Test
@@ -98,7 +124,7 @@ class S3PresignedUploadIssuerTest {
     fun `수명이 지난 주소로는 올릴 수 없다`() {
         // 쓰기 주소는 유출되면 남이 우리 보관소에 쓴다. 수명이 곧 그 창이다.
         val key = "uploads/a/dddd.png"
-        val url = issuer(ttl = Duration.ofSeconds(1)).issueUpload(key, "image/png", png.size.toLong())
+        val url = issuer(ttl = Duration.ofSeconds(1)).issueUpload(key, "image/png", png.size.toLong(), Sha256.of(png))
 
         Thread.sleep(1_500)
 
