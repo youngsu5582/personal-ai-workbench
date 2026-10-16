@@ -4,12 +4,14 @@ import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.ownership.OwnerContext
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.AssertTrue
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -64,6 +66,10 @@ data class GenerationRequest(
     @field:Max(4)
     val taskCount: Int,
 ) {
+    /** Decision API 한 요청은 여러 질문을 함께 답하므로 같은 요청을 여러 Task로 복제하지 않는다. */
+    @get:AssertTrue(message = "Decision 작업은 taskCount 가 1이어야 한다")
+    val hasValidTaskCount: Boolean get() = option !is DecisionOption || taskCount == 1
+
     fun toCommand(): GenerationCommand {
         return GenerationCommand(
             option = requireNotNull(option),

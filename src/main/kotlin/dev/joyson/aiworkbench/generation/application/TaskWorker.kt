@@ -10,6 +10,9 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
+import dev.joyson.aiworkbench.provider.ExternalApiRequest
+import dev.joyson.aiworkbench.provider.ExternalApiResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ProviderRegistry
@@ -89,14 +92,15 @@ class TaskWorker(
             }
         }
 
-        val stored = try {
+        val stored = if (response is ExternalApiGenerateResponse) try {
             store(job, response)
         } catch (e: FileStorageException) {
             stateWriter.fail(taskId, e.message ?: "결과를 보관하지 못했다", e.retryable)
             return
-        }
+        } else emptyList()
+        val result = (response as? ExternalApiDecisionResponse)?.let(TaskResultMapper::from)
 
-        stateWriter.succeed(taskId, stored)
+        stateWriter.succeed(taskId, stored, result)
         log.info(
             "task 처리를 완료했다. uuid={} 소요={}ms 파일={}",
             task.uuid,
@@ -131,15 +135,15 @@ class TaskWorker(
         task: GenerationJobTask,
         provider: ExternalApiProvider,
         images: List<ResolvedFile>,
-    ): ExternalApiGenerateResponse {
-        val request = ProviderRequestMapper.from(job.option, images)
+    ): ExternalApiResponse {
+        val request = ProviderRequestMapper.requestOf(job.option, images)
 
         // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
         // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.
         val calledAt = Instant.now()
         val callMark = TimeSource.Monotonic.markNow()
         val response = try {
-            provider.generate(job.model, request)
+            provider.execute(job.model, request)
         } catch (e: ExternalApiException) {
             record(
                 ProviderCallMapper.failed(
@@ -150,7 +154,7 @@ class TaskWorker(
             throw e
         }
 
-        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response))
         return response
     }
 

@@ -3,11 +3,16 @@ package dev.joyson.aiworkbench.generation
 import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswerResult
+import dev.joyson.aiworkbench.generation.domain.DecisionTaskResult
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
@@ -100,6 +105,39 @@ class GenerationJobPersistenceTest @Autowired constructor(
         assertEquals(sourceUuid, source.uuid)
         assertIs<ImageSize.ByRatio>(option.size)
         assertEquals("수채화로", option.prompt)
+    }
+
+    @Test
+    fun `Decision 옵션과 Task 결과가 각각의 다형으로 다시 읽힌다`() {
+        val job = GenerationJob(
+            ownerUserUuid = UUID.randomUUID(),
+            option = DecisionOption(
+                input = listOf(DecisionEvidence.Text("환불하고 싶어요")),
+                questions = listOf(
+                    dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion.Predicate(
+                        "needs_review", "사람 확인이 필요한가?",
+                    ),
+                ),
+            ),
+            model = "gpt-6-luna",
+            taskCount = 1,
+        ).also(em::persist)
+        em.flush()
+        val task = GenerationJobTask(jobId = job.id!!, sequence = 0).also {
+            it.result = DecisionTaskResult(listOf(DecisionAnswerResult.Predicate("needs_review", 0.9)))
+            em.persist(it)
+        }
+        em.flush()
+        em.clear()
+
+        val loadedJob = em.find(GenerationJob::class.java, job.id!!)!!
+        val loadedTask = em.find(GenerationJobTask::class.java, task.id!!)!!
+
+        assertEquals("환불하고 싶어요", assertIs<DecisionOption>(loadedJob.option).input.let { input ->
+            assertIs<DecisionEvidence.Text>(input.single()).text
+        })
+        val result = assertIs<DecisionTaskResult>(loadedTask.result)
+        assertEquals(0.9, assertIs<DecisionAnswerResult.Predicate>(result.answers.single()).probability)
     }
 
     /**

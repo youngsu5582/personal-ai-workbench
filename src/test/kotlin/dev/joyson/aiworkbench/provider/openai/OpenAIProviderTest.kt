@@ -7,6 +7,10 @@ import ch.qos.logback.core.read.ListAppender
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.DecisionAnswer
+import dev.joyson.aiworkbench.provider.DecisionInput
+import dev.joyson.aiworkbench.provider.DecisionQuestion
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageQuality
 import org.slf4j.LoggerFactory
@@ -72,6 +76,7 @@ class OpenAIProviderTest {
     fun `아는 모델만 지원한다고 답한다`() {
         assertTrue(provider.supports("gpt-image-2"))
         assertTrue(provider.supports("gpt-image-2.5-flare"))
+        assertFalse(provider.supports("gpt-6-luna"), "Decision 클라이언트가 없으면 지원한다고 답하면 안 된다")
         assertFalse(provider.supports("gemini-image"))
         // 사실 질의라 모르는 모델에도 예외를 던지지 않는다.
         assertFalse(provider.supports(""))
@@ -219,6 +224,74 @@ class OpenAIProviderTest {
 
         assertContentEquals(image, response.result[0].image)
         assertEquals("image/png", response.result[0].metadata.mimeType)
+    }
+
+    @Test
+    fun `Decision 텍스트와 이미지를 전용 계약으로 보내고 타입 있는 답을 받는다`() {
+        val encodedImage = Base64.getEncoder().encodeToString("근거 이미지".toByteArray())
+        server.expect(requestTo("$BASE_URL/v1/decisions"))
+            .andExpect(jsonPath("$.model").value("gpt-6-luna"))
+            .andExpect(jsonPath("$.input[0].role").value("user"))
+            .andExpect(jsonPath("$.input[0].content[0].type").value("input_text"))
+            .andExpect(jsonPath("$.input[0].content[0].text").value("환불하고 싶어요"))
+            .andExpect(jsonPath("$.input[0].content[1].type").value("input_image"))
+            .andExpect(jsonPath("$.input[0].content[1].image_url").value("data:image/png;base64,$encodedImage"))
+            .andExpect(jsonPath("$.questions[0].type").value("predicate"))
+            .andExpect(jsonPath("$.questions[1].choices[0].value").value("refund"))
+            .andExpect(jsonPath("$.questions[2].levels[1].label").value("high"))
+            .andRespond(
+                withSuccess(
+                    """{
+                      "answers":[
+                        {"type":"predicate","name":"needs_review","probability":0.9},
+                        {"type":"choice","name":"intent","choice":"refund","confidence":0.98},
+                        {"type":"score","name":"urgency","score":0.75,"confidence":0.8}
+                      ],
+                      "usage":{"input_tokens":42}
+                    }""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val decisionProvider = OpenAIProvider(
+            OpenAIImageClient(builder.build()),
+            OpenAIDecisionClient(builder.build()),
+        )
+        assertTrue(decisionProvider.supports("gpt-6-luna"))
+        val response = decisionProvider.execute(
+            "gpt-6-luna",
+            ExternalApiDecisionRequest(
+                input = listOf(
+                    DecisionInput.Text("환불하고 싶어요"),
+                    DecisionInput.Image(ExternalApiFileInput.Bytes("근거 이미지".toByteArray(), "image/png", "evidence.png")),
+                ),
+                questions = listOf(
+                    DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?"),
+                    DecisionQuestion.Choice(
+                        "intent", "의도를 고른다.",
+                        listOf(
+                            dev.joyson.aiworkbench.provider.DecisionChoice("refund", "환불 요청"),
+                            dev.joyson.aiworkbench.provider.DecisionChoice("other", "그 밖의 요청"),
+                        ),
+                    ),
+                    DecisionQuestion.Score(
+                        "urgency", "긴급도를 평가한다.",
+                        listOf(
+                            dev.joyson.aiworkbench.provider.DecisionLevel("low", "낮음"),
+                            dev.joyson.aiworkbench.provider.DecisionLevel("high", "높음"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val answers = response as dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
+        assertEquals(3, answers.answers.size)
+        assertEquals(0.9, (answers.answers[0] as DecisionAnswer.Predicate).probability)
+        assertEquals("refund", (answers.answers[1] as DecisionAnswer.Choice).choice)
+        assertEquals(0.75, (answers.answers[2] as DecisionAnswer.Score).score)
+        assertEquals(42, answers.usage?.raw?.get("input_tokens"))
+        server.verify()
     }
 
     /** 보내봐야 거절당하는 요청이라 왕복하지 않는다. 다시 보내도 같으므로 재시도 대상도 아니다. */

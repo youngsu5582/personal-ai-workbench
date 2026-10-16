@@ -7,6 +7,8 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -100,6 +102,7 @@ class GenerationJobService(
             // 입력을 요구하지 않는 종류다. 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
             is TextToImageOption -> return
             is ImageToImageOption -> option.sources
+            is DecisionOption -> option.input.filterIsInstance<DecisionEvidence.Image>().map { it.source }
         }
 
         sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }

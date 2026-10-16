@@ -2,6 +2,11 @@ package dev.joyson.aiworkbench.provider.openai
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
+import dev.joyson.aiworkbench.provider.DecisionAnswer
+import dev.joyson.aiworkbench.provider.DecisionInput
+import dev.joyson.aiworkbench.provider.DecisionQuestion
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import org.junit.jupiter.api.condition.EnabledIf
@@ -58,15 +63,12 @@ class OpenAIProviderLiveTest {
             // 이 API 는 동기라 이미지를 다 만들 때까지 연결이 열려 있다.
             setReadTimeout(java.time.Duration.ofMinutes(3))
         }
-        OpenAIProvider(
-            OpenAIImageClient(
-                RestClient.builder()
-                    .baseUrl("https://api.openai.com")
-                    .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer ${apiKey()!!}")
-                    .requestFactory(factory)
-                    .build(),
-            ),
-        )
+        val restClient = RestClient.builder()
+            .baseUrl("https://api.openai.com")
+            .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer ${apiKey()!!}")
+            .requestFactory(factory)
+            .build()
+        OpenAIProvider(OpenAIImageClient(restClient), OpenAIDecisionClient(restClient))
     }
 
     private val model: String get() = System.getenv("OPENAI_MODEL") ?: "gpt-image-2"
@@ -97,6 +99,26 @@ class OpenAIProviderLiveTest {
             .getOrThrow()
 
         assertPng(result.image)
+    }
+
+    /** API가 실제로 받아 주는 모델명·요청 모양과 답변/usage 계약을 한 번에 확인한다. */
+    @Test
+    fun decisionsApiAcceptsText() {
+        val response = provider.execute(
+            OpenAIProvider.DECISION_MODEL,
+            ExternalApiDecisionRequest(
+                input = listOf(DecisionInput.Text("다음 달부터 구독을 해지하고 싶어요.")),
+                questions = listOf(
+                    DecisionQuestion.Predicate("is_cancellation", "사용자가 구독 해지 의사를 밝혔는가?"),
+                ),
+            ),
+        ) as ExternalApiDecisionResponse
+
+        val answer = response.answers.single() as? DecisionAnswer.Predicate
+            ?: fail("predicate 답변을 기대했지만 ${response.answers.singleOrNull()} 이다")
+        assertTrue(answer.probability in 0.0..1.0, "확률 범위가 아니다: ${answer.probability}")
+        assertTrue(response.usage != null, "응답에 usage 가 없다")
+        println("Decision 응답: name=${answer.name}, probability=${answer.probability}, usage=${response.usage.raw}")
     }
 
     private fun generate(width: Int, height: Int, fileName: String): ExternalApiGenerateResult {

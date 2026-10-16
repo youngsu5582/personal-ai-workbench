@@ -46,5 +46,12 @@ interface ExternalApiProvider {
      * 제출하고 나중에 수확하는 Provider(영상 생성 쪽이 그럴 가능성이 높다)가 들어오면
      * `submit` / `poll` 로 갈라야 한다. 그때 이 메서드는 바뀐다.
      */
-    fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse
+    fun execute(model: String, request: ExternalApiRequest): ExternalApiResponse = when (request) {
+        is ExternalApiGenerateRequest -> generate(model, request)
+        else -> throw UnsupportedOperationException("이 Provider 가 요청 종류를 구현하지 않았다: ${request::class.simpleName}")
+    }
+
+    /** 이미지 Provider의 기존 계약. Decision 등 새 요청은 [execute]에서 다룬다. */
+    fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse =
+        throw UnsupportedOperationException("이 Provider 가 이미지 생성을 구현하지 않았다")
 }

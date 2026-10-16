@@ -9,6 +9,8 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.Instant
 import java.util.UUID
 
@@ -67,6 +69,11 @@ class GenerationJobTask(
 
     @Column(name = "failure_reason")
     var failureReason: String? = null,
+
+    /** 파일이 아닌 결과(Decision 답변 등)는 Task 에 붙인다. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "result")
+    var result: TaskResult? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),

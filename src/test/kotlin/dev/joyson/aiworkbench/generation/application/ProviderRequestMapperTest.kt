@@ -7,6 +7,12 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
+import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.DecisionInput
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import kotlin.test.assertIs
@@ -103,6 +109,25 @@ class ProviderRequestMapperTest {
         assertEquals("image/png", input.mimeType)
         assertEquals("source.png", input.filename)
         assertTrue(!input.toString().contains("secret"))
+    }
+
+    @Test
+    fun `Decision 은 텍스트와 이미지 근거를 순서대로 Provider 요청으로 옮긴다`() {
+        val option = DecisionOption(
+            input = listOf(
+                DecisionEvidence.Text("파손됐어요"),
+                DecisionEvidence.Image(FileSource.Uploaded(UUID.randomUUID())),
+            ),
+            questions = listOf(DecisionQuestion.Choice("kind", "무슨 문제인가", listOf(DecisionChoice("damage", "파손"), DecisionChoice("other", "기타")))),
+        )
+
+        val request = assertIs<ExternalApiDecisionRequest>(
+            mapper.requestOf(option, listOf(ResolvedFile.Bytes(byteArrayOf(1), "image/png", "evidence.png"))),
+        )
+
+        assertEquals("파손됐어요", assertIs<DecisionInput.Text>(request.input[0]).text)
+        assertIs<DecisionInput.Image>(request.input[1])
+        assertEquals("kind", request.questions.single().name)
     }
 
     private fun editOption() = ImageToImageOption(

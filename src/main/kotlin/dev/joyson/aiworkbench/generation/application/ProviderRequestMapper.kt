@@ -3,12 +3,21 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
+import dev.joyson.aiworkbench.provider.ExternalApiRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.DecisionInput
+import dev.joyson.aiworkbench.provider.DecisionQuestion as ProviderDecisionQuestion
+import dev.joyson.aiworkbench.provider.DecisionChoice
+import dev.joyson.aiworkbench.provider.DecisionLevel
 
 /**
  * 우리 도메인 어휘를 Provider 포트의 어휘로 옮긴다.
@@ -29,6 +38,14 @@ object ProviderRequestMapper {
      *   매핑 함수가 조회를 시작하면 호출자가 그 비용을 볼 수 없게 된다.
      *   기본값이 빈 목록이라 입력이 없는 종류를 옮길 때는 부르는 쪽이 달라지지 않는다.
      */
+    fun requestOf(
+        option: GenerationOption,
+        images: List<ResolvedFile> = emptyList(),
+    ): ExternalApiRequest = when (option) {
+        is DecisionOption -> decisionFrom(option, images)
+        else -> from(option, images)
+    }
+
     fun from(
         option: GenerationOption,
         images: List<ResolvedFile> = emptyList(),
@@ -57,6 +74,29 @@ object ProviderRequestMapper {
                 images = images.map { inputOf(it) },
             )
         }
+
+        is DecisionOption -> error("Decision 은 decisionFrom 으로 옮긴다")
+    }
+
+    private fun decisionFrom(option: DecisionOption, images: List<ResolvedFile>): ExternalApiDecisionRequest {
+        val resolved = images.iterator()
+        return ExternalApiDecisionRequest(
+            input = option.input.map { evidence -> when (evidence) {
+                is DecisionEvidence.Text -> DecisionInput.Text(evidence.text)
+                is DecisionEvidence.Image -> DecisionInput.Image(inputOf(resolved.next()))
+            } },
+            questions = option.questions.map(::decisionQuestionOf),
+        )
+    }
+
+    private fun decisionQuestionOf(question: DecisionQuestion): ProviderDecisionQuestion = when (question) {
+        is DecisionQuestion.Predicate -> ProviderDecisionQuestion.Predicate(question.name, question.instructions)
+        is DecisionQuestion.Choice -> ProviderDecisionQuestion.Choice(
+            question.name, question.instructions, question.choices.map { DecisionChoice(it.value, it.description) },
+        )
+        is DecisionQuestion.Score -> ProviderDecisionQuestion.Score(
+            question.name, question.instructions, question.levels.map { DecisionLevel(it.label, it.description) },
+        )
     }
 
     /** 준비한 입력 이미지를 포트의 어휘로 옮긴다. */

@@ -78,6 +78,12 @@ class GenerationJobApiTest @Autowired constructor(
         request(body(taskCount = -1)).andExpect { status { isBadRequest() } }
     }
 
+    /** 한 Decision 호출은 여러 질문을 함께 답한다. Task를 늘리면 같은 비용이 중복된다. */
+    @Test
+    fun `Decision 작업을 여러 Task로 접수하면 400 이다`() {
+        request(body(taskCount = 2, option = DECISION_OPTION)).andExpect { status { isBadRequest() } }
+    }
+
     /**
      * 접수를 통과시키면 몇 분 뒤 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 재시도해도 같아서, 큐 자리와 재시도 횟수만 태운다.
@@ -167,3 +173,8 @@ private object GenerationRequestConstraints {
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
 private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
 private const val OPTION = """{"type":"text-to-image","prompt":"고양이","size":$SIZE}"""
+private const val DECISION_OPTION = """{
+  "type":"decision",
+  "input":[{"type":"text","text":"환불하고 싶어요"}],
+  "questions":[{"type":"predicate","name":"needs_review","instructions":"사람 확인이 필요한가?"}]
+}"""

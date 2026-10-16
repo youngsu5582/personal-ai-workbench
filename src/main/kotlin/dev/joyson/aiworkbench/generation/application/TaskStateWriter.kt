@@ -8,6 +8,7 @@ import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.TaskResult
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -64,7 +65,7 @@ class TaskStateWriter(
      * 바꿔 이긴 쪽만 파일을 쓰게 한다 — Job 을 닫을 때 쓰는 것과 같은 방법이다.
      */
     @Transactional
-    fun succeed(taskId: Long, files: List<StoredFile>) {
+    fun succeed(taskId: Long, files: List<StoredFile>, result: TaskResult? = null) {
         val task = taskRepository.findById(taskId) ?: return
 
         generatedFileRepository.saveAll(
@@ -78,6 +79,7 @@ class TaskStateWriter(
                 )
             },
         )
+        task.result = result
         task.transitionTo(TaskStatus.SUCCEEDED)
         closeIfFinished(task)
     }

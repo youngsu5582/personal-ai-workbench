@@ -6,6 +6,7 @@ import dev.joyson.aiworkbench.generation.application.GenerationJobView
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
+import dev.joyson.aiworkbench.generation.domain.TaskResult
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import java.time.Instant
 import java.util.UUID
@@ -33,6 +34,7 @@ data class TaskResponse(
     val status: TaskStatus,
     val failureReason: String?,
     val files: List<FileResponse>,
+    val result: TaskResult?,
 )
 
 data class FileResponse(
@@ -74,6 +76,7 @@ private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
     status = status,
     failureReason = failureReason,
     files = files.map { it.toResponse() },
+    result = result,
 )
 
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(

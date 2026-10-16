@@ -6,4 +6,6 @@ enum class GenerationJobType(@get:JsonValue val value: String) {
     TEXT_TO_IMAGE("text-to-image"),
 
     IMAGE_TO_IMAGE("image-to-image"),
+
+    DECISION("decision"),
 }

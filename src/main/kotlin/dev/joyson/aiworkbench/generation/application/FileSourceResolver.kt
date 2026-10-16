@@ -6,6 +6,8 @@ import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
@@ -53,6 +55,7 @@ class FileSourceResolver(
     fun resolve(ownerUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
         is TextToImageOption -> emptyList()
         is ImageToImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
+        is DecisionOption -> option.input.filterIsInstance<DecisionEvidence.Image>().map { prepare(it.source, ownerUuid, inline) }
     }
 
     private fun prepare(source: FileSource, ownerUuid: UUID, inline: Boolean): ResolvedFile = when (source) {
