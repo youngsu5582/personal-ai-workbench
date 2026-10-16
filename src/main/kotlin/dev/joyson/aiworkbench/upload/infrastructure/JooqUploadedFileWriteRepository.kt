@@ -18,10 +18,9 @@ class JooqUploadedFileWriteRepository(
     private val entityManager: EntityManager,
 ) : UploadedFileWriteRepository {
 
-    override fun insertIfAbsent(uuid: UUID, owner: UUID, key: String, spec: UploadSpec, at: Instant): Int =
+    override fun insertIfAbsent(owner: UUID, key: String, spec: UploadSpec, at: Instant): Int =
         write {
             dsl.insertInto(UPLOADED_FILES)
-                .set(UPLOADED_FILES.UUID, uuid)
                 .set(UPLOADED_FILES.OWNER_USER_UUID, owner)
                 .set(UPLOADED_FILES.STORAGE_KEY, key)
                 .set(UPLOADED_FILES.SHA256, spec.digest.hex)

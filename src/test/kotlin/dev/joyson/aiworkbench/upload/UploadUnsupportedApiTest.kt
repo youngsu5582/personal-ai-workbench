@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.upload
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand

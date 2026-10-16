@@ -103,6 +103,6 @@ class GenerationJobService(
         }
 
         sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }
-            ?.let { throw UnknownFileSourceException(it.uuid) }
+            ?.let { throw UnknownFileSourceException(it.sha256) }
     }
 }

@@ -49,10 +49,10 @@ class UploadServiceTest @Autowired constructor(
     }
 
     @Test
-    fun `다른 사용자는 같은 해시라도 별도 UUID 와 객체를 가진다`() {
+    fun `다른 사용자는 같은 해시라도 같은 해시와 별도 객체를 가진다`() {
         val first = assertNotNull(service.issue(UUID.randomUUID(), spec))
         val second = assertNotNull(service.issue(UUID.randomUUID(), spec))
-        assertNotEquals(first.uuid, second.uuid)
+        assertEquals(first.sha256, second.sha256)
         assertNotEquals(first.url, second.url)
     }
 
@@ -60,9 +60,9 @@ class UploadServiceTest @Autowired constructor(
     fun `READY 중복은 보관소를 읽거나 쓰기 주소를 발급하지 않는다`() {
         val owner = UUID.randomUUID()
         val issued = assertNotNull(service.issue(owner, spec))
-        val file = assertNotNull(repository.findByUuidAndOwnerUserUuid(issued.uuid, owner))
+        val file = assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, issued.sha256))
         storage.put(file.storageKey, png, "image/png")
-        files.findUsable(file.uuid, owner)
+        files.findUsable(file.sha256, owner)
 
         val noRead = object : FileStorage by storage {
             override fun readRange(key: String, range: LongRange): Nothing = error("READY 를 다시 읽었다")
@@ -70,7 +70,7 @@ class UploadServiceTest @Autowired constructor(
         val noSign = PresignedUploadIssuer { _, _, _, _ -> error("READY 에 쓰기 권한을 발급했다") }
         val readyService = UploadService(noSign, repository, writer, DefaultUploadedFiles(repository, writer, noRead))
         val reused = assertNotNull(readyService.issue(owner, spec))
-        assertEquals(issued.uuid, reused.uuid)
+        assertEquals(issued.sha256, reused.sha256)
         assertNull(reused.url)
     }
 
@@ -79,16 +79,16 @@ class UploadServiceTest @Autowired constructor(
         val owner = UUID.randomUUID()
         val wrongSpec = UploadSpec("image/jpeg", png.size.toLong(), digest)
         val issued = assertNotNull(service.issue(owner, wrongSpec))
-        val oldPending = assertNotNull(repository.findByUuidAndOwnerUserUuid(issued.uuid, owner))
+        val oldPending = assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, issued.sha256))
         assertTrue(writer.settle(oldPending, UploadStatus.REJECTED))
-        val rejected = assertNotNull(repository.findByUuidAndOwnerUserUuid(issued.uuid, owner))
+        val rejected = assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, issued.sha256))
         assertTrue(writer.reopen(rejected, BlobKey.uploaded(owner, digest, "image/png").value, spec))
-        val corrected = assertNotNull(repository.findByUuidAndOwnerUserUuid(issued.uuid, owner))
+        val corrected = assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, issued.sha256))
 
         assertFalse(writer.settle(oldPending, UploadStatus.REJECTED))
         assertFalse(writer.reopen(rejected, "stale-key", wrongSpec))
         assertEquals("image/png", corrected.metadata.mimeType)
-        assertEquals(UploadStatus.PENDING, repository.findByUuidAndOwnerUserUuid(issued.uuid, owner)?.status)
+        assertEquals(UploadStatus.PENDING, repository.findByOwnerUserUuidAndSha256(owner, issued.sha256)?.status)
     }
 
     @Test
@@ -106,16 +106,16 @@ class UploadServiceTest @Autowired constructor(
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    fun `동시 최초 발급도 한 행과 한 UUID 를 공유한다`() {
+    fun `동시 최초 발급도 한 행과 한 해시를 공유한다`() {
         val owner = UUID.randomUUID()
         val key = BlobKey.uploaded(owner, digest, "image/png").value
         val gate = CountDownLatch(1)
         val pool = Executors.newFixedThreadPool(4)
         try {
             val futures = List(4) {
-                pool.submit<UUID> {
+                pool.submit<String> {
                     assertTrue(gate.await(10, TimeUnit.SECONDS))
-                    writer.createOrFind(owner, key, spec).uuid
+                    writer.createOrFind(owner, key, spec).sha256
                 }
             }
             gate.countDown()

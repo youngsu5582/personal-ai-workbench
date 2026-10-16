@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.util.UUID
 
 @RestController
 @RequestMapping("/api/uploads")
@@ -35,7 +34,7 @@ class UploadController(
 
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
             UploadResponse(
-                uuid = upload.uuid,
+                sha256 = upload.sha256,
                 uploadRequired = upload.url != null,
                 url = upload.url?.toString(),
                 method = if (upload.url != null) "PUT" else null,
@@ -66,7 +65,7 @@ data class UploadRequest(
 }
 
 data class UploadResponse(
-    val uuid: UUID,
+    val sha256: String,
     val uploadRequired: Boolean,
     val url: String?,
     val method: String?,

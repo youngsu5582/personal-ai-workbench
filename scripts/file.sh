@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 결과물이 어떤 길로 내려오는지 확인한다.
 #
-#   ./scripts/file.sh <file-uuid>              # files API 만 본다
+#   ./scripts/file.sh <file-sha256>              # files API 만 본다
 #   ./scripts/file.sh --job <job-uuid>         # Job 의 파일들을 전부 본다
-#   KEEP=1 ./scripts/file.sh <file-uuid>       # 받은 파일을 지우지 않는다
-#   BASE_URL=http://localhost:8099 ./scripts/file.sh <file-uuid>
+#   KEEP=1 ./scripts/file.sh <file-sha256>       # 받은 파일을 지우지 않는다
+#   BASE_URL=http://localhost:8099 ./scripts/file.sh <file-sha256>
 #
 # 보관소에 따라 응답이 갈린다. 이 스크립트는 그 차이를 그대로 보여준다.
 #   local : 200 + 바이트 (앱이 읽어 내보낸다)
@@ -38,9 +38,9 @@ for line in sys.stdin:
 
 # ── files API ────────────────────────────────────────────────────────────
 check_file() {
-  local uuid="$1" url="$BASE_URL/api/files/$1"
+  local sha256="$1" url="$BASE_URL/api/files/$1"
 
-  echo "  파일 $uuid"
+  echo "  파일 $sha256"
 
   # 1) 리다이렉트를 따라가지 않는다. 앱이 무엇을 답하는지 그대로 본다.
   local head status location
@@ -100,12 +100,12 @@ import json, sys
 job = json.load(sys.stdin)
 for task in job.get("tasks", []):
     for f in task.get("files", []):
-        print(f["uuid"], f.get("previewUrl") or "")
-' | while read -r uuid preview; do
-    check_file "$uuid"
+        print(f["sha256"], f.get("previewUrl") or "")
+' | while read -r sha256 preview; do
+    check_file "$sha256"
     check_preview "$preview"
     echo
   done
 else
-  check_file "${1:?사용법: ./scripts/file.sh <file-uuid>  또는  --job <job-uuid>}"
+  check_file "${1:?사용법: ./scripts/file.sh <file-sha256>  또는  --job <job-uuid>}"
 fi

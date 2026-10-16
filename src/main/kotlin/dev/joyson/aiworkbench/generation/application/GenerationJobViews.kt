@@ -43,12 +43,12 @@ data class GenerationJobTaskView(
  * 지금은 한 장뿐이다. 변형(썸네일 등)이 생기면 번호가 아니라 종류로 구분한다.
  */
 data class GeneratedFileView(
-    val uuid: UUID,
+    val sha256: String,
     val metadata: FileMetadata,
     /**
      * 보관소에서 **바로** 받아갈 수 있는 주소. 서명할 수 없는 보관소면 `null`.
      *
-     * 우리 경로(`/api/files/{uuid}`)는 web 계층이 만들지만 이 값은 여기서 만든다.
+     * 우리 경로(`/api/files/{sha256}`)는 web 계층이 만들지만 이 값은 여기서 만든다.
      * **우리 라우팅이 아니라 보관소가 정한 주소**이기 때문이다 — web 은 저 호스트를 알지 못하고,
      * 만들려면 보관소 키가 필요한데 그건 이 계층의 사실이다.
      *
@@ -70,10 +70,10 @@ data class GeneratedFileView(
  */
 internal fun GeneratedFile.toView(presignedUrlIssuer: PresignedUrlIssuer?): GeneratedFileView =
     GeneratedFileView(
-        uuid = uuid,
+        sha256 = sha256,
         metadata = metadata,
         previewUrl = presignedUrlIssuer
-            ?.issue(storageKey, downloadFileNameOf(uuid, metadata.mimeType))
+            ?.issue(storageKey, downloadFileNameOf(sha256, metadata.mimeType))
             ?.toString(),
     )
 

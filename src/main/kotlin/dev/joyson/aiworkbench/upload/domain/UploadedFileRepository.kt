@@ -14,9 +14,6 @@ interface UploadedFileRepository : Repository<UploadedFile, Long> {
 
     fun findByOwnerUserUuidAndSha256(ownerUserUuid: UUID, sha256: String): UploadedFile?
 
-    /** 남의 것은 없는 것과 같게 `null` 이다 — 다르게 답하면 "그 uuid 는 존재한다" 가 새어 나간다. */
-    fun findByUuidAndOwnerUserUuid(uuid: UUID, ownerUserUuid: UUID): UploadedFile?
-
     /**
      * [expected] 상태일 때만 [next] 로 옮긴다. 여러 요청이 같은 행을 동시에 옮겨도 한 번만 바뀐다.
      *

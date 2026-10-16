@@ -19,7 +19,7 @@ class UploadedFileWriter(
     @Transactional
     fun createOrFind(owner: UUID, key: String, spec: UploadSpec): UploadedFile {
         uploadedFileWriteRepository.insertIfAbsent(
-            uuid = UUID.randomUUID(), owner = owner, key = key, spec = spec, at = Instant.now(),
+            owner = owner, key = key, spec = spec, at = Instant.now(),
         )
         return requireNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(owner, spec.digest.hex))
     }

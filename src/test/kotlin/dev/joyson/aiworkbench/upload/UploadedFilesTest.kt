@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.upload
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PartialContent
@@ -31,10 +32,10 @@ class UploadedFilesTest @Autowired constructor(
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52)
 
     private fun pending(mimeType: String = "image/png", fileSize: Long = png.size.toLong()): UploadedFile {
-        val uuid = UUID.randomUUID()
+        val uuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         return uploadedFileRepository.save(
             UploadedFile(
-                uuid = uuid,
+                sha256 = uuid,
                 ownerUserUuid = owner,
                 storageKey = "users/$owner/uploads/$uuid",
                 metadata = UploadedFileMetadata(mimeType = mimeType, fileSize = fileSize),
@@ -43,14 +44,14 @@ class UploadedFilesTest @Autowired constructor(
     }
 
     private fun statusOf(file: UploadedFile) =
-        uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, owner)?.status
+        uploadedFileRepository.findByOwnerUserUuidAndSha256(owner, file.sha256)?.status
 
     @Test
     fun `선언한 형식과 크기로 올라왔으면 READY 로 남기고 쓸 수 있다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
 
-        assertEquals(UsableUpload("image/png"), uploadedFiles.findUsable(file.uuid, owner))
+        assertEquals(UsableUpload("image/png"), uploadedFiles.findUsable(file.sha256, owner))
         assertEquals(UploadStatus.READY, statusOf(file))
     }
 
@@ -58,7 +59,7 @@ class UploadedFilesTest @Autowired constructor(
     fun `아직 안 올라왔으면 판정하지 않는다`() {
         val file = pending()
 
-        assertNull(uploadedFiles.findUsable(file.uuid, owner))
+        assertNull(uploadedFiles.findUsable(file.sha256, owner))
         assertEquals(UploadStatus.PENDING, statusOf(file))
     }
 
@@ -69,7 +70,7 @@ class UploadedFilesTest @Autowired constructor(
         val file = pending(fileSize = zip.size.toLong())
         fileStorage.put(file.storageKey, zip, "image/png")
 
-        assertNull(uploadedFiles.findUsable(file.uuid, owner))
+        assertNull(uploadedFiles.findUsable(file.sha256, owner))
         assertEquals(UploadStatus.REJECTED, statusOf(file))
         assertNull(fileStorage.read(file.storageKey))
     }
@@ -79,7 +80,7 @@ class UploadedFilesTest @Autowired constructor(
         val file = pending(fileSize = png.size + 1L)
         fileStorage.put(file.storageKey, png, "image/png")
 
-        assertNull(uploadedFiles.findUsable(file.uuid, owner))
+        assertNull(uploadedFiles.findUsable(file.sha256, owner))
         assertEquals(UploadStatus.REJECTED, statusOf(file))
     }
 
@@ -87,11 +88,11 @@ class UploadedFilesTest @Autowired constructor(
     fun `READY 는 보관소를 다시 보지 않는다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
-        uploadedFiles.findUsable(file.uuid, owner)
+        uploadedFiles.findUsable(file.sha256, owner)
         // 판정 뒤 객체가 사라져도 다시 확인하지 않는다.
         fileStorage.delete(file.storageKey)
 
-        assertEquals(UsableUpload("image/png"), uploadedFiles.findUsable(file.uuid, owner))
+        assertEquals(UsableUpload("image/png"), uploadedFiles.findUsable(file.sha256, owner))
     }
 
     @Test
@@ -99,7 +100,7 @@ class UploadedFilesTest @Autowired constructor(
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
 
-        assertNull(uploadedFiles.findUsable(file.uuid, UUID.randomUUID()))
+        assertNull(uploadedFiles.findUsable(file.sha256, UUID.randomUUID()))
         assertEquals(UploadStatus.PENDING, statusOf(file))
     }
 
@@ -107,11 +108,11 @@ class UploadedFilesTest @Autowired constructor(
     fun `READY 인 업로드에는 그 자리의 읽기 주소를 낸다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
-        uploadedFiles.findUsable(file.uuid, owner)
+        uploadedFiles.findUsable(file.sha256, owner)
 
-        val url = withIssuer().issueReadUrl(file.uuid, owner, "${file.uuid}.png")
+        val url = withIssuer().issueReadUrl(file.sha256, owner, "${file.sha256}.png")
 
-        assertEquals(URI.create("https://storage.test/${file.storageKey}?name=${file.uuid}.png"), url)
+        assertEquals(URI.create("https://storage.test/${file.storageKey}?name=${file.sha256}.png"), url)
     }
 
     @Test
@@ -119,7 +120,7 @@ class UploadedFilesTest @Autowired constructor(
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
 
-        assertNull(withIssuer().issueReadUrl(file.uuid, owner, "${file.uuid}.png"))
+        assertNull(withIssuer().issueReadUrl(file.sha256, owner, "${file.sha256}.png"))
         assertEquals(UploadStatus.PENDING, statusOf(file))
     }
 
@@ -127,13 +128,13 @@ class UploadedFilesTest @Autowired constructor(
     fun `READY 인 업로드만 바이트를 내준다`() {
         val ready = pending()
         fileStorage.put(ready.storageKey, png, "image/png")
-        uploadedFiles.findUsable(ready.uuid, owner)
+        uploadedFiles.findUsable(ready.sha256, owner)
         val notJudged = pending()
         fileStorage.put(notJudged.storageKey, png, "image/png")
 
-        assertContentEquals(png, uploadedFiles.readContent(ready.uuid, owner))
-        assertNull(uploadedFiles.readContent(notJudged.uuid, owner))
-        assertNull(uploadedFiles.readContent(ready.uuid, UUID.randomUUID()))
+        assertContentEquals(png, uploadedFiles.readContent(ready.sha256, owner))
+        assertNull(uploadedFiles.readContent(notJudged.sha256, owner))
+        assertNull(uploadedFiles.readContent(ready.sha256, UUID.randomUUID()))
     }
 
     /** 공통 설정은 로컬 보관소라 서명 발급자가 없다. 주소의 모양만 보면 되므로 가짜를 붙인다. */
@@ -160,7 +161,7 @@ class UploadedFilesTest @Autowired constructor(
             }
         }
 
-        val result = DefaultUploadedFiles(uploadedFileRepository, uploadedFileWriter, racing).findUsable(file.uuid, owner)
+        val result = DefaultUploadedFiles(uploadedFileRepository, uploadedFileWriter, racing).findUsable(file.sha256, owner)
 
         assertNull(result)
         assertEquals(UploadStatus.REJECTED, statusOf(file))

@@ -13,14 +13,14 @@ sequenceDiagram
     C->>C: 매직넘버 · 크기 · SHA-256 계산
     C->>A: POST /api/uploads
     alt 검증된 같은 파일이 있다
-        A-->>C: 기존 uuid · uploadRequired=false
+        A-->>C: 기존 sha256 · uploadRequired=false
     else 새 파일이거나 아직 올라오지 않았다
-        A-->>C: uuid · PUT 주소 · 서명된 헤더
+        A-->>C: sha256 · PUT 주소 · 서명된 헤더
         C->>S: PUT (Content-Type · 크기 · SHA-256)
         S->>S: 서명과 내용 해시 검증
         S-->>C: 200
     end
-    C->>A: POST /api/jobs (uploaded uuid)
+    C->>A: POST /api/jobs (uploaded sha256)
     A->>S: 처음 참조면 앞부분 Range GET
     A->>A: 크기 · 매직넘버가 맞으면 READY
     A-->>C: 202
@@ -41,9 +41,9 @@ SHA-256 을 함께 서명하면 같은 주소의 재전송도 같은 바이트�
 ## 소유자 안에서 중복을 판정한다
 
 정체성은 `(owner_user_uuid, sha256)` 이다. 사용자 사이에서 같은 해시를 조회하면 남의 파일 보관 여부가 새어 나간다.
-밖에는 해시 대신 UUID 를 내준다. 해시 알고리즘과 보관소 키를 외부 식별자 계약에 묶지 않기 위해서다.
+업로드와 생성 결과 모두 SHA-256 을 공개 파일 식별자로 쓴다. 같은 바이트의 생성 결과 행은 Task 이력을 위해 각각 남는다.
 
-- READY: PUT 주소 없이 기존 UUID 를 돌려준다. 보관소를 다시 읽지 않는다.
+- READY: PUT 주소 없이 기존 SHA-256 를 돌려준다. 보관소를 다시 읽지 않는다.
 - PENDING: 중복 발급이면 보관소의 앞부분을 한 번 읽어 판정한다. 아직 객체가 없으면 같은 위치의 주소를 다시 발급한다.
 - REJECTED: 같은 형식의 요청은 400 이다. 다른 형식으로 정정하면 같은 행을 PENDING 으로 다시 연다.
   PNG 를 JPEG 라고 선언한 탓에 같은 파일을 영원히 올리지 못하게 해서는 안 된다.
@@ -71,7 +71,7 @@ PNG·JPEG·WebP 를 허용하고, 디코드와 재인코딩은 실제로 이미�
 
 판정 전과 REJECTED 에는 읽기 주소도 바이트도 내주지 않는다.
 아직 올라오지 않은 파일은 PENDING 에 남고, 올린 뒤 다시 참조할 수 있다.
-외부 입력으로 쓸 때는 워커가 읽기 주소를 발급한다. 대기 중 주소가 만료되지 않게 큐에는 UUID 만 둔다.
+외부 입력으로 쓸 때는 워커가 읽기 주소를 발급한다. 대기 중 주소가 만료되지 않게 큐에는 파일 해시만 둔다.
 Provider 가 주소를 받아가지 못하면 같은 입력을 바이트로 한 번 더 보낸다.
 
 ## complete API 와 검증 후 이동을 두지 않는 이유
@@ -85,9 +85,21 @@ READY 도 업로드 위치에 남으므로 prefix lifecycle 로 지우면 안 �
 
 ## 기존 데이터
 
-새 마이그레이션은 `uploaded_files.sha256` 을 nullable 로 더한다.
-기존 객체를 읽지 않고 해시를 채울 수 없으므로 옛 행과 UUID 경로는 유지한다.
-해시가 없는 기존 업로드는 중복 판정 대상이 아니다. 이미 발급된 옛 URL 의 조건도 소급해 바꾸지 못한다.
-신규 발급에는 SHA-256 이 필수다.
+V8 은 생성 결과의 해시 컬럼을 준비하고, 일회성 `.claude/scripts/migrate-file-hashes.py` 가 기존 행과 Job 입력 JSON 을 변환한다.
+해시 경로인 결과는 키에서 복원하고, UUID 경로의 업로드는 바이트를 읽어 계산한다.
+V9 는 변환이 끝난 뒤 해시를 NOT NULL 로 고정하고 파일 UUID 컬럼을 제거한다. 사용자·Job·Task 의 UUID 는 유지한다.
+도구는 기본 dry-run 이며, 실행 시 DB 백업·원본 JSON·UUID→해시 매핑·SQL·검증 결과를 남긴다.
+유실 파일을 제외하려면 `--skip-missing` 을 명시한다. 해당 파일과 연결된 요청은 백업 후 활성 테이블에서 제외하며 사용량 원장은 유지한다.
+
+기존 DB 는 앱과 워커를 멈춘 뒤 다음 순서로 변환한다. 빈 DB 는 이 과정 없이 Flyway 를 적용한다.
+
+```bash
+python3 .claude/scripts/migrate-file-hashes.py                 # 대상 확인
+python3 .claude/scripts/migrate-file-hashes.py --apply         # 백업 → V8 → 변환 → V9
+# 유실 파일도 제외하기로 했다면 위 두 명령에 --skip-missing 을 추가한다.
+```
+
+설정은 기본적으로 워크트리의 `.env` 를 읽는다. 실제 로컬 보관소 주소가 다르면 `--s3-endpoint` 를 지정한다.
+해시를 아직 채우지 않은 기존 DB 에서 앱을 먼저 시작하면 V9 의 NOT NULL 검증이 실패한다.
 
 API 와 클라이언트 사용법은 [개발 가이드](../development.md#직접-업로드-url-발급)에 있다.

@@ -30,17 +30,13 @@ class UploadedFile(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
-    /** 외부로 노출하는 식별자. */
-    @Column(nullable = false, unique = true, updatable = false)
-    val uuid: UUID = UUID.randomUUID(),
-
     /** 다른 모듈의 행을 가리키므로 FK 없이 uuid 로 둔다 — 근거는 `V2__owner_user_uuid.sql`. */
     @Column(name = "owner_user_uuid", nullable = false, updatable = false)
     val ownerUserUuid: UUID,
 
-    /** 옛 행은 내용을 읽지 않고 해시를 채울 수 없어 null 로 남긴다. 신규 발급에는 SHA-256 이 필수다. */
-    @Column(length = 64, updatable = false)
-    val sha256: String? = null,
+    /** 소유자와 함께 파일을 찾는 공개 식별자. 기존 행은 일회성 변환 후 NOT NULL 로 고정한다. */
+    @Column(length = 64, nullable = false, updatable = false)
+    val sha256: String,
 
     /** 보관소에서의 위치. **이 모듈 밖으로 내보내지 않는다** — 바이트나 읽기 주소가 필요한 쪽은 이 모듈에 부탁한다. */
     @Column(name = "storage_key", nullable = false, unique = true)

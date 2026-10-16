@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import java.net.URI
@@ -16,10 +17,10 @@ import kotlin.test.assertNull
  */
 class GenerationJobViewsTest {
 
-    private val fileUuid = UUID.randomUUID()
+    private val fileUuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
 
     private val file = GeneratedFile(
-        uuid = fileUuid,
+        sha256 = fileUuid,
         taskId = 1L,
         storageKey = "users/o/blobs/ab/cd/abcd.png",
         metadata = FileMetadata(width = 1024, height = 1024, mimeType = "image/png", fileSize = 100),

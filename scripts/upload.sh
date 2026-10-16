@@ -71,10 +71,12 @@ fi
 
 # 응답의 서명 URL은 출력하지 않고 전송에만 사용한다.
 python3 - "$TMP_DIR/response.json" "$CONTENT_TYPE" "$CONTENT_LENGTH" "$SHA256" > "$TMP_DIR/issued" <<'PY'
-import base64, json, sys, urllib.parse, uuid
+import base64, json, re, sys, urllib.parse
 with open(sys.argv[1]) as response:
     issued = json.load(response)
-print(uuid.UUID(issued["uuid"]))
+if issued.get("sha256") != sys.argv[4] or not re.fullmatch("[0-9a-f]{64}", issued["sha256"]):
+    sys.exit("발급 응답의 파일 해시가 요청과 다르다.")
+print(issued["sha256"])
 if issued["uploadRequired"] is False:
     print("reused")
     sys.exit(0)
@@ -93,7 +95,7 @@ print(urllib.parse.urlunsplit((url.scheme, url.netloc, url.path, "", "")))
 print(checksum)
 PY
 {
-  IFS= read -r UPLOAD_UUID
+  IFS= read -r UPLOADED_SHA256
   IFS= read -r UPLOAD_KIND
   if [ "$UPLOAD_KIND" = upload ]; then
     IFS= read -r UPLOAD_URL
@@ -102,7 +104,7 @@ PY
   fi
 } < "$TMP_DIR/issued"
 
-echo "  발급 성공  HTTP $STATUS · uuid=$UPLOAD_UUID"
+echo "  발급 성공  HTTP $STATUS · sha256=$UPLOADED_SHA256"
 if [ "$UPLOAD_KIND" = reused ]; then
   echo "  검증된 기존 파일을 재사용한다. PUT 전송을 생략한다."
 else
@@ -125,4 +127,4 @@ printf '  SOURCE_TYPE=uploaded BASE_URL=%q ' "$BASE_URL"
 if [ -n "${USER_UUID:-}" ]; then
   printf 'USER_UUID=%q ' "$USER_UUID"
 fi
-printf './scripts/i2i.sh %s "<프롬프트>"\n' "$UPLOAD_UUID"
+printf './scripts/i2i.sh %s "<프롬프트>"\n' "$UPLOADED_SHA256"
