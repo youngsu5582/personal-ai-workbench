@@ -56,7 +56,7 @@ class UsageController(
 /**
  * [costComplete] 를 빼지 않는다.
  *
- * 단가표가 붙기 전에는 [costUsd] 가 null 이거나 일부만 더한 값이다.
+ * 비용이 아직 안 붙었거나 단가표에 없는 호출이 있으면 [costUsd] 는 null 이거나 일부만 더한 값이다.
  * 이 플래그가 없으면 화면이 그것을 "0 달러 썼다" 로 읽는다.
  */
 data class UsageSummaryResponse(

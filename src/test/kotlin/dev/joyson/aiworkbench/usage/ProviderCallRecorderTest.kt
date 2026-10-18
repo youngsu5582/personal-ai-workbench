@@ -1,7 +1,6 @@
 package dev.joyson.aiworkbench.usage
 
 import dev.joyson.aiworkbench.IntegrationTest
-import dev.joyson.aiworkbench.usage.domain.CostBasis
 import dev.joyson.aiworkbench.usage.domain.ProviderCall
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
@@ -82,38 +81,34 @@ class ProviderCallRecorderTest @Autowired constructor(
         val loaded = reload(recorder.record(command(usageRaw = null)))
 
         assertNull(loaded.usageRaw)
-        assertNull(loaded.cost)
-        assertEquals(2048, assertIs<ImageRequest>(loaded.request).width)
+        val request = assertIs<ImageRequest>(loaded.request, "종류를 잃었다")
+        // 토큰을 주지 않는 Provider 에서는 실제로 보낸 크기·품질이 유일한 계산 근거다. Job 어디에도 없는 값이다.
+        assertEquals(2048, request.width)
+        assertEquals(1152, request.height)
+        assertEquals("high", request.quality)
         assertEquals(12_345, loaded.latencyMs)
     }
 
     /**
-     * Provider 가 달러로 답하면 그것이 곧 비용이다. 계산이 아니라 같은 사실을 제자리에 옮기는 것이라
-     * 단가표가 없는 지금도 채워진다. 이 행이 있어야 나중의 소급 계산이 "덮으면 안 되는 행" 을 가려낼 수 있다.
+     * Provider 가 답한 금액은 단위와 함께 사실로 남는다. 그것을 비용으로 옮기는 일은 여기서 하지 않는다 —
+     * 비용 행이 있는지가 "그 호출을 봤는가" 의 표시라 한 경로로만 만들어진다.
      */
     @Test
-    fun `Provider 가 달러로 답하면 실측으로 적힌다`() {
-        val loaded = reload(
+    fun `Provider 가 답한 금액은 단위와 함께 적힌다`() {
+        val usd = reload(
             recorder.record(
                 command(reportedAmount = BigDecimal("0.19000000"), reportedUnit = ReportedUnit.USD),
             ),
         )
-
-        assertEquals(CostBasis.REPORTED, loaded.cost?.basis)
-        assertEquals(0, BigDecimal("0.19").compareTo(loaded.cost?.usd))
-    }
-
-    /** 크레딧은 그 Provider 의 크레딧 단가를 알아야 달러가 된다. 지금은 모르므로 원문만 남긴다. */
-    @Test
-    fun `Provider 크레딧은 달러로 옮기지 않는다`() {
-        val loaded = reload(
+        val credit = reload(
             recorder.record(
                 command(reportedAmount = BigDecimal("3"), reportedUnit = ReportedUnit.PROVIDER_CREDIT),
             ),
         )
 
-        assertEquals(ReportedUnit.PROVIDER_CREDIT, loaded.reported?.unit)
-        assertNull(loaded.cost, "크레딧을 달러로 착각했다")
+        assertEquals(0, BigDecimal("0.19").compareTo(usd.reported?.amount))
+        assertEquals(ReportedUnit.USD, usd.reported?.unit)
+        assertEquals(ReportedUnit.PROVIDER_CREDIT, credit.reported?.unit)
     }
 
     /**

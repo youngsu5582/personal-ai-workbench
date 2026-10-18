@@ -2,7 +2,6 @@ package dev.joyson.aiworkbench.usage.application
 
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
-import dev.joyson.aiworkbench.usage.domain.CalculatedCost
 import dev.joyson.aiworkbench.usage.domain.ProviderCall
 import dev.joyson.aiworkbench.usage.domain.ReportedCost
 import dev.joyson.aiworkbench.usage.domain.ProviderCallRepository
@@ -48,11 +47,9 @@ class DefaultProviderCallRecorder(
                 // 음수 지연은 나올 수 없지만, 시계가 뒤로 가는 환경에서도 제약에 걸려 죽지 않게 한다.
                 latencyMs = command.latencyMs.coerceAtLeast(0),
                 usageRaw = command.usageRaw,
+                // 사실만 적는다. 달러로 답했더라도 그것을 비용으로 옮기는 일은 ProviderCallPricingWorker 가 한다 —
+                // 비용 행이 있는지가 "그 호출을 봤는가" 의 표시라, 한 경로로만 만들어져야 한다.
                 reported = reported,
-                // Provider 가 달러로 답했으면 그것이 곧 비용이다 — 계산이 아니라 같은 사실을 제자리에
-                // 옮기는 것이라 단가표가 없는 지금도 채워진다. 크레딧은 그 Provider 의 크레딧 단가를
-                // 알아야 달러가 되므로 asUsd 가 답하지 않는다.
-                cost = reported?.asUsd()?.let(CalculatedCost::reported),
                 calledAt = command.calledAt,
             ),
         ).uuid

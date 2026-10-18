@@ -24,9 +24,8 @@ import java.util.UUID
  * 지출의 단위는 "사용량" 이 아니라 "호출" 이다 — 실패한 호출도 시간을 쓰고 때로는 돈도 쓴다.
  * 그래서 이름이 Usage 가 아니라 Call 이다.
  *
- * **사실은 불변이고, 해석만 나중에 붙는다.** 호출이 일어났다는 것·토큰이 얼마였다는 것은 안 바뀐다.
- * [cost] 는 그 사실에 대한 우리 해석이라 단가표를 알게 되면 붙고, 표가 고쳐지면 다시 계산된다.
- * 그래서 이 행에서 바뀌는 자리는 [cost] 하나뿐이다.
+ * **이 행은 바뀌지 않는다.** 호출이 일어났다는 것·토큰이 얼마였다는 것은 Provider 가 정한 사실이다.
+ * 비용은 그 사실에 대한 우리 해석이라 단가표가 고쳐지면 다시 계산되므로, 수명이 다른 [ProviderCallCost] 에 따로 붙는다.
  *
  * 다른 모듈의 행을 가리킬 때 **대리키가 아니라 uuid** 를 쓰고 FK 도 두지 않는다.
  * 떼어낼 것을 대비한 느슨한 참조라면 상대의 내부 대리키여서는 안 된다.
@@ -100,23 +99,19 @@ class ProviderCall(
      * 여기는 **모양이 Provider 마다 다르고 우리가 정하지 않기 때문**이다.
      * 토큰을 주는 곳, 크레딧을 주는 곳, 아무것도 안 주는 곳이 한 표에 들어온다.
      *
-     * 집계는 이 컬럼이 아니라 [cost] 가 받는다 — 그게 Provider 이질성을 가로지르는 유일한 축이다.
+     * 집계는 이 컬럼이 아니라 [ProviderCallCost.usd] 가 받는다 — 그게 Provider 이질성을 가로지르는 유일한 축이다.
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "usage_raw", updatable = false)
     val usageRaw: Map<String, Any?>? = null,
 
-    /** Provider 가 비용을 직접 답한 경우만. 토큰 수는 여기 오지 않는다 — 그건 [usageRaw] 에 있다. */
-    @Embedded
-    val reported: ReportedCost? = null,
-
     /**
-     * 달러로 환산한 비용. 아직 계산 전이면 null 이다.
+     * Provider 가 비용을 직접 답한 경우만. 토큰 수는 여기 오지 않는다 — 그건 [usageRaw] 에 있다.
      *
-     * 이 행에서 **유일하게 바뀌는 자리**다. 금액과 근거가 늘 함께 정해지도록 덩어리로 둔다.
+     * 이것도 사실이다. 그것을 비용으로 옮기는 일은 [ProviderCallCost] 쪽에서 한다.
      */
     @Embedded
-    var cost: CalculatedCost? = null,
+    val reported: ReportedCost? = null,
 
     /**
      * 호출한 시각.

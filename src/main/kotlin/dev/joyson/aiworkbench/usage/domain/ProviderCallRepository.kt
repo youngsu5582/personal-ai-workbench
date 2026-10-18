@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.usage.domain
 
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.Repository
 import org.springframework.data.repository.query.Param
@@ -12,6 +13,23 @@ interface ProviderCallRepository : Repository<ProviderCall, Long> {
 
     fun save(call: ProviderCall): ProviderCall
 
+    fun findById(id: Long): ProviderCall?
+
+    /**
+     * 아직 비용 행이 없는 호출. 오래된 것부터.
+     *
+     * 봤지만 비용을 정하지 못한 호출은 여기 오지 않는다 — usd 가 null 인 비용 행이 이미 있다.
+     * 그래서 미등록 모델의 호출이 쌓여도 매번 다시 집히지 않고, 새 호출을 가로막지 않는다.
+     */
+    @Query(
+        """
+        select c.id from ProviderCall c
+        where not exists (select 1 from ProviderCallCost k where k.call = c)
+        order by c.id asc
+        """,
+    )
+    fun findUnpricedIds(page: Pageable): List<Long>
+
     /**
      * 기간 안의 지출을 모델별로 접는다. [from] 은 포함하고 [to] 는 포함하지 않는다.
      *
@@ -21,8 +39,10 @@ interface ProviderCallRepository : Repository<ProviderCall, Long> {
      * `count` 로만 세고 `sum(정수)` 를 쓰지 않는다. `count` 는 어떤 DB 에서도 bigint 를 돌려주지만
      * 정수 리터럴의 합은 타입이 방언마다 갈려, 프로젝션이 런타임에 어긋난다.
      *
-     * `count(c.cost.usd)` 는 **null 이 아닌 행만** 센다. 이 값이 [ModelUsageRow.calls] 보다 작으면
-     * 비용 합계가 전체를 말하지 않는다는 뜻이고, 그 사실은 응답까지 그대로 올라가야 한다.
+     * 비용은 left join 한다. 비용 행이 아직 없는 호출도 [ModelUsageRow.calls] 에 들어가야 한다.
+     * `count(k.usd)` 는 **null 이 아닌 행만** 센다 — 아직 안 본 호출도, 봤지만 모르는 호출도 빠진다.
+     * 이 값이 [ModelUsageRow.calls] 보다 작으면 비용 합계가 전체를 말하지 않는다는 뜻이고,
+     * 그 사실은 응답까지 그대로 올라가야 한다.
      *
      * 별칭 이름이 곧 [ModelUsageRow] 의 프로퍼티 이름이다.
      */
@@ -32,9 +52,10 @@ interface ProviderCallRepository : Repository<ProviderCall, Long> {
                c.model as model,
                count(c) as calls,
                count(case when c.succeeded = true then 1 else null end) as succeededCalls,
-               count(c.cost.usd) as costKnownCalls,
-               sum(c.cost.usd) as costUsd
+               count(k.usd) as costKnownCalls,
+               sum(k.usd) as costUsd
         from ProviderCall c
+        left join ProviderCallCost k on k.call = c
         where c.ownerUserUuid = :owner
           and c.calledAt >= :from
           and c.calledAt < :to
