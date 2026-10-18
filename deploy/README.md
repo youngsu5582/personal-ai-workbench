@@ -8,9 +8,13 @@ This overlay is the first single-node home-server target for Personal AI Workben
 browser ─https─▶ Cloudflare (TLS ends here) ─tunnel─▶ cloudflared Pod ─http─▶ Traefik ─Ingress─▶ workbench / garage
 ```
 
-- Only two hostnames are public: `api.<domain>` (the app) and `s3.<domain>` (Garage,
-  for presigned upload and download URLs). Everything else — the management port
-  8081, PostgreSQL, Garage RPC — is reachable only through cluster Services.
+- Only two hostnames are public: `workbench.youngsu5582.today` (the app) and
+  `workbench-file.youngsu5582.today` (Garage, for presigned upload and download URLs).
+  Everything else — the management port 8081, PostgreSQL, Garage RPC — is reachable
+  only through cluster Services.
+- Both are one level under the zone, so Cloudflare's free certificate
+  (`*.youngsu5582.today`) covers them. A name like `api.workbench.youngsu5582.today`
+  would not be covered.
 - `cloudflared` is a pipe, not a router. Both hostnames go to Traefik, and Traefik
   splits them by `Host` through `overlays/home/ingress.yaml`.
 - Traefik stays inside the cluster (`deploy/cluster/traefik.yaml` makes it ClusterIP)
@@ -51,14 +55,14 @@ The overlay contains no Secret objects with real values. The operator creates:
 
    | Hostname | Service |
    |---|---|
-   | `api.<domain>` | `http://traefik.kube-system.svc.cluster.local:80` |
-   | `s3.<domain>` | `http://traefik.kube-system.svc.cluster.local:80` |
+   | `workbench.youngsu5582.today` | `http://traefik.kube-system.svc.cluster.local:80` |
+   | `workbench-file.youngsu5582.today` | `http://traefik.kube-system.svc.cluster.local:80` |
 
-   Do not put Cloudflare Access in front of `api`. CLI and MCP clients call it with
-   Bearer tokens and cannot pass an Access login; the app authenticates them itself.
+   Do not put Cloudflare Access in front of `workbench`. CLI and MCP clients call it
+   with Bearer tokens and cannot pass an Access login; the app authenticates them itself.
 
-4. **Replace `example.com`** in `overlays/home/ingress.yaml` and in your
-   `runtime.env` with those hostnames.
+4. **Fill `runtime.env`** from `runtime.env.example`. The hostnames are already in it
+   and in `overlays/home/ingress.yaml`; if you move them, change both together.
 
 5. **Create the namespace and Secrets:**
 
@@ -72,7 +76,7 @@ The overlay contains no Secret objects with real values. The operator creates:
    kubectl -n workbench create secret generic workbench-runtime --from-env-file=deploy/overlays/home/runtime.env
    ```
 
-6. **Register the redirect URI** `https://api.<domain>/login/oauth2/code/google`
+6. **Register the redirect URI** `https://workbench.youngsu5582.today/login/oauth2/code/google`
    on the Google OAuth client.
 
 7. **Pin an image digest** (see below) and apply:
@@ -106,8 +110,8 @@ The overlay contains no Secret objects with real values. The operator creates:
    Do not repeat the layout step against an existing Garage volume unless you have
    a recovery plan.
 
-9. **Check** that `https://api.<domain>/` loads and Google login returns to it, then
-   generate one image and open its download URL (it redirects to `s3.<domain>`).
+9. **Check** that `https://workbench.youngsu5582.today/` loads and Google login returns to it, then
+   generate one image and open its download URL (it redirects to `workbench-file.youngsu5582.today`).
 
 10. **Back up PostgreSQL off the node before keeping real data.** Volumes use k3s's
     local-path storage on this disk; deleting a PVC deletes its data.
