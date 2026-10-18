@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.storage.Sha256
 import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -78,12 +79,12 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
     @Test
     fun `이미지 변형 옵션도 원래 타입으로 읽힌다`() {
-        val sourceUuid = UUID.randomUUID()
+        val sourceSha256 = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val job = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
             option = ImageToImageOption(
                 prompt = "수채화로",
-                sources = listOf(FileSource.Generated(sourceUuid)),
+                sources = listOf(FileSource.Generated(sourceSha256)),
                 size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
             ),
             model = "gpt-image-2",
@@ -97,7 +98,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         // 다형이 세 겹이다 — option, sources 의 원소, 그리고 size.
         val option = assertIs<ImageToImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
         val source = assertIs<FileSource.Generated>(option.sources.single(), "참조의 종류가 보존되지 않았다")
-        assertEquals(sourceUuid, source.uuid)
+        assertEquals(sourceSha256, source.sha256)
         assertIs<ImageSize.ByRatio>(option.size)
         assertEquals("수채화로", option.prompt)
     }
@@ -113,7 +114,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), gen_random_uuid(),
                     '{"type":"image-to-image","prompt":"과거 데이터",
-                      "sources":[{"type":"generated","uuid":"11111111-1111-1111-1111-111111111111"}],
+                      "sources":[{"type":"generated","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}'::jsonb,
                     'gpt-image-2', 1,
                     'DISPATCHED', current_timestamp, current_timestamp)
@@ -132,8 +133,8 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val option = assertIs<ImageToImageOption>(loaded.option)
         assertEquals("과거 데이터", option.prompt)
         assertEquals(
-            UUID.fromString("11111111-1111-1111-1111-111111111111"),
-            assertIs<FileSource.Generated>(option.sources.single()).uuid,
+            "a".repeat(64),
+            assertIs<FileSource.Generated>(option.sources.single()).sha256,
         )
     }
 

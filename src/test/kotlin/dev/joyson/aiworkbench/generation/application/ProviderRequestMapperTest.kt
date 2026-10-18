@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
@@ -107,7 +108,7 @@ class ProviderRequestMapperTest {
 
     private fun editOption() = ImageToImageOption(
         prompt = "수채화로",
-        sources = listOf(FileSource.Generated(UUID.randomUUID())),
+        sources = listOf(FileSource.Generated(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)),
         size = ImageSize.ByPixels(1024, 1024),
     )
 }

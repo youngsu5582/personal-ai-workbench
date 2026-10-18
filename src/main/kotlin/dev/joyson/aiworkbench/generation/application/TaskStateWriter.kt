@@ -15,7 +15,7 @@ import java.util.UUID
 
 /** 저장까지 끝난 결과물 하나. */
 data class StoredFile(
-    val uuid: UUID,
+    val sha256: String,
     val storageKey: String,
     val metadata: FileMetadata,
     /** 저쪽이 아무것도 알려주지 않으면 null 이다. */
@@ -70,7 +70,7 @@ class TaskStateWriter(
         generatedFileRepository.saveAll(
             files.map {
                 GeneratedFile(
-                    uuid = it.uuid,
+                    sha256 = it.sha256,
                     taskId = taskId,
                     storageKey = it.storageKey,
                     metadata = it.metadata,

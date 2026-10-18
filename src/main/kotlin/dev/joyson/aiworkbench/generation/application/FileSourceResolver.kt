@@ -40,8 +40,8 @@ class FileSourceResolver(
      */
     fun isUsable(source: FileSource, ownerUuid: UUID): Boolean = when (source) {
         // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
-        is FileSource.Generated -> generatedFileFinder.findOwned(source.uuid, ownerUuid) != null
-        is FileSource.Uploaded -> uploadedFiles.findUsable(source.uuid, ownerUuid) != null
+        is FileSource.Generated -> generatedFileFinder.findOwned(source.sha256, ownerUuid) != null
+        is FileSource.Uploaded -> uploadedFiles.findUsable(source.sha256, ownerUuid) != null
     }
 
     /**
@@ -62,7 +62,7 @@ class FileSourceResolver(
 
     private fun prepareGenerated(source: FileSource.Generated, ownerUuid: UUID, inline: Boolean): ResolvedFile {
         // 없는 것과 남의 것은 동일하게 처리한다.(외부 노출 방지) 주소를 발급하기 전에 확인해야 한다.
-        val location = generatedFileFinder.findOwned(source.uuid, ownerUuid) ?: throw notFound(source)
+        val location = generatedFileFinder.findOwned(source.sha256, ownerUuid) ?: throw notFound(source)
 
         val filename = fileNameOf(source, location.mimeType)
         presignedUrlIssuer?.takeUnless { inline }?.let { issuer ->
@@ -76,7 +76,7 @@ class FileSourceResolver(
         val bytes = fileStorage.read(location.storageKey)
             ?: throw FileSourceUnavailableException(
                 retryable = false,
-                message = "입력 이미지의 내용이 없다: ${source.uuid}",
+                message = "입력 이미지의 내용이 없다: ${source.sha256}",
             )
 
         return ResolvedFile.Bytes(
@@ -91,31 +91,31 @@ class FileSourceResolver(
     /** 올린 파일은 주소로 넘기고, [inline] 이면 바이트로 싣는다. 어느 쪽이든 upload 모듈에 부탁한다. */
     private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID, inline: Boolean): ResolvedFile {
         // 접수에서 검증을 마쳤으므로 여기서는 검증하지 않는다.
-        val usable = uploadedFiles.findUsable(source.uuid, ownerUuid) ?: throw notFound(source)
+        val usable = uploadedFiles.findUsable(source.sha256, ownerUuid) ?: throw notFound(source)
         val filename = fileNameOf(source, usable.mimeType)
 
         if (inline) {
-            val bytes = uploadedFiles.readContent(source.uuid, ownerUuid)
-                ?: throw FileSourceUnavailableException(false, "입력 이미지의 내용이 없다: ${source.uuid}")
+            val bytes = uploadedFiles.readContent(source.sha256, ownerUuid)
+                ?: throw FileSourceUnavailableException(false, "입력 이미지의 내용이 없다: ${source.sha256}")
             return ResolvedFile.Bytes(bytes, usable.mimeType, filename)
         }
 
-        val url = signing(source) { uploadedFiles.issueReadUrl(source.uuid, ownerUuid, filename) }
-            ?: throw FileSourceUnavailableException(false, "입력 이미지 주소를 발급할 수 없다: ${source.uuid}")
+        val url = signing(source) { uploadedFiles.issueReadUrl(source.sha256, ownerUuid, filename) }
+            ?: throw FileSourceUnavailableException(false, "입력 이미지 주소를 발급할 수 없다: ${source.sha256}")
         return ResolvedFile.Url(url, usable.mimeType, filename)
     }
 
-    private fun fileNameOf(source: FileSource, mimeType: String) = "${source.uuid}.${MimeTypes.extensionOf(mimeType)}"
+    private fun fileNameOf(source: FileSource, mimeType: String) = "${source.sha256}.${MimeTypes.extensionOf(mimeType)}"
 
     private fun notFound(source: FileSource) =
-        FileSourceUnavailableException(retryable = false, message = "입력 이미지를 찾을 수 없다: ${source.uuid}")
+        FileSourceUnavailableException(retryable = false, message = "입력 이미지를 찾을 수 없다: ${source.sha256}")
 
     /** 서명 실패는 Provider 를 부르기 전의 실패다. 원문에 자격증명이 섞일 수 있어 사유만 남긴다. */
     private fun <T> signing(source: FileSource, issue: () -> T): T =
         try {
             issue()
         } catch (e: Exception) {
-            throw FileSourceUnavailableException(true, "입력 이미지 주소를 발급하지 못했다: ${source.uuid}", e)
+            throw FileSourceUnavailableException(true, "입력 이미지 주소를 발급하지 못했다: ${source.sha256}", e)
         }
 }
 

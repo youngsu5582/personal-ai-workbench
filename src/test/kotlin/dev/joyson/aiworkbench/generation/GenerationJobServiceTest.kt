@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation
 
+import dev.joyson.aiworkbench.storage.Sha256
 import java.util.UUID
 import dev.joyson.aiworkbench.SharedTestConfig
 import dev.joyson.aiworkbench.IntegrationTest
@@ -120,10 +121,10 @@ class GenerationJobServiceTest @Autowired constructor(
         val me = UUID.randomUUID()
         val upload = uploadOwnedBy(me, content = png)
 
-        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
 
         assertEquals(1, view.progress.total)
-        assertEquals(UploadStatus.READY, uploadedFileRepository.findByUuidAndOwnerUserUuid(upload.uuid, me)?.status)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByOwnerUserUuidAndSha256(me, upload.sha256)?.status)
     }
 
     @Test
@@ -133,7 +134,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(me, content = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0, 0, 0, 0, 0))
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
         assertEquals(0, jobRepository.count())
     }
@@ -144,7 +145,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(me, content = null)
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.uuid)))
+            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
     }
 
@@ -153,16 +154,16 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(UUID.randomUUID(), content = png)
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Uploaded(upload.uuid)))
+            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
     }
 
     /** 발급만 된 업로드 한 개를 만들고, [content] 가 있으면 보관소에 올려 둔다. 선언은 png 다. */
     private fun uploadOwnedBy(ownerUuid: UUID, content: ByteArray?): UploadedFile {
-        val uuid = UUID.randomUUID()
+        val uuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val file = uploadedFileRepository.save(
             UploadedFile(
-                uuid = uuid,
+                sha256 = uuid,
                 ownerUserUuid = ownerUuid,
                 storageKey = "users/$ownerUuid/uploads/$uuid",
                 metadata = UploadedFileMetadata(mimeType = "image/png", fileSize = (content ?: png).size.toLong()),
@@ -173,7 +174,7 @@ class GenerationJobServiceTest @Autowired constructor(
     }
 
     /** 누군가의 결과물 한 개를 만들어 둔다. 소유자는 Job 이 알고, 파일은 Task 를 거쳐 거기 닿는다. */
-    private fun fileOwnedBy(ownerUuid: UUID): UUID {
+    private fun fileOwnedBy(ownerUuid: UUID): String {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = ownerUuid,
@@ -185,16 +186,17 @@ class GenerationJobServiceTest @Autowired constructor(
         val task = taskRepository.saveAndFlush(GenerationJobTask(jobId = job.id!!, sequence = 0))
         return generatedFileRepository.saveAndFlush(
             GeneratedFile(
+                sha256 = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex,
                 taskId = task.id!!,
                 storageKey = "users/$ownerUuid/blobs/aa/bb/deadbeef.png",
                 metadata = FileMetadata(width = 1024, height = 1024, mimeType = "image/png", fileSize = 10),
             ),
-        ).uuid
+        ).sha256
     }
 
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13)
 
-    private fun editCommand(source: FileSource = FileSource.Generated(UUID.randomUUID())) = GenerationCommand(
+    private fun editCommand(source: FileSource = FileSource.Generated(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)) = GenerationCommand(
         option = ImageToImageOption(
             prompt = "수채화로",
             sources = listOf(source),

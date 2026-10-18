@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.FileLocation
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.storage.FileStorage
@@ -21,7 +22,7 @@ import kotlin.test.assertTrue
  */
 class GeneratedFileServiceTest {
 
-    private val fileUuid = UUID.randomUUID()
+    private val fileUuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
     private val ownerUuid = UUID.randomUUID()
     private val location = FileLocation(storageKey = "users/o/blobs/ab/cd/abcd.png", mimeType = "image/png")
 

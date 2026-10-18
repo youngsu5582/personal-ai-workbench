@@ -104,48 +104,48 @@ class UploadApiTest @Autowired constructor(
     @Test
     fun `발급하면 SHA-256 과 선언 조건을 DB 에 남긴다`() {
         val body = issue()
-        val uuid = UUID.fromString(body.get("uuid").asText())
+        val uuid = body.get("sha256").asText()
         em.flush()
         em.clear()
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         assertEquals(UploadStatus.PENDING, file.status)
         assertEquals(digest.hex, file.sha256)
         assertEquals(BlobKey.uploaded(user.uuid, digest, "image/png").value, file.storageKey)
         assertEquals(png.size.toLong(), file.metadata.fileSize)
-        assertNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, UUID.randomUUID()))
+        assertNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(UUID.randomUUID(), uuid))
     }
 
     @Test
-    fun `아직 올리지 않은 같은 파일은 UUID 를 재사용하고 주소를 발급한다`() {
+    fun `아직 올리지 않은 같은 파일은 해시를 재사용하고 주소를 발급한다`() {
         val first = issue()
         val second = issue()
-        assertEquals(first.get("uuid").asText(), second.get("uuid").asText())
+        assertEquals(first.get("sha256").asText(), second.get("sha256").asText())
         assertTrue(second.get("uploadRequired").asBoolean())
     }
 
     @Test
     fun `이미 올라온 파일은 발급 시 검증하고 PUT 없이 재사용한다`() {
         val first = issue()
-        val uuid = UUID.fromString(first.get("uuid").asText())
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val uuid = first.get("sha256").asText()
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         fileStorage.put(file.storageKey, png, "image/png")
 
         request().andExpect {
             status { isOk() }
-            jsonPath("$.uuid") { value(uuid.toString()) }
+            jsonPath("$.sha256") { value(uuid.toString()) }
             jsonPath("$.uploadRequired") { value(false) }
             jsonPath("$.url") { doesNotExist() }
             jsonPath("$.method") { doesNotExist() }
             jsonPath("$.headers") { isEmpty() }
         }
-        assertEquals(UploadStatus.READY, uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid)?.status)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
     }
 
     @Test
     fun `거절된 파일은 형식을 바꿔 선언해도 다시 열지 않고 사유를 알린다`() {
         val first = issue(payload(type = "image/jpeg"))
-        val uuid = UUID.fromString(first.get("uuid").asText())
-        val file = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val sha256 = first.get("sha256").asText()
+        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, sha256))
         fileStorage.put(file.storageKey, png, "image/jpeg")
 
         listOf("image/jpeg", "image/png").forEach { type ->
@@ -156,7 +156,7 @@ class UploadApiTest @Autowired constructor(
                 }
             }
         }
-        val rejected = assertNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val rejected = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, sha256))
         assertEquals(UploadStatus.REJECTED, rejected.status)
         assertEquals("image/jpeg", rejected.metadata.mimeType)
         assertNull(fileStorage.read(file.storageKey))

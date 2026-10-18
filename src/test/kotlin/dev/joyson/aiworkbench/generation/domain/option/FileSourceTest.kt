@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.domain.option
 
+import dev.joyson.aiworkbench.storage.Sha256
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.json.JsonTest
 import org.springframework.test.context.ActiveProfiles
@@ -25,26 +26,26 @@ class FileSourceTest @Autowired constructor(
     private val mapper: ObjectMapper,
 ) {
 
-    private val sourceUuid = UUID.fromString("11111111-1111-1111-1111-111111111111")
+    private val sourceSha256 = "a".repeat(64)
 
     /** 판별자가 함께 나간다 — 종류가 늘어도 기존 행을 그대로 읽으려는 것이다. */
     @Test
     fun `생성 결과 참조에는 종류가 함께 적힌다`() {
-        val source: FileSource = FileSource.Generated(sourceUuid)
+        val source: FileSource = FileSource.Generated(sourceSha256)
 
         val json = mapper.writeValueAsString(source)
 
-        assertEquals("""{"type":"generated","uuid":"$sourceUuid"}""", json)
+        assertEquals("""{"type":"generated","sha256":"$sourceSha256"}""", json)
         assertEquals(source, mapper.readValue<FileSource>(json))
     }
 
     @Test
     fun `올린 파일 참조는 uploaded 로 적힌다`() {
-        val source: FileSource = FileSource.Uploaded(sourceUuid)
+        val source: FileSource = FileSource.Uploaded(sourceSha256)
 
         val json = mapper.writeValueAsString(source)
 
-        assertEquals("""{"type":"uploaded","uuid":"$sourceUuid"}""", json)
+        assertEquals("""{"type":"uploaded","sha256":"$sourceSha256"}""", json)
         assertEquals(source, mapper.readValue<FileSource>(json))
     }
 
@@ -52,7 +53,7 @@ class FileSourceTest @Autowired constructor(
     fun `이미지 변형 옵션을 왕복시킨다`() {
         val option: GenerationOption = ImageToImageOption(
             prompt = "수채화로",
-            sources = listOf(FileSource.Generated(sourceUuid)),
+            sources = listOf(FileSource.Generated(sourceSha256)),
             size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
         )
 
@@ -60,7 +61,7 @@ class FileSourceTest @Autowired constructor(
 
         assertEquals(
             """{"type":"image-to-image","prompt":"수채화로",""" +
-                """"sources":[{"type":"generated","uuid":"$sourceUuid"}],""" +
+                """"sources":[{"type":"generated","sha256":"$sourceSha256"}],""" +
                 """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}""",
             json,
         )
