@@ -328,6 +328,61 @@ S3 호환 보관소에서는 워커가 실행·재시도마다 새 presigned GET
 Provider로 직접 이동하며, URL은 Job 옵션에 저장하거나 로그에 출력하지 않는다.
 URL 발급자가 없는 로컬 저장소에서는 앱이 바이트를 읽어 기존 multipart 전송을 사용한다.
 
+## 텍스트 생성
+
+글을 만든다. 요청 종류는 `"type": "text-generate"` 하나이고, `output` 을 빼면 형식 없는 글을,
+`{"type": "json-schema", "schema": {...}}` 를 주면 그 스키마를 따르는 JSON 객체를 받는다.
+`instructions` 는 모델에게 주는 역할·규칙(system 프롬프트)이고 선택이다.
+`effort` 는 답하기 전에 얼마나 생각할지(`none` · `low` · `medium` · `high` · `xhigh` · `max`)이고, 빼면 모델 기본값(대개 `medium`)이다.
+생각한 만큼이 출력 토큰으로 과금되므로 간단한 일에는 낮춘다.
+
+```bash
+./scripts/text.sh "이 글을 세 줄로 요약해: ..."
+./scripts/text.sh "제목을 지어줘" 2 gpt-6.1-sol
+INSTRUCTIONS="너는 기술 블로그 편집자다" ./scripts/text.sh "제목을 지어줘"
+EFFORT=low ./scripts/text.sh "이 글의 태그 다섯 개"
+SCHEMA='{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}},"required":["tags"],"additionalProperties":false}' \
+  ./scripts/text.sh "이 글의 태그를 골라: ..."
+```
+
+기본 모델은 `gpt-6-luna`, 작업 수는 1이다. 이미지와 같은 비동기 Job 이라 접수 후 출력되는 `job.sh` 명령으로 결과를 본다.
+
+```http
+POST /api/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "option": {
+    "type": "text-generate",
+    "prompt": "이 글의 태그를 골라: ...",
+    "instructions": "너는 기술 블로그 편집자다",
+    "output": {
+      "type": "json-schema",
+      "schema": {
+        "type": "object",
+        "properties": {"tags": {"type": "array", "items": {"type": "string"}}},
+        "required": ["tags"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "model": "gpt-6-luna",
+  "taskCount": 1
+}
+```
+
+결과는 `GET /api/jobs/{uuid}` 의 `tasks[].texts[].content` 에 바로 실린다. 형식 없는 글이면 문자열,
+스키마를 줬으면 그 스키마를 따르는 객체다. 이미지 Task 의 `texts` 와 글 Task 의 `files` 는 빈 목록이다.
+
+- **스키마의 키 순서가 답의 키 순서다.** 근거를 먼저 쓰게 하려면 `reasoning` 을 `answer` 앞에 둔다.
+  그 순서를 지키려고 스키마는 원문 문자열로 저장되며, 조회 응답의 `option.output.schema` 도 문자열로 돌아온다.
+- OpenAI 는 strict 모드로 부른다. 모든 필드가 `required` 에 있고 객체마다 `additionalProperties: false` 여야 한다.
+  어기면 접수는 되지만 Task 가 저쪽의 400 사유와 함께 실패한다.
+- 모델이 거절하거나 출력 한도에 걸려 잘리면 Task 를 재시도 없이 실패로 닫는다. 그 호출도 과금됐으므로 지출은 사용량과 함께 성공 호출로 적힌다.
+- 이미지 모델로 글을, 텍스트 모델로 이미지를 요청하면 접수에서 400 이다.
+- effort 는 모델마다 받는 값이 다르다. `gpt-6-astra` 는 `none` 을, `gpt-6.1-sol` 은 `none` 을 받지 않는다. 접수는 되고 Task 가 저쪽 400 사유로 실패한다.
+
 URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. 로컬 Garage의 `localhost:3900`은
 외부 OpenAI에서 접근할 수 없다. 실제 URL 입력을 사용하려면 앱과 Provider 모두 접근 가능한
 보관소 endpoint를 설정한다. 실제 OpenAI URL 편집 호출은 아직 미검증이며, 전송 계약은 대역 테스트로 검증한다.
