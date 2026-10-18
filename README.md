@@ -63,8 +63,11 @@ AI 기능은 한 번만 연결해 두고, 어느 서비스에서든 같은 방�
 
 **비용에는 출처를 붙여요.**
 Provider 가 직접 알려준 비용 · 단가표로 계산한 비용 · 추정한 비용을 나눠 담아요.
-단가표를 고쳐 다시 계산할 때 Provider 가 알려준 실측값까지 덮어쓰지 않게 하려고요.
-지금은 호출마다 사용량을 남기고, 단가표 계산은 만드는 중이에요. → [#31](https://github.com/youngsu5582/personal-ai-workbench/pull/31)
+단가표를 고쳐 다시 계산할 때 Provider 가 알려준 실측값까지 덮어쓰지 않게 하려고요. → [#31](https://github.com/youngsu5582/personal-ai-workbench/pull/31)
+
+**단가는 기간이 있는 표로, 비용은 원장과 따로 붙여요.**
+단가는 할인처럼 시간에 따라 바뀌어서, 호출 시각에 적용되던 표로 계산해요.
+토큰 수는 바뀌지 않는 사실이고 비용은 표가 고쳐지면 달라지는 해석이라, 둘을 다른 테이블에 둬요. → [ADR 0002](docs/adr/0002-price-book-in-db.md) · [ADR 0003](docs/adr/0003-cost-separate-from-ledger.md)
 
 <br>
 
