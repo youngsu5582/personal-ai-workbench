@@ -63,6 +63,8 @@ The overlay contains no Secret objects with real values. The operator creates:
 
 4. **Fill `runtime.env`** from `runtime.env.example`. The hostnames are already in it
    and in `overlays/home/ingress.yaml`; if you move them, change both together.
+   Do not leave `AUTH_ALLOWED_EMAILS` empty. The login page is public, and an empty
+   list lets any Google account sign in, get a token, and call the paid providers.
 
 5. **Create the namespace and Secrets:**
 
