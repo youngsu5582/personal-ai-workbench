@@ -28,7 +28,7 @@ prompt, count, model, ratio, resolution, quality = sys.argv[1:7]
 # size 도 같은 방식이다(ImageSize) — 비율과 픽셀은 대체재라 둘 중 하나만 보낸다.
 print(json.dumps({
     "option": {
-        "type": "text-to-image",
+        "type": "image",
         "prompt": prompt,
         "size": {"type": "ratio", "ratio": ratio, "resolution": resolution},
         "quality": quality,

@@ -50,7 +50,7 @@ if not model.strip():
     sys.exit("모델은 비어 있을 수 없다.")
 print(json.dumps({
     "option": {
-        "type": "image-to-image",
+        "type": "image",
         "prompt": prompt,
         "sources": [{"type": source_type, "sha256": source}],
         "size": {"type": "ratio", "ratio": ratio, "resolution": resolution},

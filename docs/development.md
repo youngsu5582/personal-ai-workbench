@@ -284,7 +284,8 @@ COMPOSE_PROFILES=observability docker compose stop prometheus grafana
 
 ## 이미지 투 이미지
 
-본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
+본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장까지다.
+요청 종류는 글만으로 만들 때와 같은 `"type": "image"`이고, `sources`가 있으면 그 파일을 참조한다. 없거나 비어 있으면 글만으로 만든다.
 `sources[]`는 `{"type": "generated", "sha256": "<결과 파일 해시>"}` 또는 `{"type": "uploaded", "sha256": "<업로드 파일 해시>"}`다.
 올린 파일은 처음 입력으로 쓰일 때 형식을 확인하며, 맞지 않으면 400이다.
 
@@ -308,7 +309,7 @@ Content-Type: application/json
 
 {
   "option": {
-    "type": "image-to-image",
+    "type": "image",
     "prompt": "수채화로 바꿔줘",
     "sources": [{"type": "generated", "sha256": "<generated-file-sha256>"}],
     "size": {"type": "pixels", "width": 1024, "height": 1024},
