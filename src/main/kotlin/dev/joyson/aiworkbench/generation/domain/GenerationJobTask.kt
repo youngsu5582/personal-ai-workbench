@@ -85,7 +85,7 @@ class GenerationJobTask(
                 attemptCount += 1
                 providerTaskId?.let { this.providerTaskId = it }
             }
-            TaskStatus.FAILED -> this.failureReason = failureReason
+            TaskStatus.FAILED -> this.failureReason = failureReason?.take(FAILURE_REASON_LENGTH)
             TaskStatus.PENDING -> this.failureReason = null
             TaskStatus.SUCCEEDED -> Unit
         }
@@ -100,5 +100,13 @@ class GenerationJobTask(
          * 더 시도해도 같다.
          */
         const val MAX_ATTEMPTS = 3
+
+        /**
+         * `failure_reason` 칸의 길이. 사유는 Provider 가 길이를 정하므로 여기서 자른다.
+         *
+         * 넘기면 실패를 적는 UPDATE 자체가 실패해 Task 가 RUNNING 에 남는다. 앞부분이 원인을 말하고,
+         * 전체는 `TaskStateWriter` 가 실패를 적을 때 남기는 로그에 있다.
+         */
+        const val FAILURE_REASON_LENGTH = 255
     }
 }

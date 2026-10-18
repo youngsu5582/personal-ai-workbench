@@ -242,6 +242,23 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     /**
+     * 사유는 길이를 Provider 가 정한다. 사유 칸을 넘겨 상태 기록이 실패하면 Task 가 RUNNING 에 남는다 —
+     * 실패로 닫히는 것보다 나쁘다.
+     */
+    @Test
+    fun `긴 실패 사유도 Task 를 닫는다`() {
+        val (job, task) = newTask()
+        val long = "[openai 400 BAD_REQUEST] " + "Invalid value for 'size': must be a multiple of 16. ".repeat(6)
+
+        workerWith(provider { throw ExternalApiException(FailureKind.REJECTED, long) }).process(task.id!!)
+
+        val failed = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.FAILED, failed.status)
+        assertTrue(long.startsWith(failed.failureReason!!), "사유의 앞부분이 남아야 한다: ${failed.failureReason}")
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    /**
      * 끝난 호출만 재면 멈춘 호출은 타임아웃이 나야 보인다. 도는 동안 "진행 중" 에 있어야 그 전에 안다.
      * 끝나면 반드시 빠져야 한다 — 남으면 끝나지 않은 호출처럼 나이가 계속 는다.
      */
