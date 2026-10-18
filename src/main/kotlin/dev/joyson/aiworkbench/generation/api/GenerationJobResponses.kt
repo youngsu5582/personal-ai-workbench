@@ -36,7 +36,7 @@ data class TaskResponse(
 )
 
 data class FileResponse(
-    val uuid: UUID,
+    val sha256: String,
     /**
      * **오래 사는** 주소. 받는 쪽은 이 값을 불투명하게 다룬다.
      *
@@ -77,8 +77,8 @@ private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
 )
 
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(
-    uuid = uuid,
-    url = GeneratedFileController.pathOf(uuid),
+    sha256 = sha256,
+    url = GeneratedFileController.pathOf(sha256),
     previewUrl = previewUrl,
     width = metadata.width,
     height = metadata.height,

@@ -20,7 +20,6 @@ import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.Instant
-import java.util.UUID
 import kotlin.time.TimeSource
 
 /**
@@ -206,19 +205,16 @@ class TaskWorker(
         response: ExternalApiGenerateResponse,
     ): List<StoredFile> = response.result.map { result ->
         // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
+        val digest = Sha256.of(result.image)
         val key = BlobKey.of(
             ownerUuid = job.ownerUserUuid,
-            digest = Sha256.of(result.image),
+            digest = digest,
             mimeType = result.metadata.mimeType,
         ).value
         fileStorage.put(key, result.image, result.metadata.mimeType)
 
-        // 행의 식별자는 따로 둔다. digest 에서 파생시키면 같은 바이트를 가진 두 행이
-        // uk_generated_files_uuid 에서 충돌한다 — 키는 내용 주소, 행 식별자는 랜덤이다.
-        val fileUuid = UUID.randomUUID()
-
         StoredFile(
-            uuid = fileUuid,
+            sha256 = digest.hex,
             storageKey = key,
             metadata = FileMetadata(
                 width = result.metadata.width,

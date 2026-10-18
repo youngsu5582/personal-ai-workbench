@@ -80,5 +80,5 @@ for task in job.get("tasks", []):
         ext = (ext if slash else "") or "bin"
         print("     {}  {}x{}  {:,} bytes".format(url, f["width"], f["height"], f["fileSize"]))
         print("     curl -L -H \"Authorization: Bearer $({})\" -o {} {}".format(
-            token, shlex.quote("{}.{}".format(f["uuid"], ext)), shlex.quote(url)))
+            token, shlex.quote("{}.{}".format(f["sha256"], ext)), shlex.quote(url)))
 '

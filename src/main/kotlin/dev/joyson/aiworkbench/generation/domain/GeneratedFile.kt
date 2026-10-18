@@ -10,35 +10,32 @@ import jakarta.persistence.Index
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Instant
-import java.util.UUID
 
-/**
- * 만들어진 결과물 한 개.
- *
- * 바이트는 여기 없다. 보관소에 있고 여기는 **어디에 있는지와 무엇인지**만 적는다 —
- * 목록을 보여주거나 용량을 집계할 때 이미지를 읽어올 이유가 없다.
- *
- * Task 와 1:N 이다. Provider 가 호출 한 번으로 여러 장을 주면 Task 는 1개고 GeneratedFile 이 여러 개다.
- */
 /**
  * 받는 쪽이 저장할 이름.
  *
  * 보관소 키와 **무관하게** 짓는다 — 키는 내용 주소(해시)라 거기엔 뜻이 없다.
- * uuid 를 쓰는 것은 받는 사람이 요청한 주소와 파일명이 같아지기 때문이다.
+ * 공개 식별자인 해시로 지어 요청한 주소와 내려받은 파일명이 같은 내용을 가리키게 한다.
  *
  * 두 경로가 이 이름을 쓴다(직접 스트리밍, 서명 주소의 Content-Disposition).
  * 규칙이 갈리면 같은 파일이 경로에 따라 다른 이름으로 저장된다.
  */
-fun downloadFileNameOf(fileUuid: UUID, mimeType: String): String =
-    "$fileUuid.${MimeTypes.extensionOf(mimeType)}"
+fun downloadFileNameOf(sha256: String, mimeType: String): String =
+    "$sha256.${MimeTypes.extensionOf(mimeType)}"
 
+/**
+ * 만들어진 결과물 한 개. 바이트 대신 보관소 위치와 메타데이터를 기록한다.
+ *
+ * Task 와 1:N 이다. 같은 바이트를 가진 행도 각 작업의 결과 이력은 남고 공개 해시는 공유한다.
+ */
 @Entity
 @Table(
     name = "generated_files",
-    // 유니크 제약을 걸지 않는다. "같은 Task 가 두 번 성공 처리되지 않는다" 는 Task 의 불변식이라
-    // Task 의 상태 전이가 지켜야 한다 — 자식 테이블의 제약으로 대신 지키면 그 제약을 성립시키려고
-    // 뜻 없는 컬럼이 따라붙는다. 인덱스는 조회 때문에 둔다.
-    indexes = [Index(name = "idx_generated_files_task", columnList = "task_id")],
+    // 같은 해시의 결과 행을 허용한다. 중복 완료는 Task 의 상태 전이가 막고 인덱스는 조회에 쓴다.
+    indexes = [
+        Index(name = "idx_generated_files_task", columnList = "task_id"),
+        Index(name = "idx_generated_files_sha256", columnList = "sha256"),
+    ],
 )
 class GeneratedFile(
 
@@ -46,9 +43,9 @@ class GeneratedFile(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
-    /** 외부로 노출하는 식별자. */
-    @Column(nullable = false, unique = true, updatable = false)
-    val uuid: UUID = UUID.randomUUID(),
+    /** 같은 바이트를 가진 결과 행도 Task 이력은 각각 남고, 공개 파일 식별자는 같다. */
+    @Column(length = 64, nullable = false, updatable = false)
+    val sha256: String,
 
     /** 같은 모듈 안이지만 Task 와 GeneratedFile 은 다른 Aggregate 로 보고 ID 로 참조한다. */
     @Column(name = "task_id", nullable = false, updatable = false)
@@ -61,8 +58,7 @@ class GeneratedFile(
      * 이 값을 **공유할 수 있다.** 키 규칙은 [dev.joyson.aiworkbench.storage.BlobKey] 에 있다.
      * 파일 행은 작업 결과 하나를 가리키므로, 같은 blob 을 참조하는 여러 행을 허용한다.
      *
-     * digest 를 따로 컬럼으로 두지 않는 이유도 여기 있다 — 키 안에 있어
-     * `substringAfterLast('/').substringBefore('.')` 로 되돌릴 수 있다.
+     * 공개 식별자 sha256 은 별도 컬럼으로 인덱싱한다. 키에서 매번 문자열을 잘라 조회하지 않는다.
      *
      * 이 값이 없으면 파일은 저장돼 있는데 아무도 못 찾는다.
      */

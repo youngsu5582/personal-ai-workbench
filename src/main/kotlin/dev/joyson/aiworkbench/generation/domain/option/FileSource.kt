@@ -2,7 +2,7 @@ package dev.joyson.aiworkbench.generation.domain.option
 
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import java.util.UUID
+import dev.joyson.aiworkbench.storage.Sha256
 
 /**
  * 판별자는 **이 값이 저장되기 때문에** 둔다. 판별자 이름이 곧 저장된 행의 계약이다.
@@ -18,11 +18,15 @@ import java.util.UUID
 sealed interface FileSource {
 
     /** 가리키는 파일의 식별자. 어디서 찾을지는 구현체가 말한다. */
-    val uuid: UUID
+    val sha256: String
 
     /** 이 서비스가 만들어 둔 결과물. `generated_files` 의 한 행이다. */
-    data class Generated(override val uuid: UUID) : FileSource
+    data class Generated(override val sha256: String) : FileSource {
+        init { Sha256.parse(sha256) }
+    }
 
     /** 사용자가 보관소에 직접 올린 파일. upload 모듈이 알고, 처음 쓰일 때 판정한다. */
-    data class Uploaded(override val uuid: UUID) : FileSource
+    data class Uploaded(override val sha256: String) : FileSource {
+        init { Sha256.parse(sha256) }
+    }
 }

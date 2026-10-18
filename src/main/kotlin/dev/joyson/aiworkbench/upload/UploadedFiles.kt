@@ -11,15 +11,15 @@ import java.util.UUID
 interface UploadedFiles {
 
     /**
-     * [ownerUuid] 의 업로드 [uuid] 가 입력으로 쓸 수 있는 파일이면 그 형식, 아니면 `null`.
+     * [ownerUuid] 의 업로드 [sha256] 가 입력으로 쓸 수 있는 파일이면 그 형식, 아니면 `null`.
      *
      * 아직 검증하지 않은 파일이면 보관소에서 앞부분을 읽어 검증하고 결과를 남긴다.
      * 그래서 **트랜잭션 밖에서 부른다** — 안에서 부르면 보관소 왕복 동안 커넥션을 붙잡는다.
      *
      * 아직 안 올라왔으면 검증하지 않고 `null` 이다. 다음에 부르면 다시 본다.
-     * 없는 것·남의 것·불합격은 구분하지 않는다 — 구분하면 "그 uuid 는 존재한다" 가 새어 나간다.
+     * 없는 것·남의 것·불합격은 구분하지 않는다 — 구분하면 "그 sha256 는 존재한다" 가 새어 나간다.
      */
-    fun findUsable(uuid: UUID, ownerUuid: UUID): UsableUpload?
+    fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload?
 
     /**
      * 입력으로 쓸 수 있다고 검증된 업로드를 잠시 받아갈 수 있는 주소. 검증 전이거나 불합격이면 `null` 이다.
@@ -30,14 +30,14 @@ interface UploadedFiles {
      *
      * [fileName] 은 받는 쪽이 저장할 이름이다.
      */
-    fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI?
+    fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI?
 
     /**
      * 입력으로 쓸 수 있다고 검증된 업로드의 바이트. 검증 전이거나 불합격이면, 또는 객체가 없으면 `null` 이다.
      *
      * 받는 쪽이 [issueReadUrl] 의 주소를 받아가지 못할 때 대신 싣는다. 보관소를 읽으므로 트랜잭션 밖에서 부른다.
      */
-    fun readContent(uuid: UUID, ownerUuid: UUID): ByteArray?
+    fun readContent(sha256: String, ownerUuid: UUID): ByteArray?
 }
 
 /** 입력으로 쓸 수 있다고 검증된 업로드. */

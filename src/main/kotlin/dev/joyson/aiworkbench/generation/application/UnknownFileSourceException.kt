@@ -11,5 +11,5 @@ import java.util.UUID
  * 상태 코드를 여기서 정하지 않는 이유는 [UnsupportedModelException] 과 같다.
  */
 class UnknownFileSourceException(
-    val sourceUuid: UUID,
-) : RuntimeException("참조한 입력 이미지를 쓸 수 없다: $sourceUuid")
+    val sourceSha256: String,
+) : RuntimeException("참조한 입력 이미지를 쓸 수 없다: $sourceSha256")

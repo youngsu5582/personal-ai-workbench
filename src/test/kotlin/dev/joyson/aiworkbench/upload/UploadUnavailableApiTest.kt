@@ -53,8 +53,8 @@ class UploadUnavailableApiTest @Autowired constructor(
             content = """{"contentType":"image/png","contentLength":1,"sha256":"${digest.hex}"}"""
         }
         val first = request().andExpect { status { isOk() } }.andReturn().response
-        val uuid = UUID.fromString(mapper.readTree(first.contentAsString).get("uuid").asText())
-        val file = assertNotNull(repository.findByUuidAndOwnerUserUuid(uuid, user.uuid))
+        val uuid = mapper.readTree(first.contentAsString).get("sha256").asText()
+        val file = assertNotNull(repository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
         `when`(storage.readRange(file.storageKey, 0L until 12)).thenThrow(
             FileStorageException(retryable = true, message = "internal-storage-endpoint/${file.storageKey}"),
         )
@@ -66,7 +66,7 @@ class UploadUnavailableApiTest @Autowired constructor(
         }.andReturn().response
         assertFalse(response.contentAsString.contains(file.storageKey))
         assertFalse(response.contentAsString.contains("internal-storage-endpoint"))
-        assertEquals(UploadStatus.PENDING, repository.findByUuidAndOwnerUserUuid(uuid, user.uuid)?.status)
+        assertEquals(UploadStatus.PENDING, repository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
     }
 
     @TestConfiguration(proxyBeanMethods = false)

@@ -28,23 +28,23 @@ class DefaultUploadedFiles(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun findUsable(uuid: UUID, ownerUuid: UUID): UsableUpload? {
-        val file = uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid) ?: return null
+    override fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload? {
+        val file = uploadedFileRepository.findByOwnerUserUuidAndSha256(ownerUuid, sha256) ?: return null
         return if (verify(file) == UploadStatus.READY) file.toUsable() else null
     }
 
-    override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI? {
+    override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI? {
         val issuer = presignedUrlIssuer ?: return null
-        val file = findReady(uuid, ownerUuid) ?: return null
+        val file = findReady(sha256, ownerUuid) ?: return null
         return issuer.issue(file.storageKey, fileName)
     }
 
-    override fun readContent(uuid: UUID, ownerUuid: UUID): ByteArray? =
-        findReady(uuid, ownerUuid)?.let { fileStorage.read(it.storageKey) }
+    override fun readContent(sha256: String, ownerUuid: UUID): ByteArray? =
+        findReady(sha256, ownerUuid)?.let { fileStorage.read(it.storageKey) }
 
     /** 검증을 통과한 것만 내준다. 검증 전 객체에는 어떤 경로로도 닿지 않게 한다. */
-    private fun findReady(uuid: UUID, ownerUuid: UUID): UploadedFile? =
-        uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid)
+    private fun findReady(sha256: String, ownerUuid: UUID): UploadedFile? =
+        uploadedFileRepository.findByOwnerUserUuidAndSha256(ownerUuid, sha256)
             ?.takeIf { it.status == UploadStatus.READY }
 
     /**
@@ -64,17 +64,17 @@ class DefaultUploadedFiles(
 
         if (!uploadedFileWriter.settle(requireNotNull(file.id), next)) {
             // 다른 요청이 먼저 정했다. 그쪽 검증을 따른다.
-            return requireNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, file.ownerUserUuid)).status
+            return requireNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(file.ownerUserUuid, file.sha256)).status
         }
 
         log.info(
-            "업로드를 검증했다. uuid={} status={} declared={}/{} actual={}/{}",
-            file.uuid, next, file.metadata.mimeType, file.metadata.fileSize, detected, leading.totalSize,
+            "업로드를 검증했다. sha256={} status={} declared={}/{} actual={}/{}",
+            file.sha256, next, file.metadata.mimeType, file.metadata.fileSize, detected, leading.totalSize,
         )
         if (next == UploadStatus.REJECTED) {
             // 옮기는 데 이긴 쪽만 지운다. 지우지 못해도 REJECTED 라 이 객체를 읽을 길이 없어, 검증을 실패로 돌리지 않는다.
             runCatching { fileStorage.delete(file.storageKey) }
-                .onFailure { log.warn("불합격한 업로드를 지우지 못했다. uuid={}", file.uuid, it) }
+                .onFailure { log.warn("불합격한 업로드를 지우지 못했다. sha256={}", file.sha256, it) }
         }
         return next
     }
