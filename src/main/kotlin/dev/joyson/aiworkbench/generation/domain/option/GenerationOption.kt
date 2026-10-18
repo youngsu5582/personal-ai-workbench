@@ -8,6 +8,10 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 /**
  * 생성 요청의 입력. 생성 종류마다 필요한 값이 다르다.
  *
+ * 종류는 **결과물로** 가른다. 무엇을 만드느냐가 옵션의 필드, 결과를 보관하는 방식, 부를 API 를 정한다.
+ * 선택 입력이 있는지로는 나누지 않는다 — 참조 이미지가 있든 없든 [ImageOption] 하나다.
+ * 필수 필드의 모양이 달라질 때(원본과 마스크를 함께 받는 인페인팅처럼) 새 종류를 둔다.
+ *
  * `sealed` 인 이유는 when 이 빠짐없이 처리되도록 컴파일러가 강제하기 때문이다.
  * Provider adapter 가 종류별로 분기할 때 새 종류를 추가하면 처리 안 한 곳이 컴파일 에러로 드러난다.
  *
@@ -19,8 +23,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(
-    JsonSubTypes.Type(value = TextToImageOption::class, name = "text-to-image"),
-    JsonSubTypes.Type(value = ImageToImageOption::class, name = "image-to-image"),
+    JsonSubTypes.Type(value = ImageOption::class, name = "image-generate"),
 )
 sealed interface GenerationOption {
     /**
@@ -30,7 +33,7 @@ sealed interface GenerationOption {
      * 제외하지 않으면 `type` 키가 두 번 나오고, `EXISTING_PROPERTY` 로 바꾸면
      * 역직렬화 때 Jackson 이 이 값을 객체에 넣으려다 실패한다(setter 가 없는 계산 프로퍼티라서).
      *
-     * 생성자 파라미터로 열지 않는 이유: `TextToImageOption("고양이", TEXT_TO_VIDEO)` 처럼
+     * 생성자 파라미터로 열지 않는 이유: [ImageOption] 이 다른 종류를 자칭하는 것처럼
      * 객체가 자기 타입을 거짓말할 수 있게 된다.
      */
     @get:JsonIgnore

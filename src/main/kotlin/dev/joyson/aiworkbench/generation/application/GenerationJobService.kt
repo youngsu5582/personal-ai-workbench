@@ -5,8 +5,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -85,7 +84,7 @@ class GenerationJobService(
     }
 
     /**
-     * 고치겠다고 지목한 이미지가 실제로 있고 내 것인지 본다.
+     * 참조로 지목한 이미지가 실제로 있고 내 것인지 본다. 참조가 없으면 볼 것이 없다.
      *
      * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
@@ -97,9 +96,8 @@ class GenerationJobService(
      */
     private fun requireOwnedSources(ownerUuid: UUID, option: GenerationOption) {
         val sources = when (option) {
-            // 입력을 요구하지 않는 종류다. 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
-            is TextToImageOption -> return
-            is ImageToImageOption -> option.sources
+            // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
+            is ImageOption -> option.sources
         }
 
         sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }

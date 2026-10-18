@@ -4,8 +4,7 @@ import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.generation.domain.MimeTypes
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
@@ -48,11 +47,10 @@ class FileSourceResolver(
      * 실행 시점에 입력 파일의 바이트 또는 새 읽기 주소를 준비한다.
      *
      * [inline] 이면 주소를 발급할 수 있어도 바이트로 싣는다 — 받는 쪽이 주소를 받아가지 못했을 때 다시 보내는 길이다.
-     * 입력을 요구하지 않는 종류면 빈 목록이다 — 읽을 것이 없지, 못 읽은 것이 아니다.
+     * 참조가 없으면 빈 목록이다 — 읽을 것이 없지, 못 읽은 것이 아니다.
      */
     fun resolve(ownerUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
-        is TextToImageOption -> emptyList()
-        is ImageToImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
+        is ImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
     }
 
     private fun prepare(source: FileSource, ownerUuid: UUID, inline: Boolean): ResolvedFile = when (source) {
