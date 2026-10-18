@@ -6,6 +6,7 @@ namespace: workbench
 resources:
   - namespace.yaml
   - ../../base
+  - postgres.yaml
 
 patches:
   - path: workbench-home-patch.yaml
