@@ -1,7 +1,7 @@
 # Plan: 보관소에 직접 올리는 업로드 (presigned PUT)
 
 Created: 2026-09-27
-Status: active
+Status: completed (2026-10-18 — #54 · #55 머지)
 코드와 대조: 2026-10-11 (base main — #39 · #40 · #41 · #43 머지 후)
 
 ## 무엇을 만드나
@@ -113,6 +113,7 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
   - [x] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
   - [x] 서명에 해시(F7) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
   - [x] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
+- [x] **공개 식별자** — #55 `feat/file-hash-identifiers`. 업로드·생성 결과의 공개 식별자를 SHA-256 으로, V8 하나로 스키마 변경
 - [ ] (선택) 한 번도 참조되지 않은 PENDING 정리 — DB 기준. 자리를 옮기지 않으므로(D4) prefix lifecycle 로는 READY 까지 지워진다
 - [ ] (외부 소비자가 생기면) 업로드 클라이언트 SDK — 매직넘버 선언·해시·체크섬 헤더를 한 곳에. 지금은 `upload.sh`·샘플 페이지 두 구현이 있다
 
@@ -128,18 +129,13 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
 
 ## Resume Point
 
-**해시 구현 완료** — 워크트리 `upload-checksum`, 브랜치 `feat/upload-checksum`.
-- 신규 발급 요청은 소문자 hex `sha256` 이 필수. 서명에는 원본 digest 의 Base64 를 쓴다.
-- READY 는 `uploadRequired=false` 와 기존 UUID, PENDING 은 주소를 재발급하고 올라온 객체가 있으면 판정한다.
-- REJECTED 는 형식을 바꿔 와도 400 과 사유만 돌려준다. 다시 열지 않는다.
-- 동시 최초 발급은 유니크 제약에 걸린 쪽이 트랜잭션 밖에서 다시 읽는다(user 모듈과 같은 방식). 동시 판정은 PENDING 조건부 UPDATE 로 한 번만 반영한다.
-- 2026-10-18 `.claude/scripts/test.sh`: 328개 · 실패 0개 (정정 제거 후).
-- 실제 Garage: 변경한 바이트·체크섬·헤더 누락 거절, 원본 보존과 동일 내용 재전송 확인.
-- V6 기존 행이 있는 PostgreSQL → V7 마이그레이션, 동시 발급 4건 → UUID 1개, 보관소 장애 503 확인.
-- 샘플 페이지 JS 와 upload.sh 는 로컬 fixture 로 해시·헤더·중복 PUT 생략 확인.
-- 기존 버킷은 `scripts/upload-cors.sh` 재실행이 필요하다. 실제 운영 버킷 설정은 이 작업에서 바꾸지 않았다.
+**완료** — #54(`ce4b570`) · #55(`f2b07a7`) 가 main 에 머지됐다 (2026-10-18). 결정과 근거는 ADR 0001.
+- 업로드는 SHA-256 으로 내용이 고정되고 소유자 안에서 재사용된다. 공개 파일 식별자도 SHA-256 이다.
+- 상태 전이는 `DefaultUploadedFiles.verify` 한 곳이고, REJECTED 는 다시 열지 않는다.
+- 2026-10-18 실제 서버 확인 — 빈 DB 에 V1–V8 적용, `upload.sh` 3회(PUT → 검증·재사용 → 재사용), 업로드 해시로 OpenAI i2i 성공, 결과 바이트의 SHA-256 이 공개 식별자와 일치.
+- 기존 버킷은 `scripts/upload-cors.sh` 재실행이 필요하다. 옛 스키마의 로컬 DB 는 V8 에서 기동이 실패하니 볼륨을 지우고 다시 만든다.
 
-후속 후보: 쓰이지 않은 PENDING 정리. Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)은 신규 체크섬 발급으로 막는다.
+다시 열 계기는 Progress 의 선택 항목 둘(쓰이지 않은 PENDING 정리 · SDK)과 샘플 페이지의 400 `detail` 표시다.
 
 ## 파일 식별자 후속 변경 (2026-10-15)
 
@@ -147,10 +143,11 @@ D10 의 외부 UUID 결정은 후속 PR 에서 변경한다. 완성된 파일은
 사용자·Job·Task 의 UUID 는 유지하고, 파일 입력 JSON 은 `{type, sha256}`, 다운로드는 `/api/files/{sha256}` 이다. 근거는 ADR 0001 의 공개 식별자 절.
 
 - 첫 브랜치 `feat/upload-checksum`(#54) → main 머지 완료(2026-10-18). 결정은 ADR 0001.
-- 후속 `feat/file-hash-identifiers`(#55) → main: 공개 식별자·입력 참조 변경 + V8.
+- 후속 `feat/file-hash-identifiers`(#55) → main 머지 완료(2026-10-18): 공개 식별자·입력 참조 변경 + V8.
 - 운영 배포 전이라 기존 행을 옮기는 변환 도구는 두지 않는다(2026-10-18 걷어냄). 옛 스키마의 로컬 DB 는 지우고 다시 만든다.
 
 ## Files
 
 - `INDEX.md` — 이 문서. 결정과 진행 상황
 - `../../docs/architecture/direct-upload.md` — 설계를 처음 보는 사람에게 설명하는 문서
+- `../../docs/adr/0001-upload-content-sha256.md` — 해시 도입과 공개 식별자 결정 (ADR 0001)
