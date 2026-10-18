@@ -250,15 +250,25 @@ COMPOSE_PROFILES=observability docker compose up -d prometheus grafana
 
 | 주소 | 무엇 |
 |---|---|
-| http://localhost:3000 | Grafana. 로그인 없이 관리자로 들어간다(로컬 전용). **Workbench** 대시보드가 미리 들어 있다 |
+| http://localhost:3000 | Grafana. 로그인 없이 관리자로 들어간다 — 그래서 이 머신(127.0.0.1)에서만 열린다. **Workbench** 대시보드가 미리 들어 있다 |
 | http://localhost:9090/targets | Prometheus 가 앱을 긁고 있는지. `workbench` 가 `UP` 이어야 한다 |
 | http://localhost:8081/actuator/prometheus | 앱이 내보내는 원본. 그 순간의 값만 있다 |
 
-Provider 지표는 **첫 호출이 끝난 뒤에** 생긴다. 앱을 막 띄웠을 때 Provider 패널이 비어 있는 것은 정상이다. 아래 큐 패널은 앱 지표가 아니라 DB 를 직접 센다.
+대시보드는 다섯 줄이다.
+
+| 줄 | 무엇을 | 출처 |
+|---|---|---|
+| 한눈에 | 앱 상태 · 가동 시간 · 진행 중 호출 · 기다리는/처리 중 Task · 최근 24시간 호출 | 둘 다 |
+| Provider — 지금 | 성공률 · 실패 종류 · p95 · 가장 오래 돌고 있는 호출 · 결과별 호출 수 | 앱 지표. 앱을 다시 띄우면 0 부터 |
+| Provider — 기록 | Provider · 모델별 표 · 실패 사유 · 하루 단위 성공/실패 (최근 30일) | 원장 `provider_calls` |
+| 작업 | 상태별 Task · 가장 오래 기다린 Task · 하루 단위 Job · 최근 실패한 Task | DB |
+| 앱 런타임 (접혀 있다) | HTTP · error/warn 로그 수 · DB 커넥션 · 힙 · GC · CPU | 앱 지표 |
+
+Provider 지표는 **첫 호출이 끝난 뒤에** 생긴다. 앱을 막 띄웠을 때 "아직 호출 없음" 으로 보이는 것은 정상이다.
 
 ### 3. 대시보드를 고칠 때
 
-원본은 `docker/grafana/dashboards/workbench.json` 이다. **화면에서 고친 것은 저장되지 않는다** — JSON 을 고치면 Grafana 가 다시 읽는다. 데이터소스는 `docker/grafana/provisioning/datasources/workbench.yaml` 에 uid 로 고정돼 있고, 대시보드가 그 uid 로 가리킨다.
+원본은 `docker/grafana/dashboards/workbench.json` 이다. **화면에서 고친 것은 저장되지 않는다.** JSON 을 고친 뒤 `docker restart personal-ai-workbench-grafana` 로 다시 읽힌다 — Rancher Desktop 에서는 파일이 바뀌어도 Grafana 가 저절로 다시 읽지 않는다. 데이터소스는 `docker/grafana/provisioning/datasources/workbench.yaml` 에 uid 로 고정돼 있고, 대시보드가 그 uid 로 가리킨다.
 
 ### 4. 앱과 DB 를 호스트로 부르는 이유
 
