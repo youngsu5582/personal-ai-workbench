@@ -3,7 +3,9 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
+import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
@@ -34,6 +36,7 @@ class TaskStateWriterTest @Autowired constructor(
     private val jobRepository: GenerationJobTestRepository,
     private val taskRepository: GenerationJobTaskTestRepository,
     private val generatedFileRepository: GeneratedFileTestRepository,
+    private val generatedTextRepository: GeneratedTextRepository,
 ) : IntegrationTest() {
 
     private fun newJob(taskCount: Int = 2): Pair<Long, List<Long>> {
@@ -92,6 +95,21 @@ class TaskStateWriterTest @Autowired constructor(
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(jobId).get().status)
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(taskIds[0]).get().status)
         assertEquals("k0", generatedFileRepository.findAllByTaskId(taskIds[0]).single().storageKey)
+    }
+
+    /** 보관소를 거치지 않아 결과 행과 상태 전이가 한 트랜잭션에 든다. 규칙은 파일로 끝난 성공과 같다. */
+    @Test
+    fun `글 한 편으로 성공하면 행에 남고 마지막 Task 에서 Job 이 닫힌다`() {
+        val (jobId, taskIds) = newJob(taskCount = 1)
+        writer.claim(limit = 1)
+
+        writer.succeed(taskIds[0], "요약입니다", ProviderInfo(providerId = "resp_1"))
+
+        val text = generatedTextRepository.findAllByTaskIdIn(taskIds).single()
+        assertEquals("요약입니다", text.content)
+        assertEquals("resp_1", text.providerInfo?.providerId)
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(taskIds[0]).get().status)
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(jobId).get().status)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
@@ -27,6 +28,7 @@ class GenerationJobService(
     private val generationJobRepository: GenerationJobRepository,
     private val generationJobTaskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
+    private val generatedTextRepository: GeneratedTextRepository,
     /**
      * 보관소가 주소에 서명할 수 있을 때만 있다. 없으면 목록의 `previewUrl` 이 전부 `null` 이고,
      * 받는 쪽은 web 이 만드는 우리 경로로 폴백한다.
@@ -73,13 +75,16 @@ class GenerationJobService(
         val tasks = generationJobTaskRepository.findAllByJobIdOrderBySequence(requireNotNull(job.id))
 
         // Task 마다 한 번씩 묻지 않는다. Task 가 넷이면 쿼리도 넷이 된다.
-        val filesByTaskId = generatedFileRepository
-            .findAllByTaskIdIn(tasks.mapNotNull { it.id })
-            .groupBy { it.taskId }
+        val taskIds = tasks.mapNotNull { it.id }
+        val filesByTaskId = generatedFileRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
+        // 종류로 가려 한쪽만 묻지 않는다. 쿼리 하나를 아끼려고 종류마다 분기를 두면, 종류가 늘 때 고칠 곳이 하나 더 생긴다.
+        val textsByTaskId = generatedTextRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
 
         return job.toView(
             progress = GenerationJobProgress.of(job.taskCount, tasks),
-            tasks = tasks.map { it.toView(filesByTaskId[it.id].orEmpty(), presignedUrlIssuer) },
+            tasks = tasks.map {
+                it.toView(filesByTaskId[it.id].orEmpty(), presignedUrlIssuer, textsByTaskId[it.id].orEmpty())
+            },
         )
     }
 

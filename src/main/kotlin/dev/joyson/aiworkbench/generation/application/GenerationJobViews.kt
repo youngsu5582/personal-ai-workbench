@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
+import dev.joyson.aiworkbench.generation.domain.GeneratedText
 import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
@@ -29,11 +30,25 @@ data class GenerationJobView(
     val tasks: List<GenerationJobTaskView>,
 )
 
+/**
+ * 결과물은 종류마다 자기 목록에 온다. 이미지 Task 면 [texts] 가, 글 Task 면 [files] 가 빈 목록이다 —
+ * null 이 아니라 빈 목록이어서 "해당 없음" 과 "아직 없음" 을 받는 쪽이 가를 필요가 없다.
+ */
 data class GenerationJobTaskView(
     val sequence: Int,
     val status: TaskStatus,
     val failureReason: String?,
     val files: List<GeneratedFileView>,
+    val texts: List<GeneratedTextView> = emptyList(),
+)
+
+/**
+ * 글 한 편. 모델이 낸 원문 그대로다.
+ *
+ * 구조화된 답을 여기서 객체로 읽지 않는다. 읽는 것은 내보내는 모양의 일이라 web 계층이 한다.
+ */
+data class GeneratedTextView(
+    val content: String,
 )
 
 /**
@@ -77,15 +92,19 @@ internal fun GeneratedFile.toView(presignedUrlIssuer: PresignedUrlIssuer?): Gene
             ?.toString(),
     )
 
+internal fun GeneratedText.toView(): GeneratedTextView = GeneratedTextView(content = content)
+
 internal fun GenerationJobTask.toView(
     files: List<GeneratedFile>,
     presignedUrlIssuer: PresignedUrlIssuer?,
+    texts: List<GeneratedText> = emptyList(),
 ): GenerationJobTaskView =
     GenerationJobTaskView(
         sequence = sequence,
         status = status,
         failureReason = failureReason,
         files = files.map { it.toView(presignedUrlIssuer) },
+        texts = texts.map { it.toView() },
     )
 
 internal fun GenerationJob.toView(

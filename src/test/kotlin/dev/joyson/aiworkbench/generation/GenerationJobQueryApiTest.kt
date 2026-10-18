@@ -182,6 +182,8 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks[1].status") { value("FAILED") }
             jsonPath("$.tasks[1].failureReason") { value("rate limit") }
             jsonPath("$.tasks[1].files.length()") { value(0) }
+            // 글 결과물은 null 이 아니라 빈 목록이다. "해당 없음" 과 "아직 없음" 을 가를 필요가 없다.
+            jsonPath("$.tasks[0].texts.length()") { value(0) }
         }
     }
 
