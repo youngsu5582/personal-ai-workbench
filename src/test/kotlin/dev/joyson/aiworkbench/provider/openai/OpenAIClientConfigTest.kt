@@ -14,6 +14,7 @@ class OpenAIClientConfigTest {
     fun `키가 없으면 Provider 빈이 없다`() {
         runner.run { context ->
             assertThat(context).doesNotHaveBean(OpenAIProvider::class.java)
+            assertThat(context).doesNotHaveBean(OpenAITextProvider::class.java)
         }
     }
 
@@ -28,6 +29,7 @@ class OpenAIClientConfigTest {
     fun `키가 있으면 Provider 빈이 생긴다`() {
         runner.withPropertyValues("workbench.provider.openai.api-key=sk-test").run { context ->
             assertThat(context).hasSingleBean(OpenAIProvider::class.java)
+            assertThat(context).hasSingleBean(OpenAITextProvider::class.java)
         }
     }
 }
