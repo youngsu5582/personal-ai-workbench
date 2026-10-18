@@ -49,7 +49,8 @@ class GenerationJobService(
      * 트랜잭션에 들어가야 한다 — 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
      */
     fun submit(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
-        providerRegistry.find(command.model)
+        // 모델만 보지 않는다. 판정 모델로 이미지를 만들라는 요청도 여기서 막아야 Task 실패로 미뤄지지 않는다.
+        providerRegistry.find(command.model, ProviderRequestMapper.kindOf(command.option))
             ?: throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
         requireOwnedSources(ownerUuid, command.option)

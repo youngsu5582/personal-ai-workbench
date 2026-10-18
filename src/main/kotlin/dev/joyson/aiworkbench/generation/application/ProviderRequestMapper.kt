@@ -9,6 +9,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
+import dev.joyson.aiworkbench.provider.ExternalApiKind
 
 /**
  * 우리 도메인 어휘를 Provider 포트의 어휘로 옮긴다.
@@ -57,6 +58,12 @@ object ProviderRequestMapper {
                 images = images.map { inputOf(it) },
             )
         }
+    }
+
+    /** 이 옵션이 어떤 종류의 호출이 되는가. Provider 를 고를 때 모델과 함께 묻는다. */
+    fun kindOf(option: GenerationOption): ExternalApiKind = when (option) {
+        // 글에서 만들든 이미지를 고치든 같은 생성 호출이다. 둘을 가르는 것은 입력 이미지의 유무다.
+        is TextToImageOption, is ImageToImageOption -> ExternalApiKind.GENERATE
     }
 
     /** 준비한 입력 이미지를 포트의 어휘로 옮긴다. */

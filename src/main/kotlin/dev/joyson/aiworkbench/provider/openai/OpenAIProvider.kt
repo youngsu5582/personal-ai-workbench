@@ -6,6 +6,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
+import dev.joyson.aiworkbench.provider.ExternalApiKind
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageMetadata
@@ -37,7 +38,10 @@ class OpenAIProvider(
     override val name: String = PROVIDER_NAME
 
     /** 사실 질의다. 모르는 모델이면 예외가 아니라 false. */
-    override fun supports(model: String): Boolean = OpenAIImageModel.find(model) != null
+    override fun supports(model: String, kind: ExternalApiKind): Boolean = when (kind) {
+        ExternalApiKind.GENERATE -> OpenAIImageModel.find(model) != null
+        ExternalApiKind.DECISION -> false
+    }
 
     override fun generate(
         model: String,

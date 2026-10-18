@@ -7,6 +7,7 @@ import ch.qos.logback.core.read.ListAppender
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
+import dev.joyson.aiworkbench.provider.ExternalApiKind
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ImageQuality
 import org.slf4j.LoggerFactory
@@ -70,11 +71,11 @@ class OpenAIProviderTest {
 
     @Test
     fun `아는 모델만 지원한다고 답한다`() {
-        assertTrue(provider.supports("gpt-image-2"))
-        assertTrue(provider.supports("gpt-image-2.5-flare"))
-        assertFalse(provider.supports("gemini-image"))
+        assertTrue(provider.supports("gpt-image-2", ExternalApiKind.GENERATE))
+        assertTrue(provider.supports("gpt-image-2.5-flare", ExternalApiKind.GENERATE))
+        assertFalse(provider.supports("gemini-image", ExternalApiKind.GENERATE))
         // 사실 질의라 모르는 모델에도 예외를 던지지 않는다.
-        assertFalse(provider.supports(""))
+        assertFalse(provider.supports("", ExternalApiKind.GENERATE))
     }
 
     @Test

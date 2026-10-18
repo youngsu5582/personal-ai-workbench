@@ -57,7 +57,7 @@ class TaskWorker(
         }
 
         // 접수 때 확인했더라도 그 사이 설정이 바뀌어 Provider 가 사라졌을 수 있다.
-        val provider = providerRegistry.find(job.model) ?: run {
+        val provider = providerRegistry.find(job.model, ProviderRequestMapper.kindOf(job.option)) ?: run {
             stateWriter.fail(taskId, "다룰 수 있는 Provider 가 없다: ${job.model}", retryable = false)
             return
         }

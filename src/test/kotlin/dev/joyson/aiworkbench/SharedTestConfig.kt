@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench
 
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
+import dev.joyson.aiworkbench.provider.ExternalApiKind
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PartialContent
@@ -30,7 +31,7 @@ class SharedTestConfig {
     @Bean
     fun fakeProvider(): ExternalApiProvider = object : ExternalApiProvider {
         override val name = FAKE_PROVIDER
-        override fun supports(model: String) = model == FAKE_MODEL
+        override fun supports(model: String, kind: ExternalApiKind) = model == FAKE_MODEL && kind == ExternalApiKind.GENERATE
         override fun generate(model: String, request: ExternalApiGenerateRequest) =
             ExternalApiGenerateResponse(result = emptyList())
     }

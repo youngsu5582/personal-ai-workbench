@@ -26,6 +26,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
+import dev.joyson.aiworkbench.provider.ExternalApiKind
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import java.net.URI
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
@@ -89,7 +90,7 @@ class TaskWorkerTest @Autowired constructor(
 
     private fun provider(behavior: () -> ExternalApiGenerateResponse) = object : ExternalApiProvider {
         override val name = PROVIDER
-        override fun supports(model: String) = model == MODEL
+        override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
         override fun generate(model: String, request: ExternalApiGenerateRequest) = behavior()
     }
 
@@ -546,7 +547,7 @@ class TaskWorkerTest @Autowired constructor(
         workerWith(
             object : ExternalApiProvider {
                 override val name = PROVIDER
-                override fun supports(model: String) = model == MODEL
+                override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
                 override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
                     captured = request
                     return success()
@@ -622,7 +623,7 @@ class TaskWorkerTest @Autowired constructor(
         }
         val provider = object : ExternalApiProvider {
             override val name = PROVIDER
-            override fun supports(model: String) = model == MODEL
+            override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
             override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
                 urls += assertIs<ExternalApiFileInput.Url>(request.images.single()).url
                 if (urls.size == 1) throw ExternalApiException(FailureKind.THROTTLED, "일시적 오류")
@@ -693,7 +694,7 @@ class TaskWorkerTest @Autowired constructor(
         var sent: URI? = null
         val provider = object : ExternalApiProvider {
             override val name = PROVIDER
-            override fun supports(model: String) = model == MODEL
+            override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
             override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
                 sent = assertIs<ExternalApiFileInput.Url>(request.images.single()).url
                 return success()
@@ -727,7 +728,7 @@ class TaskWorkerTest @Autowired constructor(
     /** 보관소가 Provider 에게 닿지 않는 환경을 흉내 낸다 — 주소로 받으면 받아가지 못했다고 답한다. */
     private fun unreachableByUrl(sent: MutableList<ExternalApiFileInput>) = object : ExternalApiProvider {
         override val name = PROVIDER
-        override fun supports(model: String) = model == MODEL
+        override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
         override fun generate(model: String, request: ExternalApiGenerateRequest): ExternalApiGenerateResponse {
             val input = request.images.single().also { sent += it }
             if (input is ExternalApiFileInput.Url) {

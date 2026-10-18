@@ -26,7 +26,7 @@ data class ExternalApiGenerateRequest(
      * API 마다 다르므로 어댑터가 안다 — 여기서는 장수를 제한하지 않는다.
      */
     val images: List<ExternalApiFileInput> = emptyList(),
-) {
+) : ExternalApiRequest {
     init {
         require(prompt.isNotBlank()) { "prompt 는 비어 있을 수 없다" }
         require(width > 0 && height > 0) { "가로·세로는 양수여야 한다" }
