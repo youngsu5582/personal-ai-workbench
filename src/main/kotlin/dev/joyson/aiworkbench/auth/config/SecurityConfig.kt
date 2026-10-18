@@ -54,8 +54,10 @@ class SecurityConfig {
                     // "/error" 가 빠지면 컨트롤러가 던진 401 이 ERROR dispatch 로 /error 에 재진입하고,
                     // 그게 인증 대상이라 로그인 진입점이 302 로 바꿔버린다. 상태 코드가 조용히 뒤집힌다.
                     "/error",
-                    // 쿠버네티스 probe 는 토큰 없이 부른다. `/**` 는 `/actuator/health` 자체도 포함한다.
+                    // management 포트에만 있는 경로라, 여기서 열어도 앱 포트(= ingress)로는 닿지 않는다.
+                    // probe 와 Prometheus 는 토큰 없이 부른다. `/**` 는 `/actuator/health` 자체도 포함한다.
                     "/actuator/health/**",
+                    "/actuator/prometheus",
                     HandoffCookie.PATH,
                     "/login/**",
                     "/oauth2/**",
