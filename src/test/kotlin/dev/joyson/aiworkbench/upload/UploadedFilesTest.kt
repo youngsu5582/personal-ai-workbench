@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** 보관소는 공통 설정의 메모리 구현이다. 판정에 필요한 것은 앞부분과 크기뿐이라 S3 일 필요가 없다. */
+/** 보관소는 공통 설정의 메모리 구현이다. 검증에 필요한 것은 앞부분과 크기뿐이라 S3 일 필요가 없다. */
 class UploadedFilesTest @Autowired constructor(
     private val uploadedFiles: UploadedFiles,
     private val uploadedFileRepository: UploadedFileRepository,
@@ -55,7 +55,7 @@ class UploadedFilesTest @Autowired constructor(
     }
 
     @Test
-    fun `아직 안 올라왔으면 판정하지 않는다`() {
+    fun `아직 안 올라왔으면 검증하지 않는다`() {
         val file = pending()
 
         assertNull(uploadedFiles.findUsable(file.uuid, owner))
@@ -88,14 +88,14 @@ class UploadedFilesTest @Autowired constructor(
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
         uploadedFiles.findUsable(file.uuid, owner)
-        // 판정 뒤 객체가 사라져도 다시 확인하지 않는다.
+        // 검증 뒤 객체가 사라져도 다시 확인하지 않는다.
         fileStorage.delete(file.storageKey)
 
         assertEquals(UsableUpload("image/png"), uploadedFiles.findUsable(file.uuid, owner))
     }
 
     @Test
-    fun `남의 것은 없는 것과 같고 판정하지도 않는다`() {
+    fun `남의 것은 없는 것과 같고 검증하지도 않는다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
 
@@ -115,7 +115,7 @@ class UploadedFilesTest @Autowired constructor(
     }
 
     @Test
-    fun `판정 전 업로드에는 읽기 주소를 내지 않는다`() {
+    fun `검증 전 업로드에는 읽기 주소를 내지 않는다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")
 
@@ -145,7 +145,7 @@ class UploadedFilesTest @Autowired constructor(
     )
 
     @Test
-    fun `판정하는 사이 다른 요청이 먼저 정하면 그 결과를 따르고 지우지 않는다`() {
+    fun `검증하는 사이 다른 요청이 먼저 정하면 그 결과를 따르고 지우지 않는다`() {
         val file = pending()
         val deleted = mutableListOf<String>()
         // 앞부분을 읽는 순간 다른 요청이 REJECTED 로 정했다고 친다. 이쪽은 정상 PNG 를 본다.
