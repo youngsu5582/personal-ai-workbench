@@ -81,4 +81,6 @@ for task in job.get("tasks", []):
         print("     {}  {}x{}  {:,} bytes".format(url, f["width"], f["height"], f["fileSize"]))
         print("     curl -L -H \"Authorization: Bearer $({})\" -o {} {}".format(
             token, shlex.quote("{}.{}".format(f["uuid"], ext)), shlex.quote(url)))
+    if task.get("result") is not None:
+        print("     result  " + json.dumps(task["result"], ensure_ascii=False))
 '
