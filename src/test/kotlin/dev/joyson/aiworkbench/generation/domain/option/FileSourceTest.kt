@@ -60,7 +60,7 @@ class FileSourceTest @Autowired constructor(
         val json = mapper.writeValueAsString(option)
 
         assertEquals(
-            """{"type":"image","prompt":"수채화로",""" +
+            """{"type":"image-generate","prompt":"수채화로",""" +
                 """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto",""" +
                 """"sources":[{"type":"generated","sha256":"$sourceSha256"}]}""",
             json,
@@ -75,7 +75,7 @@ class FileSourceTest @Autowired constructor(
     /** 글만으로 만드는 요청은 `sources` 를 보내지 않는다. 빠진 것은 "참조 없음" 이다. */
     @Test
     fun `참조를 적지 않은 옵션은 참조 없이 읽힌다`() {
-        val json = """{"type":"image","prompt":"고양이",""" +
+        val json = """{"type":"image-generate","prompt":"고양이",""" +
             """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
 
         val read = assertIs<ImageOption>(mapper.readValue<GenerationOption>(json))
@@ -86,7 +86,7 @@ class FileSourceTest @Autowired constructor(
     @Test
     fun `참조 이미지가 상한을 넘는 옵션은 읽히지 않는다`() {
         val sources = List(ImageOption.MAX_SOURCES + 1) { """{"type":"generated","sha256":"$sourceSha256"}""" }
-        val json = """{"type":"image","prompt":"수채화로","sources":$sources,""" +
+        val json = """{"type":"image-generate","prompt":"수채화로","sources":$sources,""" +
             """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
 
         assertFailsWith<Exception> { mapper.readValue<GenerationOption>(json) }

@@ -23,7 +23,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(
-    JsonSubTypes.Type(value = ImageOption::class, name = "image"),
+    JsonSubTypes.Type(value = ImageOption::class, name = "image-generate"),
 )
 sealed interface GenerationOption {
     /**

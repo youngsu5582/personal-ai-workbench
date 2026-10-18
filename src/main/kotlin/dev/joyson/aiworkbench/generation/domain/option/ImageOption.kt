@@ -29,7 +29,7 @@ data class ImageOption(
         require(sources.size <= MAX_SOURCES) { "참조 이미지는 ${MAX_SOURCES}장까지다" }
     }
 
-    override val type: GenerationJobType get() = GenerationJobType.IMAGE
+    override val type: GenerationJobType get() = GenerationJobType.IMAGE_GENERATE
 
     companion object {
         /** 늘리려면 Provider 가 몇 장까지 받는지부터 확인해야 한다. */

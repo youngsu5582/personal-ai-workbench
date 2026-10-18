@@ -253,6 +253,6 @@ class GenerationJobQueryApiTest @Autowired constructor(
         private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
         private const val MIME = "image/png"
         private val OPTION =
-            """{"type":"image","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
+            """{"type":"image-generate","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
     }
 }

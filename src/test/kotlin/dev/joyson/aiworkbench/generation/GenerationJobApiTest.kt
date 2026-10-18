@@ -106,7 +106,7 @@ class GenerationJobApiTest @Autowired constructor(
 
     @Test
     fun `빈 prompt 는 400 이다`() {
-        request(body(1, """{"type":"image","prompt":"  "}""")).andExpect { status { isBadRequest() } }
+        request(body(1, """{"type":"image-generate","prompt":"  "}""")).andExpect { status { isBadRequest() } }
     }
 
     @Test
@@ -148,7 +148,7 @@ class GenerationJobApiTest @Autowired constructor(
         """{"type":"generated","sha256":"${Sha256.of(UUID.randomUUID().toString().toByteArray()).hex}"}"""
 
     private fun editOption(sources: String) =
-        """{"type":"image","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
+        """{"type":"image-generate","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
 
     /** 애노테이션 인자는 컴파일 타임 상수라 도메인 상수를 참조할 수 없다. 어긋나면 여기서 잡는다. */
     @Test
@@ -168,4 +168,4 @@ private object GenerationRequestConstraints {
 
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
 private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
-private const val OPTION = """{"type":"image","prompt":"고양이","size":$SIZE}"""
+private const val OPTION = """{"type":"image-generate","prompt":"고양이","size":$SIZE}"""

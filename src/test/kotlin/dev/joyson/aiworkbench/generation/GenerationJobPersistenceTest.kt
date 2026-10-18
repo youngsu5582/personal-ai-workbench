@@ -112,7 +112,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             """
             insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), gen_random_uuid(),
-                    '{"type":"image","prompt":"과거 데이터",
+                    '{"type":"image-generate","prompt":"과거 데이터",
                       "sources":[{"type":"generated","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}'::jsonb,
                     'gpt-image-2', 1,
@@ -177,7 +177,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             """
             insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), gen_random_uuid(),
-                    '{"type":"image","prompt":"과거 데이터",
+                    '{"type":"image-generate","prompt":"과거 데이터",
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}'::jsonb,
                     'gpt-image-2', 99,
                     'DISPATCHED', current_timestamp, current_timestamp)
