@@ -4,10 +4,9 @@ import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import kotlin.test.assertIs
@@ -24,7 +23,7 @@ class ProviderRequestMapperTest {
     private val mapper = ProviderRequestMapper
 
     private fun sizeOf(ratio: AspectRatio, resolution: Resolution): String {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByRatio(ratio, resolution)))
+        val request = mapper.from(ImageOption("고양이", ImageSize.ByRatio(ratio, resolution)))
         return "${request.width}x${request.height}"
     }
 
@@ -41,7 +40,7 @@ class ProviderRequestMapperTest {
 
     @Test
     fun `픽셀로 말한 크기는 해석하지 않는다`() {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080)))
+        val request = mapper.from(ImageOption("고양이", ImageSize.ByPixels(1920, 1080)))
 
         assertEquals(1920, request.width)
         assertEquals(1080, request.height)
@@ -52,7 +51,7 @@ class ProviderRequestMapperTest {
         // 지금은 1:1 이다. 한쪽에 값이 늘면 when 이 컴파일 에러로 알려준다.
         Quality.entries.forEach { quality ->
             val request = mapper.from(
-                TextToImageOption("고양이", ImageSize.ByPixels(1024, 1024), quality),
+                ImageOption("고양이", ImageSize.ByPixels(1024, 1024), quality),
             )
             assertEquals(ImageQuality.valueOf(quality.name), request.quality)
         }
@@ -60,7 +59,7 @@ class ProviderRequestMapperTest {
 
     @Test
     fun `프롬프트를 그대로 넘긴다`() {
-        val request = mapper.from(TextToImageOption("창밖을 보는 고양이", ImageSize.ByPixels(512, 512)))
+        val request = mapper.from(ImageOption("창밖을 보는 고양이", ImageSize.ByPixels(512, 512)))
 
         assertEquals("창밖을 보는 고양이", request.prompt)
     }
@@ -83,7 +82,7 @@ class ProviderRequestMapperTest {
     /** 빈 목록이 "글에서 만든다" 는 뜻이라, 실수로 채워지면 조용히 편집 요청이 된다. */
     @Test
     fun `글에서 만드는 요청에는 이미지가 실리지 않는다`() {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByPixels(1024, 1024)))
+        val request = mapper.from(ImageOption("고양이", ImageSize.ByPixels(1024, 1024)))
 
         assertTrue(request.images.isEmpty())
     }
@@ -92,6 +91,17 @@ class ProviderRequestMapperTest {
     @Test
     fun `이미지 변형인데 읽어 넘긴 것이 없으면 만들 수 없다`() {
         assertFailsWith<IllegalArgumentException> { mapper.from(editOption()) }
+    }
+
+    /** 반대 방향도 버그다. 참조가 없는 옵션에 이미지가 실리면 조용히 편집 요청이 된다. */
+    @Test
+    fun `참조가 없는 옵션에 이미지를 넘기면 만들 수 없다`() {
+        assertFailsWith<IllegalArgumentException> {
+            mapper.from(
+                ImageOption("고양이", ImageSize.ByPixels(1024, 1024)),
+                listOf(ResolvedFile.Bytes(bytes = byteArrayOf(1), mimeType = "image/png", filename = "source.png")),
+            )
+        }
     }
 
     @Test
@@ -106,7 +116,7 @@ class ProviderRequestMapperTest {
         assertTrue(!input.toString().contains("secret"))
     }
 
-    private fun editOption() = ImageToImageOption(
+    private fun editOption() = ImageOption(
         prompt = "수채화로",
         sources = listOf(FileSource.Generated(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)),
         size = ImageSize.ByPixels(1024, 1024),

@@ -10,7 +10,7 @@ import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.GeneratedFileTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTaskTestRepository
@@ -40,7 +40,7 @@ class TaskStateWriterTest @Autowired constructor(
         val job = jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = UUID.randomUUID(),
-                option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+                option = ImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
                 model = "gpt-image-2",
                 taskCount = taskCount,
             ),

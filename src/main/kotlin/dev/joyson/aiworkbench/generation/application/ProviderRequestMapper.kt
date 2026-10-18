@@ -1,11 +1,10 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
@@ -27,26 +26,18 @@ object ProviderRequestMapper {
     /**
      * @param images 실행 시점에 준비한 입력 바이트 또는 읽기 주소. **준비는 여기서 하지 않는다** —
      *   매핑 함수가 조회를 시작하면 호출자가 그 비용을 볼 수 없게 된다.
-     *   기본값이 빈 목록이라 입력이 없는 종류를 옮길 때는 부르는 쪽이 달라지지 않는다.
+     *   기본값이 빈 목록이라 참조가 없는 옵션을 옮길 때는 부르는 쪽이 달라지지 않는다.
      */
     fun from(
         option: GenerationOption,
         images: List<ResolvedFile> = emptyList(),
     ): ExternalApiGenerateRequest = when (option) {
-        is TextToImageOption -> {
-            val (width, height) = pixelsOf(option.size)
-            ExternalApiGenerateRequest(
-                prompt = option.prompt,
-                width = width,
-                height = height,
-                quality = qualityOf(option.quality),
-            )
-        }
-
-        is ImageToImageOption -> {
-            // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 읽어 넘기기를 빠뜨린 것이다.
-            // 그대로 두면 이미지 없는 요청이 조용히 t2i 로 나가 과금된다.
-            require(images.isNotEmpty()) { "고칠 이미지를 읽어 넘기지 않았다" }
+        is ImageOption -> {
+            // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 참조를 읽어 넘기다 빠뜨렸거나 잘못 넘긴 것이다.
+            // 포트는 이미지가 있는지로 경로를 고르므로, 장수가 어긋난 채 보내면 조용히 다른 요청이 되어 과금된다.
+            require(images.size == option.sources.size) {
+                "읽어 넘긴 참조 이미지 수가 옵션과 다르다: 참조 ${option.sources.size}장, 넘긴 것 ${images.size}장"
+            }
 
             val (width, height) = pixelsOf(option.size)
             ExternalApiGenerateRequest(

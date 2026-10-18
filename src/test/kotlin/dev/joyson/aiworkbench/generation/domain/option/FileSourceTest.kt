@@ -51,7 +51,7 @@ class FileSourceTest @Autowired constructor(
 
     @Test
     fun `이미지 변형 옵션을 왕복시킨다`() {
-        val option: GenerationOption = ImageToImageOption(
+        val option: GenerationOption = ImageOption(
             prompt = "수채화로",
             sources = listOf(FileSource.Generated(sourceSha256)),
             size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
@@ -60,22 +60,33 @@ class FileSourceTest @Autowired constructor(
         val json = mapper.writeValueAsString(option)
 
         assertEquals(
-            """{"type":"image-to-image","prompt":"수채화로",""" +
-                """"sources":[{"type":"generated","sha256":"$sourceSha256"}],""" +
-                """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}""",
+            """{"type":"image","prompt":"수채화로",""" +
+                """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto",""" +
+                """"sources":[{"type":"generated","sha256":"$sourceSha256"}]}""",
             json,
         )
 
         val read = mapper.readValue<GenerationOption>(json)
-        assertIs<ImageToImageOption>(read)
+        assertIs<ImageOption>(read)
         assertIs<FileSource.Generated>(read.sources.single())
         assertEquals(option, read)
     }
 
+    /** 글만으로 만드는 요청은 `sources` 를 보내지 않는다. 빠진 것은 "참조 없음" 이다. */
+    @Test
+    fun `참조를 적지 않은 옵션은 참조 없이 읽힌다`() {
+        val json = """{"type":"image","prompt":"고양이",""" +
+            """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
+
+        val read = assertIs<ImageOption>(mapper.readValue<GenerationOption>(json))
+        assertEquals(emptyList(), read.sources)
+    }
+
     /** 사용자 입력의 불변식은 도메인 타입이 지킨다 — 바인딩 단계에서 걸려야 400 이 된다. */
     @Test
-    fun `입력 이미지가 없는 변형 옵션은 읽히지 않는다`() {
-        val json = """{"type":"image-to-image","prompt":"수채화로","sources":[],""" +
+    fun `참조 이미지가 상한을 넘는 옵션은 읽히지 않는다`() {
+        val sources = List(ImageOption.MAX_SOURCES + 1) { """{"type":"generated","sha256":"$sourceSha256"}""" }
+        val json = """{"type":"image","prompt":"수채화로","sources":$sources,""" +
             """"size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""
 
         assertFailsWith<Exception> { mapper.readValue<GenerationOption>(json) }

@@ -7,6 +7,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
 import org.springframework.beans.factory.annotation.Autowired
@@ -105,7 +106,7 @@ class GenerationJobApiTest @Autowired constructor(
 
     @Test
     fun `빈 prompt 는 400 이다`() {
-        request(body(1, """{"type":"text-to-image","prompt":"  "}""")).andExpect { status { isBadRequest() } }
+        request(body(1, """{"type":"image","prompt":"  "}""")).andExpect { status { isBadRequest() } }
     }
 
     @Test
@@ -119,34 +120,35 @@ class GenerationJobApiTest @Autowired constructor(
      */
     @Test
     fun `존재하지 않는 이미지 참조는 400 이다`() {
-        request(body(1, editOption(sources = generated(UUID.randomUUID()))))
+        request(body(1, editOption(sources = "[${generated()}]")))
             .andExpect { status { isBadRequest() } }
     }
 
+    /** 참조가 없으면 글만으로 만든다. 빈 목록을 보내는 클라이언트도 거절하지 않는다. */
     @Test
-    fun `고칠 이미지를 주지 않으면 400 이다`() {
-        request(body(1, editOption(sources = "[]"))).andExpect { status { isBadRequest() } }
+    fun `참조를 빈 목록으로 주면 글만으로 접수된다`() {
+        request(body(1, editOption(sources = "[]"))).andExpect { status { isAccepted() } }
     }
 
     /** 지금 상한은 1장이고, 그 제한이 접수 단계에서 걸린다는 사실을 고정한다. */
     @Test
-    fun `고칠 이미지를 두 장 주면 400 이다`() {
-        val two = """[{"type":"generated","uuid":"${UUID.randomUUID()}"},""" +
-            """{"type":"generated","uuid":"${UUID.randomUUID()}"}]"""
-
-        request(body(1, editOption(sources = two))).andExpect { status { isBadRequest() } }
+    fun `참조 이미지를 두 장 주면 400 이다`() {
+        request(body(1, editOption(sources = "[${generated()},${generated()}]")))
+            .andExpect { status { isBadRequest() } }
     }
 
     @Test
     fun `알 수 없는 이미지 참조 종류는 400 이다`() {
-        request(body(1, editOption(sources = """[{"type":"borrowed","uuid":"${UUID.randomUUID()}"}]""")))
+        request(body(1, editOption(sources = """[{"type":"borrowed","sha256":"${"a".repeat(64)}"}]""")))
             .andExpect { status { isBadRequest() } }
     }
 
-    private fun generated(uuid: UUID) = """[{"type":"generated","uuid":"$uuid"}]"""
+    /** 형식은 맞지만 아무도 갖지 않은 해시다. 400 이 형식 오류가 아니라 판정에서 나오게 한다. */
+    private fun generated() =
+        """{"type":"generated","sha256":"${Sha256.of(UUID.randomUUID().toString().toByteArray()).hex}"}"""
 
     private fun editOption(sources: String) =
-        """{"type":"image-to-image","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
+        """{"type":"image","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
 
     /** 애노테이션 인자는 컴파일 타임 상수라 도메인 상수를 참조할 수 없다. 어긋나면 여기서 잡는다. */
     @Test
@@ -166,4 +168,4 @@ private object GenerationRequestConstraints {
 
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
 private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
-private const val OPTION = """{"type":"text-to-image","prompt":"고양이","size":$SIZE}"""
+private const val OPTION = """{"type":"image","prompt":"고양이","size":$SIZE}"""

@@ -8,10 +8,9 @@ import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import org.springframework.beans.factory.annotation.Autowired
 import jakarta.persistence.EntityManager
 import kotlin.test.Test
@@ -27,7 +26,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     private val em: EntityManager,
 ) : IntegrationTest() {
 
-    private fun option(prompt: String = "고양이") = TextToImageOption(
+    private fun option(prompt: String = "고양이") = ImageOption(
         prompt = prompt,
         size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.TWO_K),
         quality = Quality.HIGH,
@@ -48,7 +47,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
         val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
 
-        val option = assertIs<TextToImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
+        val option = assertIs<ImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
         assertEquals("고양이", option.prompt)
         assertEquals(Quality.HIGH, option.quality)
 
@@ -62,7 +61,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `픽셀로 말한 크기도 원래 타입으로 읽힌다`() {
         val job = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
-            option = TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
+            option = ImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
             model = "gpt-image-2",
             taskCount = 1,
         )
@@ -71,7 +70,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
 
         val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
 
-        val option = assertIs<TextToImageOption>(loaded.option)
+        val option = assertIs<ImageOption>(loaded.option)
         val size = assertIs<ImageSize.ByPixels>(option.size)
         assertEquals(1920, size.width)
         assertEquals(1080, size.height)
@@ -82,7 +81,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val sourceSha256 = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val job = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
-            option = ImageToImageOption(
+            option = ImageOption(
                 prompt = "수채화로",
                 sources = listOf(FileSource.Generated(sourceSha256)),
                 size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
@@ -96,7 +95,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val loaded = em.find(GenerationJob::class.java, saved.id!!)!!
 
         // 다형이 세 겹이다 — option, sources 의 원소, 그리고 size.
-        val option = assertIs<ImageToImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
+        val option = assertIs<ImageOption>(loaded.option, "다형성 정보가 보존되지 않았다")
         val source = assertIs<FileSource.Generated>(option.sources.single(), "참조의 종류가 보존되지 않았다")
         assertEquals(sourceSha256, source.sha256)
         assertIs<ImageSize.ByRatio>(option.size)
@@ -113,7 +112,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             """
             insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), gen_random_uuid(),
-                    '{"type":"image-to-image","prompt":"과거 데이터",
+                    '{"type":"image","prompt":"과거 데이터",
                       "sources":[{"type":"generated","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}'::jsonb,
                     'gpt-image-2', 1,
@@ -130,7 +129,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             .resultList
             .first()
 
-        val option = assertIs<ImageToImageOption>(loaded.option)
+        val option = assertIs<ImageOption>(loaded.option)
         assertEquals("과거 데이터", option.prompt)
         assertEquals(
             "a".repeat(64),
@@ -178,7 +177,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
             """
             insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
             values (gen_random_uuid(), gen_random_uuid(),
-                    '{"type":"text-to-image","prompt":"과거 데이터",
+                    '{"type":"image","prompt":"과거 데이터",
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}'::jsonb,
                     'gpt-image-2', 99,
                     'DISPATCHED', current_timestamp, current_timestamp)

@@ -13,9 +13,8 @@ import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.GeneratedFileTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTaskTestRepository
@@ -135,7 +134,7 @@ class TaskWorkerTest @Autowired constructor(
     private fun newTask(
         model: String = MODEL,
         size: ImageSize = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
-        option: GenerationOption = TextToImageOption("고양이", size),
+        option: GenerationOption = ImageOption("고양이", size),
         ownerUuid: UUID = UUID.randomUUID(),
     ): Pair<GenerationJob, GenerationJobTask> {
         val job = jobRepository.saveAndFlush(
@@ -834,7 +833,7 @@ class TaskWorkerTest @Autowired constructor(
 
     private fun editOption(sourceSha256: String) = editOption(FileSource.Generated(sourceSha256))
 
-    private fun editOption(source: FileSource) = ImageToImageOption(
+    private fun editOption(source: FileSource) = ImageOption(
         prompt = "수채화로",
         sources = listOf(source),
         size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),

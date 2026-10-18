@@ -12,9 +12,8 @@ import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -53,7 +52,7 @@ class GenerationJobServiceTest @Autowired constructor(
 ) : IntegrationTest() {
 
     private fun command(model: String = MODEL, taskCount: Int = 2) = GenerationCommand(
-        option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+        option = ImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
         model = model,
         taskCount = taskCount,
     )
@@ -197,7 +196,7 @@ class GenerationJobServiceTest @Autowired constructor(
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13)
 
     private fun editCommand(source: FileSource = FileSource.Generated(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)) = GenerationCommand(
-        option = ImageToImageOption(
+        option = ImageOption(
             prompt = "수채화로",
             sources = listOf(source),
             size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),

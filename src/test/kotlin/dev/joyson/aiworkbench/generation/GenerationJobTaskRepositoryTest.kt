@@ -8,7 +8,7 @@ import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
-import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import kotlin.test.Test
@@ -31,7 +31,7 @@ class GenerationJobTaskRepositoryTest @Autowired constructor(
         jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = UUID.randomUUID(),
-                option = TextToImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
+                option = ImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
                 model = "gpt-image-2",
                 taskCount = 3,
             ),
