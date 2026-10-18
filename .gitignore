@@ -41,6 +41,8 @@ out/
 
 ### Local secrets ###
 .env
+runtime.env
+deploy/overlays/home/runtime.env
 google-login-auth-design.html
 
 ### Local file storage ###
