@@ -17,9 +17,12 @@ import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
+import io.micrometer.core.instrument.LongTaskTimer
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.time.Instant
+import java.util.function.Supplier
 import kotlin.time.TimeSource
 
 /**
@@ -44,6 +47,7 @@ class TaskWorker(
     private val fileStorage: FileStorage,
     private val stateWriter: TaskStateWriter,
     private val callRecorder: ProviderCallRecorder,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -138,7 +142,8 @@ class TaskWorker(
         val calledAt = Instant.now()
         val callMark = TimeSource.Monotonic.markNow()
         val response = try {
-            provider.generate(job.model, request)
+            // 도는 동안만 진행 중에 둔다. record 가 성공이든 예외든 끝나면 뺀다.
+            activeCalls(provider.name, job.model).record(Supplier { provider.generate(job.model, request) })
         } catch (e: ExternalApiException) {
             record(
                 ProviderCallMapper.failed(
@@ -152,6 +157,19 @@ class TaskWorker(
         record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage, response.applied))
         return response
     }
+
+    /**
+     * 진행 중인 Provider 호출. 끝난 호출만 재는 Timer 로는 멈춘 호출이 타임아웃이 나야 보이는데,
+     * 여기서는 몇 초째 돌고 있는지가 도는 동안 보인다.
+     *
+     * 끝나면 반드시 빠져야 한다 — 남으면 끝나지 않은 호출처럼 나이가 계속 는다. 그래서 start·stop 을
+     * 손으로 짝짓지 않고 `record` 로 감싼다.
+     */
+    private fun activeCalls(providerName: String, model: String): LongTaskTimer =
+        LongTaskTimer.builder("workbench.provider.call.active")
+            .description(ACTIVE_CALL_DESCRIPTION)
+            .tags("provider", providerName, "model", model)
+            .register(meterRegistry)
 
     private fun failCall(taskId: Long, e: ExternalApiException) =
         stateWriter.fail(taskId, e.message ?: CALL_FAILED, e.retryable)
@@ -233,5 +251,9 @@ class TaskWorker(
 
     private companion object {
         const val CALL_FAILED = "Provider 호출이 실패했다"
+
+        /** `_count` 가 같은 이름의 Timer 와 뜻이 다르다. 누적 호출 수로 읽으면 안 된다. */
+        const val ACTIVE_CALL_DESCRIPTION =
+            "지금 진행 중인 Provider 호출. 끝나면 빠진다 — _count 는 누적이 아니라 지금 수, _max 는 가장 오래 돌고 있는 호출의 초다"
     }
 }

@@ -42,6 +42,8 @@ import dev.joyson.aiworkbench.upload.UsableUpload
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import dev.joyson.aiworkbench.usage.ProviderCallTestRepository
+import io.micrometer.core.instrument.LongTaskTimer
+import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -69,6 +71,7 @@ class TaskWorkerTest @Autowired constructor(
     private val callRepository: ProviderCallTestRepository,
     private val generatedFileFinder: GeneratedFileFinder,
     private val uploadedFiles: UploadedFiles,
+    private val meterRegistry: MeterRegistry,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -126,6 +129,7 @@ class TaskWorkerTest @Autowired constructor(
         fileStorage = fileStorage,
         stateWriter = stateWriter,
         callRecorder = recorder,
+        meterRegistry = meterRegistry,
     )
 
     private fun newTask(
@@ -237,6 +241,37 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals("400 잘못된 요청", failed.failureReason)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
     }
+
+    /**
+     * 끝난 호출만 재면 멈춘 호출은 타임아웃이 나야 보인다. 도는 동안 "진행 중" 에 있어야 그 전에 안다.
+     * 끝나면 반드시 빠져야 한다 — 남으면 끝나지 않은 호출처럼 나이가 계속 는다.
+     */
+    @Test
+    fun `Provider 호출은 도는 동안만 진행 중으로 센다`() {
+        val (_, task) = newTask()
+        var duringCall = -1
+
+        workerWith(provider {
+            duringCall = activeCalls().activeTasks()
+            success()
+        }).process(task.id!!)
+
+        assertEquals(1, duringCall)
+        assertEquals(0, activeCalls().activeTasks())
+    }
+
+    @Test
+    fun `Provider 가 실패해도 진행 중에서 빠진다`() {
+        val (_, task) = newTask()
+
+        workerWith(provider { throw ExternalApiException(FailureKind.NO_RESPONSE, "읽기 타임아웃") })
+            .process(task.id!!)
+
+        assertEquals(0, activeCalls().activeTasks())
+    }
+
+    private fun activeCalls(): LongTaskTimer =
+        meterRegistry.get("workbench.provider.call.active").tags("provider", PROVIDER, "model", MODEL).longTaskTimer()
 
     @Test
     fun `다룰 Provider 가 사라졌으면 재시도하지 않는다`() {

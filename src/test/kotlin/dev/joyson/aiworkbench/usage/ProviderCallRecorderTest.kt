@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.usage
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.usage.domain.CostBasis
 import dev.joyson.aiworkbench.usage.domain.ProviderCall
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
 import java.math.BigDecimal
@@ -12,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * 지출 기록의 성립 조건 두 가지를 본다.
@@ -25,6 +27,7 @@ import kotlin.test.assertNull
 class ProviderCallRecorderTest @Autowired constructor(
     private val recorder: ProviderCallRecorder,
     private val em: EntityManager,
+    private val meterRegistry: MeterRegistry,
 ) : IntegrationTest() {
 
     private fun command(
@@ -33,6 +36,7 @@ class ProviderCallRecorderTest @Autowired constructor(
         reportedUnit: ReportedUnit? = null,
         model: String = "gpt-image-2",
         failureReason: String? = null,
+        failureKind: FailureKind? = null,
     ) = RecordProviderCallCommand(
         taskUuid = UUID.randomUUID(),
         jobUuid = UUID.randomUUID(),
@@ -42,6 +46,7 @@ class ProviderCallRecorderTest @Autowired constructor(
         request = ImageRequest(width = 2048, height = 1152, quality = "high"),
         succeeded = failureReason == null,
         failureReason = failureReason,
+        failureKind = failureKind,
         latencyMs = 12_345,
         usageRaw = usageRaw,
         reportedAmount = reportedAmount,
@@ -129,4 +134,35 @@ class ProviderCallRecorderTest @Autowired constructor(
         assertEquals(255, loaded.failureReason!!.length)
         assertEquals(255, loaded.model.length)
     }
+
+    /**
+     * 실패를 종류별로 따로 센다. 응답을 못 받은 실패는 과금을 가장 의심해야 하는 종류라,
+     * 다른 실패와 섞이면 그것만 골라 알림을 걸 수 없다.
+     */
+    @Test
+    fun `호출마다 결과와 실패 종류를 붙여 센다`() {
+        val timeoutsBefore = calls(outcome = "failure", failureKind = "no_response")
+        val successesBefore = calls(outcome = "success", failureKind = "none")
+
+        recorder.record(command(failureReason = "읽기 타임아웃", failureKind = FailureKind.NO_RESPONSE))
+        recorder.record(command())
+
+        // 컨텍스트를 공유하므로 다른 테스트가 센 것이 남아 있다. 늘어난 만큼만 본다.
+        assertEquals(1, calls(outcome = "failure", failureKind = "no_response") - timeoutsBefore)
+        assertEquals(1, calls(outcome = "success", failureKind = "none") - successesBefore)
+    }
+
+    /** Prometheus 의 `# HELP` 줄이 된다. 비어 있으면 이름만 보고 보관 시간이 섞였는지 짐작하게 된다. */
+    @Test
+    fun `호출 지표에 무엇을 재는지 설명이 붙는다`() {
+        recorder.record(command())
+
+        val timer = meterRegistry.get("workbench.provider.call").tags("outcome", "success").timer()
+        assertTrue(assertNotNull(timer.id.description).isNotBlank())
+    }
+
+    private fun calls(outcome: String, failureKind: String): Long =
+        meterRegistry.find("workbench.provider.call")
+            .tags("provider", "openai", "model", "gpt-image-2", "outcome", outcome, "failure_kind", failureKind)
+            .timer()?.count() ?: 0
 }
