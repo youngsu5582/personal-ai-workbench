@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # 생성 결과나 올린 파일을 입력으로 이미지 투 이미지 요청을 보낸다.
-#   ./scripts/i2i.sh <결과파일-uuid> "수채화로 바꿔줘"
-#   ./scripts/i2i.sh <결과파일-uuid> "수채화로" 2 gpt-image-2
-#   SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드-uuid> "수채화로"
-#   RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <결과파일-uuid> "수채화로"
+#   ./scripts/i2i.sh <결과파일-sha256> "수채화로 바꿔줘"
+#   ./scripts/i2i.sh <결과파일-sha256> "수채화로" 2 gpt-image-2
+#   SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드-sha256> "수채화로"
+#   RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <결과파일-sha256> "수채화로"
 set -euo pipefail
 
 usage() {
-  echo '사용법: ./scripts/i2i.sh <입력 파일 UUID> <프롬프트> [작업 수: 1~4] [모델]'
+  echo '사용법: ./scripts/i2i.sh <입력 파일 SHA-256> <프롬프트> [작업 수: 1~4] [모델]'
   echo '입력은 생성 결과 파일(기본)이나 올린 파일(SOURCE_TYPE=uploaded)이다. Job UUID는 입력이 아니다.'
   echo '환경변수: BASE_URL, ACCESS_TOKEN, USER_UUID, SOURCE_TYPE, RATIO, RESOLUTION, QUALITY'
 }
@@ -32,14 +32,12 @@ done
 # JSON 인코딩을 맡겨 따옴표와 줄바꿈이 들어간 프롬프트도 그대로 전달한다.
 BODY=$(python3 - "$1" "$2" "${3:-1}" "${4:-gpt-image-2}" \
   "${RATIO:-1:1}" "${RESOLUTION:-1k}" "${QUALITY:-auto}" "${SOURCE_TYPE:-generated}" <<'PY'
-import json, sys, uuid
+import json, sys, re, uuid
 source, prompt, count, model, ratio, resolution, quality, source_type = sys.argv[1:]
 if source_type not in ("generated", "uploaded"):
     sys.exit("SOURCE_TYPE은 generated 또는 uploaded여야 한다.")
-try:
-    source = str(uuid.UUID(source))
-except ValueError:
-    sys.exit("입력 파일의 UUID가 필요하다.")
+if not re.fullmatch("[0-9a-f]{64}", source):
+    sys.exit("입력 파일의 SHA-256 소문자 hex 64자가 필요하다.")
 if not prompt.strip():
     sys.exit("프롬프트는 비어 있을 수 없다.")
 try:
@@ -54,7 +52,7 @@ print(json.dumps({
     "option": {
         "type": "image-to-image",
         "prompt": prompt,
-        "sources": [{"type": source_type, "uuid": source}],
+        "sources": [{"type": source_type, "sha256": source}],
         "size": {"type": "ratio", "ratio": ratio, "resolution": resolution},
         "quality": quality,
     },
@@ -88,7 +86,7 @@ if [ "$STATUS" != '202' ]; then
 fi
 
 JOB_UUID=$(python3 - "$TMP_DIR/response.json" <<'PY'
-import json, sys, uuid
+import json, sys, re, uuid
 try:
     with open(sys.argv[1]) as response:
         job = json.load(response)

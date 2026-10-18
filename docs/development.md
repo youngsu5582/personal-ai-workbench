@@ -209,7 +209,7 @@ aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
 
 ### 5. 다운로드가 달라진다
 
-`GET /api/files/{uuid}` 는 주소도 인가도 그대로지만, **응답이 달라진다.**
+`GET /api/files/{sha256}` 는 주소도 인가도 그대로지만, **응답이 달라진다.**
 
 | 보관소 | 응답 | 바이트가 지나는 길 |
 |---|---|---|
@@ -217,7 +217,7 @@ aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
 | `s3` | `302` + `Location` | 보관소 → 클라이언트 (**앱을 안 거친다**) |
 
 ```bash
-curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:8080/api/files/<uuid>
+curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:8080/api/files/<sha256>
 # HTTP/1.1 302
 # Location: http://localhost:3900/workbench/users/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
 ```
@@ -236,16 +236,16 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 ## 이미지 투 이미지
 
 본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.
-`sources[]`는 `{"type": "generated", "uuid": <결과 파일 UUID>}` 또는 `{"type": "uploaded", "uuid": <업로드 UUID>}`다.
+`sources[]`는 `{"type": "generated", "sha256": "<결과 파일 해시>"}` 또는 `{"type": "uploaded", "sha256": "<업로드 파일 해시>"}`다.
 올린 파일은 처음 입력으로 쓰일 때 형식을 확인하며, 맞지 않으면 400이다.
 
-실행 중인 서버에는 다음 스크립트로 요청한다. 입력 UUID는 `GET /api/jobs/{uuid}` 응답의
-`tasks[].files[].uuid`에서 확인한다.
+실행 중인 서버에는 다음 스크립트로 요청한다. 입력 해시는 `GET /api/jobs/{uuid}` 응답의
+`tasks[].files[].sha256`에서 확인한다. Job 과 Task 식별자는 UUID 를 유지한다.
 
 ```bash
-./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘"
-./scripts/i2i.sh <생성-결과파일-uuid> "수채화로 바꿔줘" 2 gpt-image-2
-RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <생성-결과파일-uuid> "수채화로"
+./scripts/i2i.sh <생성-결과파일-sha256> "수채화로 바꿔줘"
+./scripts/i2i.sh <생성-결과파일-sha256> "수채화로 바꿔줘" 2 gpt-image-2
+RATIO=16:9 RESOLUTION=2k QUALITY=high ./scripts/i2i.sh <생성-결과파일-sha256> "수채화로"
 ```
 
 기본 모델은 `gpt-image-2`, 작업 수는 1, 크기는 `1:1 / 1k`, 품질은 `auto`다.
@@ -261,7 +261,7 @@ Content-Type: application/json
   "option": {
     "type": "image-to-image",
     "prompt": "수채화로 바꿔줘",
-    "sources": [{"type": "generated", "uuid": "<generated-file-uuid>"}],
+    "sources": [{"type": "generated", "sha256": "<generated-file-sha256>"}],
     "size": {"type": "pixels", "width": 1024, "height": 1024},
     "quality": "high"
   },
@@ -299,7 +299,7 @@ Content-Type: application/json
 
 ```json
 {
-  "uuid": "<upload-uuid>",
+  "sha256": "<파일 SHA-256 소문자 hex 64자>",
   "uploadRequired": true,
   "url": "http://<storage>/<bucket>/users/<owner>/uploads/<fanout>/<hash>.png?<signature>",
   "method": "PUT",
@@ -312,8 +312,8 @@ Content-Type: application/json
 }
 ```
 
-이미 검증된 같은 파일이 있으면 `uploadRequired: false`, 기존 `uuid`, `url: null`, `method: null`, 빈 `headers`를 반환한다.
-이때는 PUT을 생략하고 UUID를 입력으로 사용한다. 아직 올라오지 않은 같은 파일은 UUID를 재사용하고 주소를 다시 발급한다.
+이미 검증된 같은 파일이 있으면 `uploadRequired: false`, 기존 `sha256`, `url: null`, `method: null`, 빈 `headers`를 반환한다.
+이때는 PUT을 생략하고 해시를 입력으로 사용한다. 아직 올라오지 않은 같은 파일은 같은 해시의 주소를 다시 발급한다.
 `contentType`은 파일 이름의 확장자가 아니라 앞부분의 매직넘버로 정한다. 선언과 내용이 다르면 거절되고,
 같은 내용은 형식을 바꿔 선언해도 다시 발급받을 수 없다(400).
 
@@ -324,7 +324,7 @@ PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인�
 직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 중복 확인 중 보관소에 닿지 못하면 503이며 상태를 바꾸지 않는다.
 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
 
-올린 파일은 `SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드 UUID> "<프롬프트>"`로 i2i 입력에 쓴다.
+올린 파일은 `SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드 SHA-256> "<프롬프트>"`로 i2i 입력에 쓴다.
 설계와 그 이유는 [`docs/architecture/direct-upload.md`](architecture/direct-upload.md)에 정리한다.
 
 ### 스크립트로 발급 → 업로드 확인
@@ -340,7 +340,7 @@ BASE_URL=http://localhost:8099 ./scripts/upload.sh './images/my photo.jpg'
 기본 인증은 `dev-token.sh`를 사용하므로, 먼저 한 번 로그인해 DB에 사용자를 등록한다.
 특정 사용자는 `USER_UUID`로 지정하고, 이미 가진 토큰은 `ACCESS_TOKEN` 환경변수로 전달할 수 있다.
 파일 헤더로 PNG·JPEG·WebP를 판별하고 크기·SHA-256을 계산한 뒤, `POST /api/uploads` 응답의 주소로
-파일을 직접 PUT한다. 검증된 기존 파일이면 전송을 생략한다. 발급 UUID·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
+파일을 직접 PUT한다. 검증된 기존 파일이면 전송을 생략한다. 파일 해시·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
 Bearer 토큰은 앱에만 보낸다.
 
 ### 샘플 페이지에서 발급 → 업로드 확인
