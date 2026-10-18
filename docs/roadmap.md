@@ -8,7 +8,7 @@ README 의 [이런 걸 하려고 해요](../README.md#이런-걸-하려고-해�
 |---|---|
 | 🧩 어떤 AI 기능이든 요청 하나로 | 🚧 이미지(T2I · I2I)만 |
 | ⏳ 맡겨두고, 결과는 나중에 | ✅ 비동기 처리 · 재시도 — 중복 요청 방지는 아직 |
-| 💰 요청 하나하나의 비용까지 | 🚧 호출마다 사용량 기록 · 이번 달 조회 — 단가표는 아직 |
+| 💰 요청 하나하나의 비용까지 | 🚧 호출마다 단가표로 USD 비용 · 이번 달 조회 — 원화 환산 · 그룹별 조회는 아직 |
 | 📦 급하지 않으면 더 싸게 | ⬜ |
 | 📝 자주 하는 요청은 템플릿으로 | ⬜ |
 | 🔐 내 서비스들이 안전하게 연결 | 🚧 Google 로그인 · 자체 토큰까지 — OAuth Server 는 아직 |
@@ -27,3 +27,4 @@ README 의 [이런 걸 하려고 해요](../README.md#이런-걸-하려고-해�
 | 09.24 – 09.26 | Provider 호출마다 지출을 기록하고, S3 호환 보관소를 붙임 | [#31](https://github.com/youngsu5582/personal-ai-workbench/pull/31) [#32](https://github.com/youngsu5582/personal-ai-workbench/pull/32) [#33](https://github.com/youngsu5582/personal-ai-workbench/pull/33) [#35](https://github.com/youngsu5582/personal-ai-workbench/pull/35) |
 | 10.05 – 10.12 | 직접 업로드 주소 발급, 이미지 투 이미지, 올린 이미지를 I2I 입력으로 | [#36](https://github.com/youngsu5582/personal-ai-workbench/pull/36) [#39](https://github.com/youngsu5582/personal-ai-workbench/pull/39) [#46](https://github.com/youngsu5582/personal-ai-workbench/pull/46) |
 | 10.09 – 10.12 | 관례를 기계로 — 이름 · 자리 규칙을 테스트와 Claude Code Mod 가 강제 | [#40](https://github.com/youngsu5582/personal-ai-workbench/pull/40) [#41](https://github.com/youngsu5582/personal-ai-workbench/pull/41) [#43](https://github.com/youngsu5582/personal-ai-workbench/pull/43) |
+| 10.18 | 호출마다 비용 — 기간이 있는 단가표로 USD 를 계산하고, 원장과 따로 붙임 | [#61](https://github.com/youngsu5582/personal-ai-workbench/pull/61) |

@@ -325,9 +325,6 @@ class TaskWorkerTest @Autowired constructor(
         // 소유자를 여기 복사해 둬야 지출 조회가 Job 을 조인하지 않는다.
         assertEquals(job.ownerUserUuid, call.ownerUserUuid)
         assertNotNull(call.usageRaw)
-
-        // 단가표가 아직 없다. 모르는 것을 0 으로 적지 않는다.
-        assertNull(call.cost)
     }
 
     /**

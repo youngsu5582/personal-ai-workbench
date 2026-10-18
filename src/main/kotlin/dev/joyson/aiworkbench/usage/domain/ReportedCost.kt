@@ -12,6 +12,9 @@ import java.math.BigDecimal
  *
  * 금액과 단위를 갈라 두지 않는 이유: **단위가 값에 붙어 다녀야 합계가 뜻을 갖는다.**
  * 따로 두면 크레딧 3 과 달러 0.19 가 같은 컬럼에 섞이는 것을 아무것도 막지 못한다.
+ *
+ * 생성자를 `private` 이 아니라 `internal` 로 둔다. kotlin-jpa 가 만들어 주는 no-arg 생성자가
+ * 선언한 가시성을 따라가서, private 이면 Hibernate 가 `InstantiationException` 으로 못 만든다.
  */
 @Embeddable
 class ReportedCost internal constructor(

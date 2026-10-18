@@ -2,6 +2,9 @@ package dev.joyson.aiworkbench.usage
 
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
+import dev.joyson.aiworkbench.usage.application.ProviderCallPricingWorker
+import dev.joyson.aiworkbench.usage.domain.ModelPriceBook
+import dev.joyson.aiworkbench.usage.domain.PriceRates
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
 import org.springframework.beans.factory.annotation.Autowired
@@ -16,8 +19,8 @@ import kotlin.test.Test
 /**
  * 지출 조회가 무엇을 말하고 무엇을 말하지 않는지 고정한다.
  *
- * 가장 중요한 것은 **모르는 것을 0 으로 말하지 않는 것**이다. 단가표가 붙기 전에는 비용이 비어 있는데,
- * 합계만 내보내면 화면이 그것을 "이번 달 0 달러 썼다" 로 읽는다. 그건 거짓이고,
+ * 가장 중요한 것은 **모르는 것을 0 으로 말하지 않는 것**이다. 비용은 폴러가 나중에 붙이고 단가표에 없는 모델은
+ * 끝내 비어 있는데, 합계만 내보내면 화면이 그것을 "이번 달 0 달러 썼다" 로 읽는다. 그건 거짓이고,
  * 거짓인 줄 모르는 채로 한도를 정하는 근거가 된다.
  */
 class UsageApiTest @Autowired constructor(
@@ -25,7 +28,12 @@ class UsageApiTest @Autowired constructor(
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
     private val recorder: ProviderCallRecorder,
+    private val worker: ProviderCallPricingWorker,
+    private val books: ModelPriceBookTestRepository,
 ) : IntegrationTest() {
+
+    /** 폴러가 한 주기에 하는 일. */
+    private fun priceAll() = worker.unpriced(100).forEach(worker::price)
 
     private class Owner(val uuid: UUID, val token: String)
 
@@ -46,6 +54,7 @@ class UsageApiTest @Autowired constructor(
         model: String = "gpt-image-2",
         succeeded: Boolean = true,
         reportedUsd: BigDecimal? = null,
+        usageRaw: Map<String, Any?>? = null,
         calledAt: Instant = Instant.now(),
     ) = recorder.record(
         RecordProviderCallCommand(
@@ -56,28 +65,62 @@ class UsageApiTest @Autowired constructor(
             model = model,
             succeeded = succeeded,
             latencyMs = 1_000,
+            usageRaw = usageRaw,
             reportedAmount = reportedUsd,
             reportedUnit = reportedUsd?.let { ReportedUnit.USD },
             calledAt = calledAt,
         ),
     )
 
+    /** 아직 안 본 호출과, 봤지만 단가표에 없는 호출 — 둘 다 모르는 것이다. */
     @Test
     fun `비용을 모르면 0 이 아니라 모른다고 말한다`() {
         val me = owner("usage-unknown")
         record(me.uuid)
         record(me.uuid, succeeded = false)
 
+        for (pass in listOf("폴러가 돌기 전", "폴러가 지나간 뒤")) {
+            if (pass == "폴러가 지나간 뒤") priceAll()
+
+            mockMvc.get("/api/usage") { header("Authorization", "Bearer ${me.token}") }
+                .andExpect {
+                    status { isOk() }
+                    jsonPath("$.calls") { value(2) }
+                    jsonPath("$.succeededCalls") { value(1) }
+                    jsonPath("$.failedCalls") { value(1) }
+                    // 0 이 아니라 null 이다. 0 은 "안 썼다" 는 뜻이고 그건 거짓이다.
+                    jsonPath("$.costUsd") { doesNotExist() }
+                    jsonPath("$.costKnownCalls") { value(0) }
+                    jsonPath("$.costComplete") { value(false) }
+                }
+        }
+    }
+
+    @Test
+    fun `단가표에 있는 호출은 비용이 붙어 합계가 완전해진다`() {
+        val me = owner("usage-priced")
+        books.save(
+            ModelPriceBook(
+                provider = "openai",
+                model = "gpt-image-2",
+                effectiveFrom = Instant.parse("2026-01-01T00:00:00Z"),
+                sourceUrl = "https://example.com",
+                rates = PriceRates(mapOf("output_tokens" to BigDecimal("30"))),
+            ),
+        )
+        record(me.uuid, usageRaw = mapOf("output_tokens" to 1000))
+        record(me.uuid, usageRaw = mapOf("output_tokens" to 1000))
+
+        priceAll()
+
         mockMvc.get("/api/usage") { header("Authorization", "Bearer ${me.token}") }
             .andExpect {
                 status { isOk() }
                 jsonPath("$.calls") { value(2) }
-                jsonPath("$.succeededCalls") { value(1) }
-                jsonPath("$.failedCalls") { value(1) }
-                // 0 이 아니라 null 이다. 0 은 "안 썼다" 는 뜻이고 그건 거짓이다.
-                jsonPath("$.costUsd") { doesNotExist() }
-                jsonPath("$.costKnownCalls") { value(0) }
-                jsonPath("$.costComplete") { value(false) }
+                jsonPath("$.costKnownCalls") { value(2) }
+                jsonPath("$.costComplete") { value(true) }
+                // 1000 × 30 / 1M × 2
+                jsonPath("$.costUsd") { value("0.06000000") }
             }
     }
 
@@ -87,6 +130,7 @@ class UsageApiTest @Autowired constructor(
         val me = owner("usage-partial")
         record(me.uuid, reportedUsd = BigDecimal("0.19"))
         record(me.uuid)
+        priceAll()
 
         mockMvc.get("/api/usage") { header("Authorization", "Bearer ${me.token}") }
             .andExpect {
