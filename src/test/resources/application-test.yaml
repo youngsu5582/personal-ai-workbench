@@ -53,6 +53,10 @@ workbench:
     worker:
       # 테스트가 도는 동안 폴러가 끼어들면 Task 상태가 테스트 몰래 바뀐다.
       enabled: false
+  usage:
+    pricing:
+      # 같은 이유다. 비용 행이 테스트 몰래 생기면 "아직 안 본 호출" 을 확인할 수 없다.
+      enabled: false
   auth:
     issuer: "https://workbench.test"
     audience: workbench-api
