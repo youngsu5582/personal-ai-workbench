@@ -39,8 +39,8 @@ Status: active
 - **토큰 · 비용** — 지표로 두지 않는다. 사용량은 Provider 마다 모양이 다른 원문(`ProviderUsage.raw`)이고 비용은 Provider 가 직접 답할 때만 있다. `provider_calls` 에 쌓이는 원문으로 단가표 작업 때 계산한다
 
 ## Resume Point
-1단계 후속 — #60 위에 쌓는 PR. Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
-1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 그 PR 에서 확정한다
+1단계 후속 — #62. #60 이 머지돼 #62 는 main 위로 다시 쌓아야 한다(지금은 옛 #60 커밋 위라 충돌 상태). Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
+1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 **아직 확정 전**이다. 스키마라 확정한 뒤에 시작한다
 2. 시도 Timer(outcome 별, 재시도율은 `retried` 개수) · 보관 Timer, 둘 다 설명을 붙인다
 3. 로그 추적 — MDC 로 job · task · 시도 번호를 모든 워커 로그에 싣는다. 실패 · 재시도 로그에도 소요 시간
 
