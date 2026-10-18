@@ -3,10 +3,18 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
+import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
+import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.DecisionInput
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import kotlin.test.assertIs
@@ -22,8 +30,12 @@ class ProviderRequestMapperTest {
 
     private val mapper = ProviderRequestMapper
 
+    /** 이미지 옵션은 늘 생성 요청이 된다. 그 필드를 보려고 한 번 좁힌다. */
+    private fun generateFrom(option: GenerationOption, images: List<ResolvedFile> = emptyList()) =
+        assertIs<ExternalApiGenerateRequest>(mapper.from(option, images))
+
     private fun sizeOf(ratio: AspectRatio, resolution: Resolution): String {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByRatio(ratio, resolution)))
+        val request = generateFrom(TextToImageOption("고양이", ImageSize.ByRatio(ratio, resolution)))
         return "${request.width}x${request.height}"
     }
 
@@ -40,7 +52,7 @@ class ProviderRequestMapperTest {
 
     @Test
     fun `픽셀로 말한 크기는 해석하지 않는다`() {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080)))
+        val request = generateFrom(TextToImageOption("고양이", ImageSize.ByPixels(1920, 1080)))
 
         assertEquals(1920, request.width)
         assertEquals(1080, request.height)
@@ -50,7 +62,7 @@ class ProviderRequestMapperTest {
     fun `제품 품질 눈금을 포트 눈금으로 옮긴다`() {
         // 지금은 1:1 이다. 한쪽에 값이 늘면 when 이 컴파일 에러로 알려준다.
         Quality.entries.forEach { quality ->
-            val request = mapper.from(
+            val request = generateFrom(
                 TextToImageOption("고양이", ImageSize.ByPixels(1024, 1024), quality),
             )
             assertEquals(ImageQuality.valueOf(quality.name), request.quality)
@@ -59,7 +71,7 @@ class ProviderRequestMapperTest {
 
     @Test
     fun `프롬프트를 그대로 넘긴다`() {
-        val request = mapper.from(TextToImageOption("창밖을 보는 고양이", ImageSize.ByPixels(512, 512)))
+        val request = generateFrom(TextToImageOption("창밖을 보는 고양이", ImageSize.ByPixels(512, 512)))
 
         assertEquals("창밖을 보는 고양이", request.prompt)
     }
@@ -68,7 +80,7 @@ class ProviderRequestMapperTest {
     fun `이미지 변형은 넘겨받은 이미지를 포트 어휘로 옮긴다`() {
         val bytes = byteArrayOf(1, 2, 3)
 
-        val request = mapper.from(
+        val request = generateFrom(
             editOption(),
             listOf(ResolvedFile.Bytes(bytes = bytes, mimeType = "image/png", filename = "source.png")),
         )
@@ -82,7 +94,7 @@ class ProviderRequestMapperTest {
     /** 빈 목록이 "글에서 만든다" 는 뜻이라, 실수로 채워지면 조용히 편집 요청이 된다. */
     @Test
     fun `글에서 만드는 요청에는 이미지가 실리지 않는다`() {
-        val request = mapper.from(TextToImageOption("고양이", ImageSize.ByPixels(1024, 1024)))
+        val request = generateFrom(TextToImageOption("고양이", ImageSize.ByPixels(1024, 1024)))
 
         assertTrue(request.images.isEmpty())
     }
@@ -96,13 +108,32 @@ class ProviderRequestMapperTest {
     @Test
     fun `이미지 주소는 바이트 없이 포트에 전달한다`() {
         val url = URI.create("https://storage.test/source.png?X-Amz-Signature=secret")
-        val request = mapper.from(editOption(), listOf(ResolvedFile.Url(url, "image/png", "source.png")))
+        val request = generateFrom(editOption(), listOf(ResolvedFile.Url(url, "image/png", "source.png")))
 
         val input = assertIs<ExternalApiFileInput.Url>(request.images.single())
         assertEquals(url, input.url)
         assertEquals("image/png", input.mimeType)
         assertEquals("source.png", input.filename)
         assertTrue(!input.toString().contains("secret"))
+    }
+
+    @Test
+    fun `Decision 은 텍스트와 이미지 근거를 순서대로 Provider 요청으로 옮긴다`() {
+        val option = DecisionOption(
+            input = listOf(
+                DecisionEvidence.Text("파손됐어요"),
+                DecisionEvidence.Image(FileSource.Uploaded(UUID.randomUUID())),
+            ),
+            questions = listOf(DecisionQuestion.Choice("kind", "무슨 문제인가", listOf(DecisionChoice("damage", "파손"), DecisionChoice("other", "기타")))),
+        )
+
+        val request = assertIs<ExternalApiDecisionRequest>(
+            mapper.from(option, listOf(ResolvedFile.Bytes(byteArrayOf(1), "image/png", "evidence.png"))),
+        )
+
+        assertEquals("파손됐어요", assertIs<DecisionInput.Text>(request.input[0]).text)
+        assertIs<DecisionInput.Image>(request.input[1])
+        assertEquals("kind", request.questions.single().name)
     }
 
     private fun editOption() = ImageToImageOption(

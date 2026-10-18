@@ -5,8 +5,12 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.CostUnit
 import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
-import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.provider.ExternalApiRequest
+import dev.joyson.aiworkbench.provider.ExternalApiResponse
+import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderRequest
@@ -29,19 +33,22 @@ object ProviderCallMapper {
         job: GenerationJob,
         task: GenerationJobTask,
         providerName: String,
-        request: ExternalApiGenerateRequest,
+        request: ExternalApiRequest,
         latencyMs: Int,
         calledAt: Instant,
-        usage: ProviderUsage?,
-        applied: AppliedParameters?,
+        response: ExternalApiResponse,
     ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).let { sent ->
         sent.copy(
             succeeded = true,
             // 저쪽이 실제로 쓴 값을 안다면 그쪽이 맞다 — 돈은 요청이 아니라 만들어진 것에 붙는다.
-            request = applied?.let { overlay(sent.request, it) } ?: sent.request,
-            usageRaw = usage?.raw?.takeIf { it.isNotEmpty() },
-            reportedAmount = usage?.reportedCost?.amount,
-            reportedUnit = usage?.reportedCost?.unit?.let(::unitOf),
+            request = when (response) {
+                is ExternalApiGenerateResponse -> response.applied?.let { overlay(sent.request, it) } ?: sent.request
+                // 판정 응답에는 덮을 실제 값이 없다.
+                is ExternalApiDecisionResponse -> sent.request
+            },
+            usageRaw = response.usage?.raw?.takeIf { it.isNotEmpty() },
+            reportedAmount = response.usage?.reportedCost?.amount,
+            reportedUnit = response.usage?.reportedCost?.unit?.let(::unitOf),
         )
     }
 
@@ -49,7 +56,7 @@ object ProviderCallMapper {
         job: GenerationJob,
         task: GenerationJobTask,
         providerName: String,
-        request: ExternalApiGenerateRequest,
+        request: ExternalApiRequest,
         latencyMs: Int,
         calledAt: Instant,
         failureReason: String,
@@ -64,7 +71,7 @@ object ProviderCallMapper {
         job: GenerationJob,
         task: GenerationJobTask,
         providerName: String,
-        request: ExternalApiGenerateRequest,
+        request: ExternalApiRequest,
         latencyMs: Int,
         calledAt: Instant,
     ) = RecordProviderCallCommand(
@@ -75,11 +82,15 @@ object ProviderCallMapper {
         model = job.model,
         // 요청에 적힌 비율이 아니라 Provider 에게 실제로 보낸 픽셀이다. 과금이 걸리는 축은 이쪽이다.
         // 이미지 종류를 아는 것은 여기다 — usage 는 어떤 종류가 왔는지 판별자로만 안다.
-        request = ImageRequest(
-            width = request.width,
-            height = request.height,
-            quality = request.quality.name.lowercase(),
-        ),
+        request = when (request) {
+            is ExternalApiGenerateRequest -> ImageRequest(
+                width = request.width,
+                height = request.height,
+                quality = request.quality.name.lowercase(),
+            )
+            // 판정 요청의 표준형은 아직 없다. 이미지 축(픽셀·품질)을 지어내지 않고 비워 둔다.
+            is ExternalApiDecisionRequest -> null
+        },
         succeeded = false,
         latencyMs = latencyMs,
         calledAt = calledAt,

@@ -7,6 +7,8 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswerResult
+import dev.joyson.aiworkbench.generation.domain.DecisionTaskResult
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
@@ -14,6 +16,8 @@ import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextToImageOption
 import dev.joyson.aiworkbench.generation.GeneratedFileTestRepository
@@ -25,6 +29,12 @@ import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
+import dev.joyson.aiworkbench.provider.ExternalApiRequest
+import dev.joyson.aiworkbench.provider.ExternalApiResponse
+import dev.joyson.aiworkbench.provider.DecisionAnswer
+import dev.joyson.aiworkbench.provider.DecisionInput
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ExternalApiKind
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
@@ -92,6 +102,14 @@ class TaskWorkerTest @Autowired constructor(
         override val name = PROVIDER
         override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
         override fun generate(model: String, request: ExternalApiGenerateRequest) = behavior()
+    }
+
+    private fun decisionProvider(behavior: (ExternalApiDecisionRequest) -> ExternalApiDecisionResponse) = object : ExternalApiProvider {
+        override val name = PROVIDER
+        override fun supports(model: String, kind: ExternalApiKind) = model == MODEL
+        override fun execute(model: String, request: ExternalApiRequest): ExternalApiResponse =
+            behavior(assertIs(request))
+        override fun generate(model: String, request: ExternalApiGenerateRequest) = error("판정 대역은 이미지를 만들지 않는다")
     }
 
     private fun success(
@@ -166,6 +184,41 @@ class TaskWorkerTest @Autowired constructor(
 
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    @Test
+    fun `Decision 답은 파일 없이 Task 결과와 사용량에 기록한다`() {
+        val option = DecisionOption(
+            input = listOf(DecisionEvidence.Text("환불하고 싶어요")),
+            questions = listOf(
+                dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion.Predicate(
+                    "needs_review", "사람 확인이 필요한가?",
+                ),
+            ),
+        )
+        val (_, task) = newTask(option = option)
+        var sent: ExternalApiDecisionRequest? = null
+
+        workerWith(
+            decisionProvider { request ->
+                sent = request
+                ExternalApiDecisionResponse(
+                    answers = listOf(DecisionAnswer.Predicate("needs_review", 0.9)),
+                    usage = ProviderUsage(raw = mapOf("input_tokens" to 12)),
+                )
+            },
+        ).process(task.id!!)
+
+        assertEquals(listOf(DecisionInput.Text("환불하고 싶어요")), assertNotNull(sent).input)
+        val finished = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.SUCCEEDED, finished.status)
+        assertTrue(generatedFileRepository.findAllByTaskId(task.id!!).isEmpty(), "Decision은 결과 파일을 만들지 않는다")
+        val result = assertIs<DecisionTaskResult>(finished.result)
+        assertEquals(0.9, (result.answers.single() as DecisionAnswerResult.Predicate).probability)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertNull(call.request, "이미지 전용 과금 요청값을 Decision에 지어내면 안 된다")
+        assertEquals(12, call.usageRaw?.get("input_tokens"))
     }
 
     @Test

@@ -9,6 +9,9 @@ import dev.joyson.aiworkbench.generation.application.GenerationJobWriter
 import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageToImageOption
@@ -79,6 +82,23 @@ class GenerationJobServiceTest @Autowired constructor(
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.
         assertEquals(0, jobRepository.count())
         assertEquals(0, taskRepository.count())
+    }
+
+    /** 모델이 있어도 그 종류를 못 하면 받지 않는다. 받아 두면 Task 실패로만 드러나고 다시 해도 같다. */
+    @Test
+    fun `이미지 모델로 판정을 요청하면 접수되지 않는다`() {
+        val decision = GenerationCommand(
+            option = DecisionOption(
+                input = listOf(DecisionEvidence.Text("환불하고 싶어요")),
+                questions = listOf(DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?")),
+            ),
+            model = MODEL,
+            taskCount = 1,
+        )
+
+        assertFailsWith<UnsupportedModelException> { service.submit(ownerUuid = UUID.randomUUID(), command = decision) }
+
+        assertEquals(0, jobRepository.count())
     }
 
     /**
