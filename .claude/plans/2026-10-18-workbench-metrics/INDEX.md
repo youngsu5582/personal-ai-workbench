@@ -5,7 +5,8 @@ Status: active
 ## Progress
 - [x] 1단계 앱 metric — Provider 호출 Timer (#60)
 - [ ] 1단계 후속 — Task 시도 기록(새 테이블 없이 Task 행 안에) · 시도 Timer(재시도율) · 보관 Timer · 로그 추적(MDC) (#60 위에 쌓는 PR)
-- [ ] 2단계 로컬 compose 에 Prometheus · Grafana — 대시보드와 PromQL 을 k3s 없이 먼저 만든다
+- [x] 2단계 로컬 compose 에 Prometheus · Grafana — 대시보드와 PromQL 을 k3s 없이 먼저 만든다 (profile `observability`)
+- [ ] 2단계 후속 — Loki · Alloy. 1단계 후속의 MDC 가 들어간 뒤 붙인다 — 그래야 Task 하나로 로그를 모을 수 있다
 - [ ] k3s 학습 — #56 의 커밋을 하나씩 Rancher Desktop 에 올려 본다
 - [ ] 3단계 홈서버 클러스터에 monitoring 층 — Prometheus · Grafana · node-exporter 매니페스트
 
@@ -38,9 +39,12 @@ Status: active
 - **토큰 · 비용** — 지표로 두지 않는다. 사용량은 Provider 마다 모양이 다른 원문(`ProviderUsage.raw`)이고 비용은 Provider 가 직접 답할 때만 있다. `provider_calls` 에 쌓이는 원문으로 단가표 작업 때 계산한다
 
 ## Resume Point
-1단계 후속 — #60 위에 쌓는 PR. Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
-1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 그 PR 에서 확정한다
+1단계 후속 — #62. #60 이 머지돼 #62 는 main 위로 다시 쌓아야 한다(지금은 옛 #60 커밋 위라 충돌 상태). Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
+1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 **아직 확정 전**이다. 스키마라 확정한 뒤에 시작한다
 2. 시도 Timer(outcome 별, 재시도율은 `retried` 개수) · 보관 Timer, 둘 다 설명을 붙인다
 3. 로그 추적 — MDC 로 job · task · 시도 번호를 모든 워커 로그에 싣는다. 실패 · 재시도 로그에도 소요 시간
 
-그 다음 2단계. `compose.yaml` 에 Prometheus · Grafana 를 붙이고, 앱은 호스트에서 `bootRun` 으로 띄워 `:8081/actuator/prometheus` 를 긁게 한다. 대시보드 첫 줄은 위 쿼리다. Grafana datasource 는 provisioning 으로 고정한다 — 손으로 넣으면 컨테이너를 다시 만들 때 사라진다.
+2단계(로컬 Prometheus · Grafana)는 끝났다. 쓰는 법은 `docs/development.md` 의 "지표 보기". 정해 둔 것:
+- 앱과 개발 DB 를 `host.docker.internal` 로 부른다. 개발 DB 가 다른 워크트리의 compose 에서 떠 있을 수 있어 서비스 이름으로는 못 닿는다. Rancher Desktop 에서 `host-gateway` 를 덧붙이면 VM 브리지로 바뀌어 오히려 닿지 않는다
+- 쌓인 Task 수 · 가장 오래 기다린 시간은 앱 지표가 아니라 Grafana 의 Postgres 데이터소스로 센다. 미뤄 둔 큐 지표가 여기서 풀렸다
+- 3단계에서 대시보드 JSON 을 다시 쓸 때, kustomize 는 기본으로 자기 디렉터리 밖 파일을 못 읽는다. 그때 위치나 복사 방식을 정한다. Grafana 의 DB 계정도 그때 읽기 전용으로 따로 둔다

@@ -1,0 +1,10 @@
+# 호스트에서 bootRun 으로 뜬 앱의 management 포트를 긁는다.
+# 컨테이너 안의 localhost 는 앱이 아니라 Prometheus 자신이다.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: workbench
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
