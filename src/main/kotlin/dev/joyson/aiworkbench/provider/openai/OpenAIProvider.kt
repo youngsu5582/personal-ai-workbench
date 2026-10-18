@@ -4,6 +4,13 @@ import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
+import dev.joyson.aiworkbench.provider.DecisionAnswer
+import dev.joyson.aiworkbench.provider.DecisionInput
+import dev.joyson.aiworkbench.provider.DecisionQuestion
+import dev.joyson.aiworkbench.provider.ExternalApiRequest
+import dev.joyson.aiworkbench.provider.ExternalApiResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ExternalApiKind
@@ -31,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class OpenAIProvider(
     private val client: OpenAIImageClient,
+    private val decisionClient: OpenAIDecisionClient? = null,
 ) : ExternalApiProvider {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -40,7 +48,70 @@ class OpenAIProvider(
     /** 사실 질의다. 모르는 모델이면 예외가 아니라 false. */
     override fun supports(model: String, kind: ExternalApiKind): Boolean = when (kind) {
         ExternalApiKind.GENERATE -> OpenAIImageModel.find(model) != null
-        ExternalApiKind.DECISION -> false
+        ExternalApiKind.DECISION -> model == DECISION_MODEL && decisionClient != null
+    }
+
+    override fun execute(model: String, request: ExternalApiRequest): ExternalApiResponse = when (request) {
+        is ExternalApiGenerateRequest -> generate(model, request)
+        is ExternalApiDecisionRequest -> decide(model, request)
+    }
+
+    private fun decide(model: String, request: ExternalApiDecisionRequest): ExternalApiDecisionResponse = try {
+        // supports 를 건너뛰고 부를 수 있으므로 여기서도 확인한다. 다시 보내도 달라지지 않으니 재시도 대상이 아니다.
+        if (model != DECISION_MODEL || decisionClient == null) {
+            throw ExternalApiException(FailureKind.REJECTED, "다루지 않는 Decision 모델이다: $model")
+        }
+        val response = decisionClient.decide(
+            OpenAIDecisionRequest(
+                model = model,
+                input = listOf(OpenAIDecisionMessage(content = request.input.map(::decisionInputOf))),
+                questions = request.questions.map(::decisionQuestionOf),
+            ),
+        )
+        if (response.answers.isEmpty()) {
+            // 200 인데 이미지가 없는 생성 응답과 같은 상태다. 저쪽이 처리한 뒤라 거절로 적지 않는다.
+            throw ExternalApiException(FailureKind.PROVIDER_ERROR, "응답에 답변이 없다")
+        }
+        ExternalApiDecisionResponse(response.answers.map(::decisionAnswerOf), response.usage?.let { ProviderUsage(raw = it) })
+    } catch (e: ExternalApiException) {
+        throw e
+    } catch (e: OpenAIException) {
+        throw ExternalApiException(kindOf(e), "[$PROVIDER_NAME ${e.status}${e.code?.let { " $it" }.orEmpty()}] ${e.detail}", e)
+    } catch (e: ResourceAccessException) {
+        throw ExternalApiException(FailureKind.NO_RESPONSE, "[$PROVIDER_NAME 응답 없음] ${e.message}", e)
+    } catch (e: Exception) {
+        // 답을 옮기다 나는 실패(모르는 답변 종류·빠진 값)도 여기 온다. 호출은 이미 성공해 돈이 나갔으므로
+        // 과금이 없다는 뜻의 REJECTED 로 적으면 안 된다.
+        log.error("Decision 호출 중 설명되지 않는 오류다. model={}", model, e)
+        throw ExternalApiException(FailureKind.UNKNOWN, "[$PROVIDER_NAME 알 수 없는 오류] ${e.message}", e)
+    }
+
+    private fun decisionInputOf(input: DecisionInput): OpenAIDecisionInput = when (input) {
+        is DecisionInput.Text -> OpenAIDecisionText(text = input.text)
+        is DecisionInput.Image -> OpenAIDecisionImage(image_url = when (val image = input.image) {
+            is ExternalApiFileInput.Url -> image.url.toString()
+            is ExternalApiFileInput.Bytes -> "data:${image.mimeType};base64,${Base64.getEncoder().encodeToString(image.bytes)}"
+        })
+    }
+
+    private fun decisionQuestionOf(question: DecisionQuestion): OpenAIDecisionQuestion = when (question) {
+        is DecisionQuestion.Predicate -> OpenAIPredicateQuestion(name = question.name, instructions = question.instructions)
+        is DecisionQuestion.Choice -> OpenAIChoiceQuestion(
+            name = question.name, instructions = question.instructions,
+            choices = question.choices.map { OpenAIChoice(it.value, it.description) },
+        )
+        is DecisionQuestion.Score -> OpenAIScoreQuestion(
+            name = question.name, instructions = question.instructions,
+            levels = question.levels.map { OpenAIScoreLevel(it.label, it.description) },
+        )
+    }
+
+    private fun decisionAnswerOf(answer: OpenAIDecisionAnswer): DecisionAnswer = when (answer.type) {
+        "predicate" -> DecisionAnswer.Predicate(answer.name, requireNotNull(answer.probability))
+        "choice" -> DecisionAnswer.Choice(answer.name, requireNotNull(answer.choice), answer.confidence)
+        "score" -> DecisionAnswer.Score(answer.name, requireNotNull(answer.score), answer.confidence)
+        "refusal" -> DecisionAnswer.Refusal(answer.name)
+        else -> throw IllegalArgumentException("알 수 없는 Decision 답변 종류다: ${answer.type}")
     }
 
     override fun generate(
@@ -292,6 +363,7 @@ class OpenAIProvider(
 
     companion object {
         const val PROVIDER_NAME = "openai"
+        const val DECISION_MODEL = "gpt-6-luna"
 
         /** 주소로 넘긴 입력 이미지를 OpenAI 가 받아오지 못했을 때 오는 문구의 앞부분. */
         private const val INPUT_DOWNLOAD_FAILED = "Error while downloading file"

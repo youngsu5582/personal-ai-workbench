@@ -25,7 +25,7 @@ import java.net.http.HttpClient
 class OpenAIClientConfig {
 
     @Bean
-    fun openAIImageClient(properties: OpenAIProperties): OpenAIImageClient {
+    fun openAIRestClient(properties: OpenAIProperties): RestClient {
         val apiKey = requireNotNull(properties.apiKey) {
             "workbench.provider.openai.api-key 가 필요하다"
         }
@@ -39,14 +39,18 @@ class OpenAIClientConfig {
             setReadTimeout(properties.readTimeout)
         }
 
-        return OpenAIImageClient(
-            RestClient.builder()
-                .baseUrl(properties.baseUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer $apiKey")
-                .requestFactory(requestFactory)
-                .build(),
-        )
+        return RestClient.builder()
+            .baseUrl(properties.baseUrl)
+            .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer $apiKey")
+            .requestFactory(requestFactory)
+            .build()
     }
+
+    @Bean
+    fun openAIImageClient(openAIRestClient: RestClient) = OpenAIImageClient(openAIRestClient)
+
+    @Bean
+    fun openAIDecisionClient(openAIRestClient: RestClient) = OpenAIDecisionClient(openAIRestClient)
 
     /**
      * 어댑터도 같은 조건 아래 둔다.
@@ -55,5 +59,6 @@ class OpenAIClientConfig {
      * "쓸 수 있는 Provider 목록" 을 따로 관리할 필요가 없어진다.
      */
     @Bean
-    fun openAIProvider(client: OpenAIImageClient): OpenAIProvider = OpenAIProvider(client)
+    fun openAIProvider(client: OpenAIImageClient, decisionClient: OpenAIDecisionClient): OpenAIProvider =
+        OpenAIProvider(client, decisionClient)
 }
