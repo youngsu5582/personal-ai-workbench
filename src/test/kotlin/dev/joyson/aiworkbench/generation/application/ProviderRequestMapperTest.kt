@@ -2,12 +2,16 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
+import dev.joyson.aiworkbench.generation.domain.option.TextFormat
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.provider.ImageQuality
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import kotlin.test.assertIs
 import java.net.URI
@@ -16,6 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProviderRequestMapperTest {
@@ -121,4 +126,32 @@ class ProviderRequestMapperTest {
         sources = listOf(FileSource.Generated(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)),
         size = ImageSize.ByPixels(1024, 1024),
     )
+
+    @Test
+    fun `형식 없는 글은 스키마 없이 옮긴다`() {
+        val request = ProviderRequestMapper.from(TextGenerateOption(prompt = "요약해", instructions = "편집자다"))
+
+        assertEquals("요약해", request.prompt)
+        assertEquals("편집자다", request.instructions)
+        assertNull(request.jsonSchema)
+        // 주지 않은 effort 는 지어내지 않는다 — 모델 기본값이 모델마다 다르다.
+        assertNull(request.effort)
+    }
+
+    @Test
+    fun `effort 를 포트 눈금으로 옮긴다`() {
+        val request = ProviderRequestMapper.from(TextGenerateOption(prompt = "요약해", effort = Effort.XHIGH))
+
+        assertEquals(ReasoningEffort.XHIGH, request.effort)
+    }
+
+    /** 원문 그대로 넘긴다. 객체로 다시 읽어 쓰는 단계가 끼면 키 순서를 지킨다는 보장이 하나 더 필요해진다. */
+    @Test
+    fun `스키마는 원문 그대로 옮긴다`() {
+        val schema = """{"type":"object","properties":{"reasoning":{"type":"string"},"answer":{"type":"string"}}}"""
+
+        val request = ProviderRequestMapper.from(TextGenerateOption(prompt = "풀어", output = TextFormat.JsonSchema(schema)))
+
+        assertEquals(schema, request.jsonSchema)
+    }
 }

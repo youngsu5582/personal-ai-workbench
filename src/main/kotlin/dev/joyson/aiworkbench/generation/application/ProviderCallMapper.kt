@@ -6,11 +6,13 @@ import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.CostUnit
 import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderRequest
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
+import dev.joyson.aiworkbench.usage.TextRequest
 import dev.joyson.aiworkbench.usage.ReportedUnit
 import java.time.Instant
 
@@ -34,15 +36,11 @@ object ProviderCallMapper {
         calledAt: Instant,
         usage: ProviderUsage?,
         applied: AppliedParameters?,
-    ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).let { sent ->
-        sent.copy(
-            succeeded = true,
-            // 저쪽이 실제로 쓴 값을 안다면 그쪽이 맞다 — 돈은 요청이 아니라 만들어진 것에 붙는다.
-            request = applied?.let { overlay(sent.request, it) } ?: sent.request,
-            usageRaw = usage?.raw?.takeIf { it.isNotEmpty() },
-            reportedAmount = usage?.reportedCost?.amount,
-            reportedUnit = usage?.reportedCost?.unit?.let(::unitOf),
-        )
+    ): RecordProviderCallCommand {
+        val sent = imageRequestOf(request)
+        // 저쪽이 실제로 쓴 값을 안다면 그쪽이 맞다 — 돈은 요청이 아니라 만들어진 것에 붙는다.
+        return base(job, task, providerName, applied?.let { overlay(sent, it) } ?: sent, latencyMs, calledAt)
+            .succeededWith(usage)
     }
 
     fun failed(
@@ -54,17 +52,41 @@ object ProviderCallMapper {
         calledAt: Instant,
         failureReason: String,
         failureKind: ProviderFailureKind,
-    ): RecordProviderCallCommand = base(job, task, providerName, request, latencyMs, calledAt).copy(
-        succeeded = false,
-        failureReason = failureReason,
-        failureKind = kindOf(failureKind),
-    )
+    ): RecordProviderCallCommand = base(job, task, providerName, imageRequestOf(request), latencyMs, calledAt)
+        .failedWith(failureReason, failureKind)
+
+    /**
+     * 글 생성 호출. 모델이 거절했거나 잘렸어도 **응답을 받았으면 성공한 호출이다** —
+     * Task 를 실패로 닫는 것과 별개로, 그 응답의 사용량은 과금 근거라 성공 행에 남아야 한다.
+     */
+    fun succeeded(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiTextRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        usage: ProviderUsage?,
+    ): RecordProviderCallCommand = base(job, task, providerName, textRequestOf(request), latencyMs, calledAt)
+        .succeededWith(usage)
+
+    fun failed(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiTextRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        failureReason: String,
+        failureKind: ProviderFailureKind,
+    ): RecordProviderCallCommand = base(job, task, providerName, textRequestOf(request), latencyMs, calledAt)
+        .failedWith(failureReason, failureKind)
 
     private fun base(
         job: GenerationJob,
         task: GenerationJobTask,
         providerName: String,
-        request: ExternalApiGenerateRequest,
+        request: ProviderRequest,
         latencyMs: Int,
         calledAt: Instant,
     ) = RecordProviderCallCommand(
@@ -73,16 +95,39 @@ object ProviderCallMapper {
         ownerUserUuid = job.ownerUserUuid,
         provider = providerName,
         model = job.model,
-        // 요청에 적힌 비율이 아니라 Provider 에게 실제로 보낸 픽셀이다. 과금이 걸리는 축은 이쪽이다.
-        // 이미지 종류를 아는 것은 여기다 — usage 는 어떤 종류가 왔는지 판별자로만 안다.
-        request = ImageRequest(
-            width = request.width,
-            height = request.height,
-            quality = request.quality.name.lowercase(),
-        ),
+        request = request,
         succeeded = false,
         latencyMs = latencyMs,
         calledAt = calledAt,
+    )
+
+    private fun RecordProviderCallCommand.succeededWith(usage: ProviderUsage?) = copy(
+        succeeded = true,
+        usageRaw = usage?.raw?.takeIf { it.isNotEmpty() },
+        reportedAmount = usage?.reportedCost?.amount,
+        reportedUnit = usage?.reportedCost?.unit?.let(::unitOf),
+    )
+
+    private fun RecordProviderCallCommand.failedWith(failureReason: String, failureKind: ProviderFailureKind) = copy(
+        succeeded = false,
+        failureReason = failureReason,
+        failureKind = kindOf(failureKind),
+    )
+
+    /**
+     * 요청에 적힌 비율이 아니라 Provider 에게 실제로 보낸 픽셀이다. 과금이 걸리는 축은 이쪽이다.
+     * 이미지 종류를 아는 것은 여기다 — usage 는 어떤 종류가 왔는지 판별자로만 안다.
+     */
+    private fun imageRequestOf(request: ExternalApiGenerateRequest) = ImageRequest(
+        width = request.width,
+        height = request.height,
+        quality = request.quality.name.lowercase(),
+    )
+
+    /** 표기는 요청 옵션의 판별자와 맞춘다. 포트에서는 스키마가 있는지가 곧 형식이다. */
+    private fun textRequestOf(request: ExternalApiTextRequest) = TextRequest(
+        format = if (request.jsonSchema == null) "text" else "json-schema",
+        effort = request.effort?.name?.lowercase(),
     )
 
     /**
@@ -114,18 +159,13 @@ object ProviderCallMapper {
      *
      * 크기는 늘 덮는다. 저쪽이 답하지 않으면 애초에 보낸 값이 거기 들어 있다.
      */
-    private fun overlay(sent: ProviderRequest?, applied: AppliedParameters): ProviderRequest = when (sent) {
-        is ImageRequest -> ImageRequest(
-            width = applied.width,
-            height = applied.height,
-            quality = applied.quality ?: sent.quality,
-            background = applied.background ?: sent.background,
-            outputFormat = applied.outputFormat ?: sent.outputFormat,
-        )
-
-        // base 가 늘 ImageRequest 를 넣으므로 여기는 닿지 않는다. 종류가 늘면 컴파일러가 알려준다.
-        null -> ImageRequest(width = applied.width, height = applied.height, quality = applied.quality)
-    }
+    private fun overlay(sent: ImageRequest, applied: AppliedParameters) = ImageRequest(
+        width = applied.width,
+        height = applied.height,
+        quality = applied.quality ?: sent.quality,
+        background = applied.background ?: sent.background,
+        outputFormat = applied.outputFormat ?: sent.outputFormat,
+    )
 
     /**
      * 단위를 우리 이름으로 옮긴다.

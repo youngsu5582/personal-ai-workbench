@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.generation.domain.MimeTypes
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
@@ -51,6 +52,8 @@ class FileSourceResolver(
      */
     fun resolve(ownerUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
         is ImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
+        // 입력 파일을 받지 않는 종류다.
+        is TextGenerateOption -> emptyList()
     }
 
     private fun prepare(source: FileSource, ownerUuid: UUID, inline: Boolean): ResolvedFile = when (source) {

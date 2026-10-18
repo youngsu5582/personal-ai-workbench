@@ -30,6 +30,15 @@ import java.net.URI
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
+import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.StopReason
+import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
+import dev.joyson.aiworkbench.generation.domain.option.Effort
+import dev.joyson.aiworkbench.generation.domain.option.TextFormat
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.usage.TextRequest
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.provider.ProviderUsage
@@ -71,6 +80,7 @@ class TaskWorkerTest @Autowired constructor(
     private val generatedFileFinder: GeneratedFileFinder,
     private val uploadedFiles: UploadedFiles,
     private val meterRegistry: MeterRegistry,
+    private val generatedTextRepository: GeneratedTextRepository,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -119,10 +129,11 @@ class TaskWorkerTest @Autowired constructor(
         recorder: ProviderCallRecorder = callRecorder,
         presignedUrlIssuer: PresignedUrlIssuer? = null,
         uploadedFiles: UploadedFiles = this.uploadedFiles,
+        textProvider: ExternalApiTextProvider? = null,
     ) = TaskWorker(
         taskRepository = taskPort,
         jobRepository = jobPort,
-        providerRegistry = ProviderRegistry(listOf(provider)),
+        providerRegistry = ProviderRegistry(listOf(provider), listOfNotNull(textProvider)),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
         fileSourceResolver = FileSourceResolver(generatedFileFinder, uploadedFiles, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
@@ -856,8 +867,122 @@ class TaskWorkerTest @Autowired constructor(
         size = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
     )
 
+    private fun textProvider(behavior: (ExternalApiTextRequest) -> ExternalApiTextResponse) = object : ExternalApiTextProvider {
+        override val name = PROVIDER
+        override fun supports(model: String) = model == TEXT_MODEL
+        override fun generateText(model: String, request: ExternalApiTextRequest) = behavior(request)
+    }
+
+    private fun textWorker(behavior: (ExternalApiTextRequest) -> ExternalApiTextResponse) =
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }, textProvider = textProvider(behavior))
+
+    private val tokens = mapOf("input_tokens" to 12, "output_tokens" to 7)
+
+    private fun answered(text: String, stopReason: StopReason = StopReason.COMPLETED) = ExternalApiTextResponse(
+        text = text,
+        stopReason = stopReason,
+        usage = ProviderUsage(raw = tokens),
+        providerId = "resp_1",
+    )
+
+    private val schema = """{"type":"object","properties":{"answer":{"type":"string"}}}"""
+
+    @Test
+    fun `글을 만들면 행에 남고 Job 이 닫힌다`() {
+        val (job, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("세 줄로 요약해"))
+
+        textWorker { answered("요약입니다") }.process(task.id!!)
+
+        val text = generatedTextRepository.findAllByTaskIdIn(listOf(task.id!!)).single()
+        assertEquals("요약입니다", text.content)
+        assertEquals("resp_1", text.providerInfo?.providerId)
+        assertTrue(storage.written.isEmpty(), "글은 보관소를 거치지 않는다")
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    @Test
+    fun `글 호출의 지출은 형식과 사용량으로 적힌다`() {
+        val (_, task) = newTask(
+            model = TEXT_MODEL,
+            option = TextGenerateOption("풀어", output = TextFormat.JsonSchema(schema), effort = Effort.HIGH),
+        )
+        var sent: ExternalApiTextRequest? = null
+
+        textWorker { sent = it; answered("""{"answer":"42"}""") }.process(task.id!!)
+
+        // 스키마는 받은 원문 그대로 포트까지 간다.
+        assertEquals(schema, assertNotNull(sent).jsonSchema)
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.succeeded)
+        val recorded = assertIs<TextRequest>(call.request)
+        assertEquals("json-schema", recorded.format)
+        // 같은 모델에서도 비용을 가르는 축이라 원장에 남는다.
+        assertEquals("high", recorded.effort)
+        assertEquals(tokens, call.usageRaw)
+    }
+
+    /**
+     * 거절도 저쪽은 만들었고 과금했다. Task 는 실패로 닫되, 지출은 사용량과 함께 성공 호출로 남아야 한다.
+     * 다시 보내도 대개 같은 답이라 재시도하지 않는다.
+     */
+    @Test
+    fun `거절된 글은 다시 하지 않고 닫되 지출은 사용량과 함께 남는다`() {
+        val (job, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("질문"))
+
+        textWorker { answered("도울 수 없다", StopReason.REFUSED) }.process(task.id!!)
+
+        val failed = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.FAILED, failed.status)
+        assertTrue(failed.failureReason!!.contains("REFUSED"), failed.failureReason)
+        assertTrue(failed.failureReason!!.contains("도울 수 없다"), "거절 문구가 사유에서 사라졌다: ${failed.failureReason}")
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+        assertTrue(generatedTextRepository.findAllByTaskIdIn(listOf(task.id!!)).isEmpty())
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.succeeded, "응답을 받은 호출을 실패로 적었다")
+        assertEquals(tokens, call.usageRaw)
+    }
+
+    /** strict 로 보냈으니 일어나면 안 되는 일이다. 받는 쪽이 파싱하다 터지는 것보다 여기서 멈춘다. */
+    @Test
+    fun `스키마를 줬는데 JSON 이 아닌 답이면 결과로 받지 않는다`() {
+        val (_, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("풀어", output = TextFormat.JsonSchema(schema)))
+
+        textWorker { answered("42 입니다") }.process(task.id!!)
+
+        val failed = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.FAILED, failed.status)
+        assertTrue(generatedTextRepository.findAllByTaskIdIn(listOf(task.id!!)).isEmpty())
+    }
+
+    @Test
+    fun `글 호출이 다시 해볼 만하게 실패하면 큐로 돌아간다`() {
+        val (_, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("질문"))
+
+        textWorker { throw ExternalApiException(FailureKind.THROTTLED, "429") }.process(task.id!!)
+
+        assertEquals(TaskStatus.PENDING, taskRepository.findById(task.id!!).get().status)
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertFalse(call.succeeded)
+        assertEquals(RecordedFailureKind.THROTTLED, call.failureKind)
+        assertEquals("text", assertIs<TextRequest>(call.request).format)
+    }
+
+    @Test
+    fun `글을 다룰 Provider 가 사라졌으면 닫는다`() {
+        val (_, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("질문"))
+
+        // 이미지 어댑터만 있다. 같은 이름의 모델이라도 글을 만들지 못한다.
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty(), "부르지 않았는데 지출이 적혔다")
+    }
+
     private companion object {
         const val MODEL = "fake-image-1"
+        const val TEXT_MODEL = "fake-text-1"
         const val PROVIDER = "fake"
 
         /**

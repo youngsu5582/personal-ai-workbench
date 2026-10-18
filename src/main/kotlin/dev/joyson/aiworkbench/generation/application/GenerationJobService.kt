@@ -7,6 +7,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -50,8 +51,12 @@ class GenerationJobService(
      * 트랜잭션에 들어가야 한다 — 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
      */
     fun submit(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
-        providerRegistry.find(command.model)
-            ?: throw UnsupportedModelException(command.model, providerRegistry.availableNames)
+        // 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
+        val supported = when (command.option) {
+            is ImageOption -> providerRegistry.find(command.model) != null
+            is TextGenerateOption -> providerRegistry.findText(command.model) != null
+        }
+        if (!supported) throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
         requireOwnedSources(ownerUuid, command.option)
 
@@ -103,6 +108,7 @@ class GenerationJobService(
         val sources = when (option) {
             // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
             is ImageOption -> option.sources
+            is TextGenerateOption -> return
         }
 
         sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }
