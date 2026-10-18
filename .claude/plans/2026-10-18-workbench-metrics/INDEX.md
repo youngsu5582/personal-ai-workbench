@@ -15,6 +15,7 @@ Status: active
 - 셈은 `DefaultProviderCallRecorder` 에서 한다. 모든 Provider 호출이 지나는 길이고 지연 · 성공 · 실패 종류가 이미 커맨드에 있다
 - tag 값은 enum 이름과 따로 고정한다(`no_response` 등). 대시보드와 알림이 이 값에 묶인다
 - 지표마다 설명(`# HELP`)을 붙인다. 이름만 봐서는 보관 시간이 들어 있는지 같은 것을 알 수 없다
+- 진행 중인 Provider 호출을 `LongTaskTimer`(`workbench.provider.call.active`)로 보인다. 끝난 호출만 재는 Timer 로는 멈춘 호출이 타임아웃이 나야 보인다. 진행 중 표식(시작 시각 하나)만 메모리에 두고 끝나면 뺀다 — start·stop 을 손으로 짝짓지 않고 `LongTaskTimer.record` 로 감싸 성공이든 예외든 빠지게 한다. 동시 호출은 `batchSize`(4)를 넘지 않는다. `_count` 는 누적이 아니라 지금 수다
 - 큐 길이 · 가장 오래 기다린 시간은 미룬다. 지금은 Provider · Task 시간을 읽기 쉽게 하고 추적할 수 있게 하는 것이 먼저다. 다시 할 때 고를 것:
   - Grafana 에서 Postgres 를 직접 조회한다 — 앱이 DB 를 주기마다 묻지 않고, 큐 길이는 앱이 아니라 DB 의 사실이다
   - 앱 Gauge 로 둔다면 긁을 때 묻지 말고 주기마다 읽어 둔다. 긁을 때 물으면 DB 가 막혔을 때 응답 전체가 기다려 다른 지표까지 빈다. 읽지 못하면 0 이 아니라 NaN, 인스턴스가 늘면 같은 값을 여러 번 보고하니 `max` 로 집계한다
@@ -28,6 +29,8 @@ Status: active
 | 어떻게 실패하나 | `sum by (provider, failure_kind) (increase(workbench_provider_call_seconds_count{outcome="failure"}[1h]))` |
 | p95 지연 | `histogram_quantile(0.95, sum by (provider, le) (rate(workbench_provider_call_seconds_bucket[1h])))` |
 | 한도에 걸리기 시작했나 (알림 후보) | `increase(workbench_provider_call_seconds_count{failure_kind="throttled"}[15m]) > 0` |
+| 지금 진행 중인 호출 수 | `sum by (provider) (workbench_provider_call_active_seconds_count)` |
+| 오래 응답이 없는 호출 (알림 후보, 기준은 읽기 타임아웃보다 짧게) | `max by (provider) (workbench_provider_call_active_seconds_max) > 300` |
 
 ## Resume Point
 1단계 후속 — #60 위에 쌓는 PR. Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
