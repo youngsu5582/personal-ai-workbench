@@ -233,6 +233,45 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 
 로컬 디스크로 되돌리려면 `.env` 의 `STORAGE_PROVIDER` 를 지우거나 `local` 로 바꾼다. **클라이언트는 아무것도 안 바꾼다.**
 
+## 지표 보기 (Prometheus · Grafana)
+
+앱이 management 포트(8081)로 내보내는 지표를 Prometheus 가 15초마다 긁고, Grafana 가 그것과 개발 DB 를 함께 그린다.
+
+### 1. 시작
+
+```bash
+COMPOSE_PROFILES=observability docker compose up -d prometheus grafana
+./gradlew bootRun
+```
+
+`profiles: ["observability"]` 라 **평소 `docker compose up -d` 에는 뜨지 않는다.** 개발 DB 는 평소처럼 띄워 둔다.
+
+### 2. 열기
+
+| 주소 | 무엇 |
+|---|---|
+| http://localhost:3000 | Grafana. 로그인 없이 관리자로 들어간다(로컬 전용). **Workbench** 대시보드가 미리 들어 있다 |
+| http://localhost:9090/targets | Prometheus 가 앱을 긁고 있는지. `workbench` 가 `UP` 이어야 한다 |
+| http://localhost:8081/actuator/prometheus | 앱이 내보내는 원본. 그 순간의 값만 있다 |
+
+Provider 지표는 **첫 호출이 끝난 뒤에** 생긴다. 앱을 막 띄웠을 때 Provider 패널이 비어 있는 것은 정상이다. 아래 큐 패널은 앱 지표가 아니라 DB 를 직접 센다.
+
+### 3. 대시보드를 고칠 때
+
+원본은 `docker/grafana/dashboards/workbench.json` 이다. **화면에서 고친 것은 저장되지 않는다** — JSON 을 고치면 Grafana 가 다시 읽는다. 데이터소스는 `docker/grafana/provisioning/datasources/workbench.yaml` 에 uid 로 고정돼 있고, 대시보드가 그 uid 로 가리킨다.
+
+### 4. 앱과 DB 를 호스트로 부르는 이유
+
+앱은 호스트에서 bootRun 으로 뜨고, 개발 DB 는 다른 워크트리의 compose 에서 떠 있을 수도 있다. 그래서 둘 다 컨테이너 이름이 아니라 `host.docker.internal` 로 부른다. Rancher Desktop 은 이 이름을 호스트로 풀어 주지만, Linux 의 Docker 라면 두 서비스에 `extra_hosts: ["host.docker.internal:host-gateway"]` 가 필요하다.
+
+### 5. 종료
+
+```bash
+COMPOSE_PROFILES=observability docker compose stop prometheus grafana
+```
+
+`docker compose down -v` 는 **개발 DB 볼륨까지** 지운다. 지표만 비우려면 `docker compose rm -sf prometheus grafana` 뒤에 그 두 볼륨만 지운다.
+
 ## 이미지 투 이미지
 
 본인이 생성한 결과 파일이나 직접 올린 파일을 입력으로 지정해 다시 생성한다. 현재 입력은 1장이다.

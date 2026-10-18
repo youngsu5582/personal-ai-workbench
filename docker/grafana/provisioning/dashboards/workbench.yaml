@@ -1,0 +1,9 @@
+apiVersion: 1
+
+# 대시보드의 원본은 저장소의 JSON 이다. 화면에서 고친 것은 저장되지 않으니, 고칠 때는 JSON 을 고친다.
+providers:
+  - name: workbench
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

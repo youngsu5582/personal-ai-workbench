@@ -1,0 +1,292 @@
+{
+  "uid": "workbench",
+  "title": "Workbench",
+  "description": "Provider 가 요청을 잘 처리하고 있는지와 큐에 무엇이 쌓였는지. 원본은 저장소의 docker/grafana/dashboards/workbench.json 이다.",
+  "tags": ["workbench"],
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Provider — 앱 지표 (Prometheus)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "성공률 (최근 1시간)",
+      "description": "끝난 호출 중 성공한 비율. 요청이 드물어 1시간 단위로 묶는다.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (provider) (increase(workbench_provider_call_seconds_count{outcome=\"success\"}[1h])) / sum by (provider) (increase(workbench_provider_call_seconds_count[1h]))",
+          "legendFormat": "{{provider}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.8 },
+              { "color": "green", "value": 0.95 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "bargauge",
+      "title": "실패 종류 (최근 1시간)",
+      "description": "어떻게 실패했나. throttled 는 한도, no_response 는 응답을 못 받음(과금을 가장 의심해야 하는 종류), rejected 는 요청 거절이다.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (provider, failure_kind) (increase(workbench_provider_call_seconds_count{outcome=\"failure\"}[1h]))",
+          "legendFormat": "{{provider}} · {{failure_kind}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "orange", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "지금 진행 중인 호출",
+      "description": "긁는 순간에 돌고 있던 호출 수. 누적이 아니다 — 끝나면 줄어든다. 동시 호출은 워커의 batchSize 를 넘지 않는다.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (provider) (workbench_provider_call_active_seconds_count)",
+          "legendFormat": "{{provider}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "p95 지연",
+      "description": "끝난 호출 95% 가 이 시간 안에 끝났다. Provider 호출만의 길이이고 보관 시간은 들어 있지 않다.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (provider, le) (rate(workbench_provider_call_seconds_bucket[1h])))",
+          "legendFormat": "{{provider}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 0, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "가장 오래 돌고 있는 호출",
+      "description": "진행 중인 호출 중 가장 오래된 것이 몇 초째인가. 평소엔 짧은 봉우리가 생겼다 0 으로 내려온다. 빨간 선(300초)을 넘어 계속 오르면 응답 없이 멈춘 호출이다.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max by (provider) (workbench_provider_call_active_seconds_max)",
+          "legendFormat": "{{provider}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "thresholdsStyle": { "mode": "line" } },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "큐 — DB 직접 조회",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "기다리는 Task",
+      "description": "아직 집히지 않은 Task 수. 앱 지표가 아니라 DB 를 직접 센다 — 큐 길이는 앱이 아니라 DB 의 사실이다.",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS \"기다리는 Task\" FROM generation_job_tasks WHERE status = 'PENDING'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "가장 오래 기다린 Task",
+      "description": "기다리는 Task 중 가장 먼저 접수된 것이 얼마나 기다렸나. 재시도로 되돌아온 Task 도 처음 접수된 때부터 잰다. 큐가 비면 0 이다.",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0) AS \"가장 오래 기다린 시간\" FROM generation_job_tasks WHERE status = 'PENDING'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 300 },
+              { "color": "red", "value": 900 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "처리 중인 Task",
+      "description": "집혀서 RUNNING 인 Task 수. 오래 줄지 않으면 워커가 멈췄는지 본다 — 위의 '가장 오래 돌고 있는 호출' 과 같이 읽는다.",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "workbench-db" },
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT count(*) AS \"처리 중인 Task\" FROM generation_job_tasks WHERE status = 'RUNNING'"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "orientation": "auto"
+      }
+    }
+  ]
+}

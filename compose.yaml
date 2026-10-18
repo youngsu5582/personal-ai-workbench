@@ -34,7 +34,48 @@ services:
       - personal-ai-workbench-garage-meta:/var/lib/garage/meta
       - personal-ai-workbench-garage-data:/var/lib/garage/data
 
+  # 지표를 보는 두 컨테이너. `COMPOSE_PROFILES=observability docker compose up -d` 일 때만 뜬다.
+  #
+  # 앱은 호스트에서 bootRun 으로 뜨므로 둘 다 호스트를 host.docker.internal 로 부른다.
+  # Rancher Desktop 은 이 이름을 호스트로 풀어 준다. extra_hosts 로 host-gateway 를 덧붙이면
+  # VM 안의 Docker 브리지(172.17.0.1)로 바뀌어 호스트에 닿지 않는다.
+  # Linux 의 Docker 처럼 이 이름이 없는 곳에서는 `extra_hosts: ["host.docker.internal:host-gateway"]` 가 필요하다.
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: personal-ai-workbench-prometheus
+    profiles: ["observability"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - personal-ai-workbench-prometheus:/prometheus
+
+  # 데이터소스와 대시보드는 파일로 고정한다. 화면에서 손으로 넣으면 컨테이너를 다시 만들 때 사라진다.
+  # 로그인 없이 관리자로 들어간다 — 로컬 전용이다.
+  grafana:
+    image: grafana/grafana:13.2.4
+    container_name: personal-ai-workbench-grafana
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # 데이터소스 설정 파일이 읽는다. 값은 위 postgres 와 같다.
+      WORKBENCH_DB_NAME: ${POSTGRES_DB:-personal_ai_workbench}
+      WORKBENCH_DB_USER: ${POSTGRES_USER:-workbench}
+      WORKBENCH_DB_PASSWORD: ${POSTGRES_PASSWORD:-workbench}
+    volumes:
+      # provisioning 은 필요한 하위 디렉터리만 건다. 통째로 덮으면 이미지에 있던 plugins·alerting 이 사라져 오류 로그가 남는다.
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/dashboards:/etc/grafana/dashboards:ro
+      - personal-ai-workbench-grafana:/var/lib/grafana
+
 volumes:
   personal-ai-workbench-postgres:
   personal-ai-workbench-garage-meta:
   personal-ai-workbench-garage-data:
+  personal-ai-workbench-prometheus:
+  personal-ai-workbench-grafana:
