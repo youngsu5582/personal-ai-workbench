@@ -32,6 +32,11 @@ Status: active
 | 지금 진행 중인 호출 수 | `sum by (provider) (workbench_provider_call_active_seconds_count)` |
 | 오래 응답이 없는 호출 (알림 후보, 기준은 읽기 타임아웃보다 짧게) | `max by (provider) (workbench_provider_call_active_seconds_max) > 300` |
 
+## 다음에 볼 Provider 지표 후보
+- **입력 재전송 횟수** — Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸 경우가 원장에서 `REJECTED` 로 옮겨져(`ProviderCallMapper`) 지표에서도 `failure_kind="rejected"` 에 섞인다. 과금 판정으로는 맞는 매핑이라 원장은 두고, 워커의 재전송 분기에 Counter 를 따로 두면 "이 Provider 는 주소 입력을 못 받아간다" 가 갈린다
+- **품질 tag** — 지연은 품질에 크게 좌우된다. Provider 를 같은 조건끼리 비교하려면 `quality` 를 tag 로 붙인다. 값의 가짓수를 먼저 확인한다
+- **토큰 · 비용** — 지표로 두지 않는다. 사용량은 Provider 마다 모양이 다른 원문(`ProviderUsage.raw`)이고 비용은 Provider 가 직접 답할 때만 있다. `provider_calls` 에 쌓이는 원문으로 단가표 작업 때 계산한다
+
 ## Resume Point
 1단계 후속 — #60 위에 쌓는 PR. Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
 1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 그 PR 에서 확정한다
