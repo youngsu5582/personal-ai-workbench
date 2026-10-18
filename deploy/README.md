@@ -36,11 +36,18 @@ The overlay contains no Secret objects with real values. The operator creates:
 
 ## Home server runbook
 
+Run every command from a checkout of this repository on the server.
+
 1. **Install k3s without the service load balancer**, so nothing in the cluster takes
-   host ports 80/443 (other services on the host keep them):
+   host ports 80/443 (other services on the host keep them). Then give your own user
+   a kubeconfig — the one k3s writes is readable by root only:
 
    ```bash
    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable servicelb" sh -
+   mkdir -p ~/.kube
+   sudo k3s kubectl config view --raw > ~/.kube/config
+   chmod 600 ~/.kube/config
+   export KUBECONFIG=~/.kube/config   # also put this in ~/.bashrc
    ```
 
 2. **Apply the cluster-level Traefik settings** and wait for Traefik to restart:
@@ -112,10 +119,21 @@ The overlay contains no Secret objects with real values. The operator creates:
    Do not repeat the layout step against an existing Garage volume unless you have
    a recovery plan.
 
-9. **Check** that `https://workbench.youngsu5582.today/` loads and Google login returns to it, then
-   generate one image and open its download URL (it redirects to `workbench-file.youngsu5582.today`).
+9. **Let the browser upload to Garage.** The page on `workbench.youngsu5582.today`
+   PUTs straight to `workbench-file.youngsu5582.today`, another origin, so the bucket
+   needs a CORS rule — CORS on the app does not cover it. The script needs `aws`,
+   `curl` and `python3`, and checks the preflight itself:
 
-10. **Back up PostgreSQL off the node before keeping real data.** Volumes use k3s's
+   ```bash
+   set -a; . deploy/overlays/home/runtime.env; set +a
+   ./scripts/upload-cors.sh https://workbench.youngsu5582.today
+   ```
+
+10. **Check** that `https://workbench.youngsu5582.today/` loads and Google login returns
+    to it, upload one image from that page, then generate one image and open its
+    download URL (it redirects to `workbench-file.youngsu5582.today`).
+
+11. **Back up PostgreSQL off the node before keeping real data.** Volumes use k3s's
     local-path storage on this disk; deleting a PVC deletes its data.
 
 ## Deploying a version
