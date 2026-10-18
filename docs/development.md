@@ -292,7 +292,7 @@ POST /api/uploads
 Authorization: Bearer <token>
 Content-Type: application/json
 
-{"contentType":"image/png","contentLength":1024}
+{"contentType":"image/png","contentLength":1024,"sha256":"<파일 SHA-256 소문자 hex 64자>"}
 ```
 
 `200 OK` 응답:
@@ -300,17 +300,29 @@ Content-Type: application/json
 ```json
 {
   "uuid": "<upload-uuid>",
-  "url": "http://<storage>/<bucket>/users/<owner>/uploads/<upload-uuid>?<signature>",
+  "uploadRequired": true,
+  "url": "http://<storage>/<bucket>/users/<owner>/uploads/<fanout>/<hash>.png?<signature>",
   "method": "PUT",
-  "headers": {"Content-Type": "image/png", "Content-Length": "1024"}
+  "headers": {
+    "Content-Type": "image/png",
+    "Content-Length": "1024",
+    "x-amz-checksum-sha256": "<SHA-256 digest 의 Base64>",
+    "x-amz-sdk-checksum-algorithm": "SHA256"
+  }
 }
 ```
 
+이미 검증된 같은 파일이 있으면 `uploadRequired: false`, 기존 `uuid`, `url: null`, `method: null`, 빈 `headers`를 반환한다.
+이때는 PUT을 생략하고 UUID를 입력으로 사용한다. 아직 올라오지 않은 같은 파일은 UUID를 재사용하고 주소를 다시 발급한다.
+`contentType`은 파일 이름의 확장자가 아니라 앞부분의 매직넘버로 정한다. 선언과 내용이 다르면 거절되고,
+같은 내용은 형식을 바꿔 선언해도 다시 발급받을 수 없다(400).
+
 반환된 URL로 파일 바이트를 PUT한다. 앱의 Bearer 토큰은 보관소에 보내지 않는다.
-형식과 크기는 서명에 포함돼 실제 요청과 같아야 한다. 브라우저에서는 `Content-Length`를
+형식·크기·SHA-256은 서명에 포함돼 실제 요청과 같아야 한다. 체크섬 헤더 두 개도 응답 그대로 보낸다. 브라우저에서는 `Content-Length`를
 직접 설정하지 않고 `File`/`Blob`을 본문으로 보내 브라우저가 계산하게 한다.
 PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인증은 401,
-직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
+직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 중복 확인 중 보관소에 닿지 못하면 503이며 상태를 바꾸지 않는다.
+수명은 `workbench.storage.presigned-url-ttl`을 따른다.
 
 올린 파일은 `SOURCE_TYPE=uploaded ./scripts/i2i.sh <업로드 UUID> "<프롬프트>"`로 i2i 입력에 쓴다.
 설계와 그 이유는 [`docs/architecture/direct-upload.md`](architecture/direct-upload.md)에 정리한다.
@@ -327,8 +339,8 @@ BASE_URL=http://localhost:8099 ./scripts/upload.sh './images/my photo.jpg'
 
 기본 인증은 `dev-token.sh`를 사용하므로, 먼저 한 번 로그인해 DB에 사용자를 등록한다.
 특정 사용자는 `USER_UUID`로 지정하고, 이미 가진 토큰은 `ACCESS_TOKEN` 환경변수로 전달할 수 있다.
-파일 헤더로 PNG·JPEG·WebP를 판별하고 크기를 확인한 뒤, `POST /api/uploads` 응답의 주소로
-파일을 직접 PUT한다. 발급 UUID·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
+파일 헤더로 PNG·JPEG·WebP를 판별하고 크기·SHA-256을 계산한 뒤, `POST /api/uploads` 응답의 주소로
+파일을 직접 PUT한다. 검증된 기존 파일이면 전송을 생략한다. 발급 UUID·서명을 제외한 경로·각 HTTP 상태를 출력하며 실패하면 0이 아닌 코드로 종료한다.
 Bearer 토큰은 앱에만 보낸다.
 
 ### 샘플 페이지에서 발급 → 업로드 확인
@@ -348,7 +360,8 @@ docker compose --profile s3 exec -T garage /garage bucket allow --owner workbenc
 
 스크립트는 해당 origin의 PUT·Content-Type 허용 규칙을 추가한다. 동일 origin의 샘플 규칙만
 갱신하고 다른 기존 규칙은 유지한다. 와일드카드 origin은 허용하지 않는다.
-브라우저 preflight가 보내는 소문자 `content-type`을 허용하며, 설정 적용 후 실제 OPTIONS
+브라우저 preflight가 보내는 소문자 `content-type`·`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`을 허용하며,
+기존 CORS 설정을 사용 중이면 스크립트를 다시 실행한다. 설정 적용 후 실제 OPTIONS
 요청까지 성공해야 스크립트가 성공으로 종료한다. 이 확인은 파일 PUT 권한·전송 성공과는 별개다.
 
 앱의 `http://localhost:8080/`에서 Google 로그인 후 **이미지 직접 업로드** 영역에 파일을 선택하고

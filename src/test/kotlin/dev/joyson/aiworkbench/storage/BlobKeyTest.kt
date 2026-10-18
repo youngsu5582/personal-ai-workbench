@@ -24,6 +24,13 @@ class BlobKeyTest {
     }
 
     @Test
+    fun `업로드는 같은 키 규칙을 쓰되 결과물과 자리를 나눈다`() {
+        val key = BlobKey.uploaded(owner, digest, "image/png").value
+        assertEquals(BlobKey.of(owner, digest, "image/png").value.replace("/blobs/", "/uploads/"), key)
+        assertNotEquals(BlobKey.of(owner, digest, "image/png").value, key)
+    }
+
+    @Test
     fun `팬아웃 두 조각은 digest 의 앞 네 글자다`() {
         // 별도 값이 아니라 digest 에서 잘라낸다 — 키가 (소유자, 바이트, 형식) 만의 함수로 남는다.
         val key = BlobKey.of(owner, digest, "image/png").value

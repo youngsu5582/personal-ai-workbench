@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.upload.api
 
 import dev.joyson.aiworkbench.ownership.OwnerContext
+import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.upload.application.UploadService
 import dev.joyson.aiworkbench.upload.domain.UploadSpec
 import jakarta.validation.Valid
@@ -35,11 +36,14 @@ class UploadController(
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
             UploadResponse(
                 uuid = upload.uuid,
-                url = upload.url.toString(),
-                method = "PUT",
-                headers = mapOf(
+                uploadRequired = upload.url != null,
+                url = upload.url?.toString(),
+                method = if (upload.url != null) "PUT" else null,
+                headers = if (upload.url == null) emptyMap() else mapOf(
                     HttpHeaders.CONTENT_TYPE to spec.contentType,
                     HttpHeaders.CONTENT_LENGTH to spec.contentLength.toString(),
+                    "x-amz-checksum-sha256" to spec.digest.base64(),
+                    "x-amz-sdk-checksum-algorithm" to "SHA256",
                 ),
             ),
         )
@@ -54,13 +58,17 @@ data class UploadRequest(
     @field:Min(1)
     @field:Max(UploadSpec.MAX_CONTENT_LENGTH)
     val contentLength: Long?,
+    @field:NotNull
+    @field:Pattern(regexp = "[0-9a-f]{64}")
+    val sha256: String?,
 ) {
-    fun toSpec() = UploadSpec(requireNotNull(contentType), requireNotNull(contentLength))
+    fun toSpec() = UploadSpec(requireNotNull(contentType), requireNotNull(contentLength), Sha256.parse(requireNotNull(sha256)))
 }
 
 data class UploadResponse(
     val uuid: UUID,
-    val url: String,
-    val method: String,
+    val uploadRequired: Boolean,
+    val url: String?,
+    val method: String?,
     val headers: Map<String, String>,
 )

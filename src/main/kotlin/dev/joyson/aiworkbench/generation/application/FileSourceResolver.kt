@@ -17,7 +17,7 @@ import java.util.UUID
  * 소유권을 확인한 참조를 바이트 또는 읽기 주소로 푼다.
  *
  * 결과물은 [GeneratedFileService] 와 같은 모양이다 — 조회는 finder 에, 읽기는 보관소에 맡기고
- * 둘을 잇기만 한다. 올린 파일은 upload 모듈에 묻는다. 판정도 주소 발급도 그 파일을 가진 모듈이 한다.
+ * 둘을 잇기만 한다. 올린 파일은 upload 모듈에 묻는다. 검증도 주소 발급도 그 파일을 가진 모듈이 한다.
  * `@Transactional` 을 걸지 않는 이유는 둘 다 보관소를 탈 수 있어서다.
  *
  * 실행 시점에 찾지 못하면 **예외를 던진다.** finder 가 `null` 을 답하는 것과 어긋나 보이지만, 그 규칙의 근거는
@@ -35,7 +35,7 @@ class FileSourceResolver(
     /**
      * 참조가 가리키는 파일을 **소유자와 함께** 확인한다. 남의 것은 없는 것과 같게 `false` 다.
      *
-     * 결과물은 메타 행만 본다. 올린 파일은 처음 참조될 때 보관소에서 앞부분을 읽어 판정한다 —
+     * 결과물은 메타 행만 본다. 올린 파일은 처음 참조될 때 보관소에서 앞부분을 읽어 검증한다 —
      * 그래서 이것을 부르는 접수는 트랜잭션 밖이다. 찾지 못한 것을 어떻게 할지는 부르는 쪽이 정한다.
      */
     fun isUsable(source: FileSource, ownerUuid: UUID): Boolean = when (source) {
@@ -90,7 +90,7 @@ class FileSourceResolver(
 
     /** 올린 파일은 주소로 넘기고, [inline] 이면 바이트로 싣는다. 어느 쪽이든 upload 모듈에 부탁한다. */
     private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID, inline: Boolean): ResolvedFile {
-        // 접수에서 판정을 마쳤으므로 여기서는 판정하지 않는다.
+        // 접수에서 검증을 마쳤으므로 여기서는 검증하지 않는다.
         val usable = uploadedFiles.findUsable(source.uuid, ownerUuid) ?: throw notFound(source)
         val filename = fileNameOf(source, usable.mimeType)
 

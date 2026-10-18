@@ -14,10 +14,9 @@ import java.net.URI
 import java.util.UUID
 
 /**
- * 올린 파일을 처음 쓰일 때 판정한다 — 있는가, 선언한 크기인가, 앞부분이 선언한 형식의 매직넘버인가.
- * 판정을 통과한 파일에만 읽기 주소를 낸다.
+ * 올린 파일을 검증하고([verify]), 검증을 통과한 파일에만 읽기 주소와 바이트를 낸다.
  *
- * 판정은 한 번이다. READY 와 REJECTED 는 다시 보지 않는다.
+ * 업로드 상태가 바뀌는 곳은 [verify] 하나다. 생명주기는 [UploadStatus] 에 있다.
  */
 @Service
 class DefaultUploadedFiles(
@@ -31,11 +30,7 @@ class DefaultUploadedFiles(
 
     override fun findUsable(uuid: UUID, ownerUuid: UUID): UsableUpload? {
         val file = uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid) ?: return null
-        return when (file.status) {
-            UploadStatus.READY -> file.toUsable()
-            UploadStatus.REJECTED -> null
-            UploadStatus.PENDING -> judge(file)
-        }
+        return if (verify(file) == UploadStatus.READY) file.toUsable() else null
     }
 
     override fun issueReadUrl(uuid: UUID, ownerUuid: UUID, fileName: String): URI? {
@@ -47,35 +42,41 @@ class DefaultUploadedFiles(
     override fun readContent(uuid: UUID, ownerUuid: UUID): ByteArray? =
         findReady(uuid, ownerUuid)?.let { fileStorage.read(it.storageKey) }
 
-    /** 판정을 통과한 것만 내준다. 검증 전 객체에는 어떤 경로로도 닿지 않게 한다. */
+    /** 검증을 통과한 것만 내준다. 검증 전 객체에는 어떤 경로로도 닿지 않게 한다. */
     private fun findReady(uuid: UUID, ownerUuid: UUID): UploadedFile? =
         uploadedFileRepository.findByUuidAndOwnerUserUuid(uuid, ownerUuid)
             ?.takeIf { it.status == UploadStatus.READY }
 
-    private fun judge(file: UploadedFile): UsableUpload? {
-        val leading = fileStorage.readRange(file.storageKey, 0L until ImageContentType.SIGNATURE_LENGTH) ?: return null
+    /**
+     * PENDING 인 파일을 검증해 READY 나 REJECTED 로 옮기고, 지금 상태를 돌려준다.
+     *
+     * 보관소에서 앞부분을 읽어 선언한 크기·형식과 대조한다. 객체가 아직 없으면 검증하지 않고 PENDING 이다.
+     * READY 와 REJECTED 는 다시 보지 않는다. 보관소를 읽으므로 트랜잭션 밖에서 부른다.
+     */
+    fun verify(file: UploadedFile): UploadStatus {
+        if (file.status.isFinal) return file.status
+        val leading = fileStorage.readRange(file.storageKey, 0L until ImageContentType.SIGNATURE_LENGTH)
+            ?: return UploadStatus.PENDING
 
         val detected = ImageContentType.detect(leading.bytes)
         val matches = leading.totalSize == file.metadata.fileSize && detected == file.metadata.mimeType
         val next = if (matches) UploadStatus.READY else UploadStatus.REJECTED
 
         if (!uploadedFileWriter.settle(requireNotNull(file.id), next)) {
-            // 다른 요청이 먼저 정했다. 같은 바이트를 봤다면 판정도 같지만, 그 사이 덮어쓰였을 수 있어 그쪽을 따른다.
-            return uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, file.ownerUserUuid)
-                ?.takeIf { it.status == UploadStatus.READY }
-                ?.toUsable()
+            // 다른 요청이 먼저 정했다. 그쪽 검증을 따른다.
+            return requireNotNull(uploadedFileRepository.findByUuidAndOwnerUserUuid(file.uuid, file.ownerUserUuid)).status
         }
 
         log.info(
-            "업로드를 판정했다. uuid={} status={} declared={}/{} actual={}/{}",
+            "업로드를 검증했다. uuid={} status={} declared={}/{} actual={}/{}",
             file.uuid, next, file.metadata.mimeType, file.metadata.fileSize, detected, leading.totalSize,
         )
-        if (matches) return file.toUsable()
-
-        // 옮기는 데 이긴 쪽만 지운다. 지우지 못해도 REJECTED 라 이 객체를 읽을 길이 없어, 판정을 실패로 돌리지 않는다.
-        runCatching { fileStorage.delete(file.storageKey) }
-            .onFailure { log.warn("불합격한 업로드를 지우지 못했다. uuid={}", file.uuid, it) }
-        return null
+        if (next == UploadStatus.REJECTED) {
+            // 옮기는 데 이긴 쪽만 지운다. 지우지 못해도 REJECTED 라 이 객체를 읽을 길이 없어, 검증을 실패로 돌리지 않는다.
+            runCatching { fileStorage.delete(file.storageKey) }
+                .onFailure { log.warn("불합격한 업로드를 지우지 못했다. uuid={}", file.uuid, it) }
+        }
+        return next
     }
 
     private fun UploadedFile.toUsable() = UsableUpload(mimeType = metadata.mimeType)

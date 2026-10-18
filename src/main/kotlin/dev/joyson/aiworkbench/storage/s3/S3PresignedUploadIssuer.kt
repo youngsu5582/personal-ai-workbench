@@ -1,6 +1,8 @@
 package dev.joyson.aiworkbench.storage.s3
 
 import dev.joyson.aiworkbench.storage.PresignedUploadIssuer
+import dev.joyson.aiworkbench.storage.Sha256
+import software.amazon.awssdk.services.s3.model.ChecksumAlgorithm
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import java.net.URI
 import java.time.Duration
@@ -18,7 +20,7 @@ class S3PresignedUploadIssuer(
     private val ttl: Duration,
 ) : PresignedUploadIssuer {
 
-    override fun issueUpload(key: String, contentType: String, contentLength: Long): URI =
+    override fun issueUpload(key: String, contentType: String, contentLength: Long, digest: Sha256): URI =
         presigner.presignPutObject { request ->
             request
                 .signatureDuration(ttl)
@@ -29,6 +31,8 @@ class S3PresignedUploadIssuer(
                         // 우리가 바이트를 보지 못하는 이 경로에서 형식을 못박을 수 있는 유일한 자리다.
                         .contentType(contentType)
                         .contentLength(contentLength)
+                        .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+                        .checksumSHA256(digest.base64())
                 }
         }.url().toURI()
 }

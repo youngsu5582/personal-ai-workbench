@@ -69,13 +69,18 @@ generation 은 루트 포트로 "쓸 수 있는 내 파일인가" 와 "읽기 �
 그런데 서명에 싣는 것은 MD5(F5)고 키는 SHA-256 이다. 보관소는 MD5 만 확인하므로 키의 SHA-256 은 클라이언트의 말이다.
 그러면 내려받은 결과물의 SHA-256 을 대고 다른 바이트를 올려 **결과물 객체를 덮어쓸 수 있다.** 자리를 나누면 이 길이 없다.
 
-### 잘못 선언한 형식은 REJECTED 를 다시 연다 (해시 PR)
+### 잘못 선언한 형식은 다시 열지 않는다 (해시 PR)
 
-이름이 `.png` 인 JPEG 는 해시는 같고 선언만 틀린다. `(owner, hash)` 가 REJECTED 로 남아 그 해시를 영원히 막으면 안 된다.
+이름이 `.png` 인 JPEG 는 해시는 같고 선언만 틀린다. `(owner, hash)` 가 REJECTED 로 남으면 그 사용자는 같은 내용을 다시 올릴 수 없다.
 
-- 클라이언트는 확장자가 아니라 **매직넘버로 선언**한다 — 해시를 내려고 어차피 전체를 읽는다. `upload.sh` 는 이미 그렇다
-- REJECTED 에 **같은 형식**으로 다시 오면 업로드 없이 400, **다른 형식**이면 그 행을 새 형식의 PENDING 으로 되돌린다
-- 그래서 전이 `REJECTED → PENDING` 이 하나 생긴다. 발급에서만 열리고 그때 진행 중인 판정이 없어 조건부 UPDATE 하나로 충분하다
+- 클라이언트는 확장자가 아니라 **매직넘버로 선언**한다 — 해시를 내려고 어차피 전체를 읽는다. `upload.sh` 와 샘플 페이지가 그렇다
+- REJECTED 에는 형식을 바꿔 와도 **400 과 사유**만 돌려준다. 서버가 선언을 정정해 주지 않는다
+- 올바른 선언은 클라이언트 쪽에서 보장한다. 외부 소비자가 생기면 같은 로직을 SDK 로 제공한다
+
+처음에는 다른 형식으로 오면 그 행을 PENDING 으로 다시 열었다(`REJECTED → PENDING`).
+조건부 UPDATE 하나면 될 줄 알았지만, 정정 전 판정이 정정된 PENDING 을 덮는 경우 때문에 `updated_at` 대조가,
+정정끼리 겹치는 경우 때문에 재시도 루프가 붙었다. 공식 클라이언트에서는 생기지 않는 경로 위의 경합이라 걷어냈다.
+대가는 잘못 선언해 거절된 내용이 그 사용자에게 영구히 막힌다는 것이다. 실제로 겪는 소비자가 생기면 운영자가 행을 지워 풀고, 그때 다시 검토한다.
 
 ## 단계와 PR
 
@@ -103,12 +108,13 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
   - [x] 5. 스크립트(`SOURCE_TYPE=uploaded`)와 문서(`direct-upload.md` 재구성)
   - [x] 6. 폴백 — 주소로 실패하면 바이트로 다시 보낸다(D13)
   - [x] 라이브 확인 — 로컬 Garage + OpenAI 로 `upload.sh` → `i2i.sh`. 주소 실패(1.1초, 과금 없음) → 바이트로 성공(12.3초)
-- [ ] **해시 PR** — 아래 순서
+- [x] **해시 구현** — `feat/upload-checksum`
   - [x] Garage 실험 — SHA-256 도 강제된다(F7). SHA-256 으로 간다
-  - [ ] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
-  - [ ] 서명에 해시(F5) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
-  - [ ] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
+  - [x] 클라이언트가 보낼 헤더 둘(`x-amz-checksum-sha256`·`x-amz-sdk-checksum-algorithm`)을 발급 응답과 버킷 CORS 에
+  - [x] 서명에 해시(F7) + `V7` nullable 해시 컬럼 + `(owner_user_uuid, hash)` unique
+  - [x] 키를 D7 로, 중복이면 기존 uuid 를 돌려준다. PENDING 중복은 발급 때 보관소를 한 번 보고 판정한다
 - [ ] (선택) 한 번도 참조되지 않은 PENDING 정리 — DB 기준. 자리를 옮기지 않으므로(D4) prefix lifecycle 로는 READY 까지 지워진다
+- [ ] (외부 소비자가 생기면) 업로드 클라이언트 SDK — 매직넘버 선언·해시·체크섬 헤더를 한 곳에. 지금은 `upload.sh`·샘플 페이지 두 구현이 있다
 
 ## 함정
 
@@ -118,12 +124,22 @@ main   (#40 리포지토리 포트 · #41 규약 + ArchitectureTest · #43 Sprin
 - **`ByteArrayResource.getFilename()` 은 기본이 null** — override 하지 않으면 파트가 파일로 안 나가고, 증상은 저쪽의 400 이라 원인이 멀다
 - **`spring.servlet.multipart` 설정은 이 경로에 필요 없다** — 앱이 파일을 받지 않는다
 - **`contentLength` 를 서명에 넣으면 스트리밍 업로드가 불가능해진다** — 올리는 쪽이 정확한 크기를 미리 알아야 한다
-- **F3 의 창은 해시 PR 전까지 열려 있다** — 주소 수명(기본 15m) 동안 같은 크기·형식의 다른 바이트로 덮어쓸 수 있고, READY 는 다시 보지 않는다. 재사용한 Job 들이 서로 다른 입력으로 돌았을 수 있다
+- **기존 발급 URL 에 해시를 소급해 넣을 수는 없다** — 해시 구현 이후 신규 주소는 내용이 고정된다. 기존 행은 nullable 해시와 UUID 경로로 유지한다
 
 ## Resume Point
 
-**다음은 해시 PR** — SHA-256 으로 간다(F7). 실험 코드는 `S3FileStorageTest` 처럼 사실을 고정하는 테스트로 다시 쓴다.
-Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)이 이 PR 로 닫힌다. 업로드를 i2i 입력으로 쓰는 일은 #45·#46 으로 끝났다.
+**해시 구현 완료** — 워크트리 `upload-checksum`, 브랜치 `feat/upload-checksum`.
+- 신규 발급 요청은 소문자 hex `sha256` 이 필수. 서명에는 원본 digest 의 Base64 를 쓴다.
+- READY 는 `uploadRequired=false` 와 기존 UUID, PENDING 은 주소를 재발급하고 올라온 객체가 있으면 판정한다.
+- REJECTED 는 형식을 바꿔 와도 400 과 사유만 돌려준다. 다시 열지 않는다.
+- 동시 최초 발급은 유니크 제약에 걸린 쪽이 트랜잭션 밖에서 다시 읽는다(user 모듈과 같은 방식). 동시 판정은 PENDING 조건부 UPDATE 로 한 번만 반영한다.
+- 2026-10-18 `.claude/scripts/test.sh`: 328개 · 실패 0개 (정정 제거 후).
+- 실제 Garage: 변경한 바이트·체크섬·헤더 누락 거절, 원본 보존과 동일 내용 재전송 확인.
+- V6 기존 행이 있는 PostgreSQL → V7 마이그레이션, 동시 발급 4건 → UUID 1개, 보관소 장애 503 확인.
+- 샘플 페이지 JS 와 upload.sh 는 로컬 fixture 로 해시·헤더·중복 PUT 생략 확인.
+- 기존 버킷은 `scripts/upload-cors.sh` 재실행이 필요하다. 실제 운영 버킷 설정은 이 작업에서 바꾸지 않았다.
+
+후속 후보: 쓰이지 않은 PENDING 정리. Codex 가 #45 에 단 P1(판정 뒤 바꿔치기, F3)은 신규 체크섬 발급으로 막는다.
 
 ## Files
 

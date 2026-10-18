@@ -73,7 +73,7 @@ rules.insert(0, {
     "AllowedOrigins": [sys.argv[2]],
     "AllowedMethods": ["PUT"],
     # 브라우저 preflight는 소문자로 보내고 Garage는 문자열을 대소문자까지 비교한다.
-    "AllowedHeaders": ["content-type"],
+    "AllowedHeaders": ["content-type", "x-amz-checksum-sha256", "x-amz-sdk-checksum-algorithm"],
     "MaxAgeSeconds": 300,
 })
 print(json.dumps({"CORSRules": rules}))
@@ -97,7 +97,7 @@ PY
 STATUS=$(curl --silent --show-error --connect-timeout 3 --max-time 5 \
   --request OPTIONS --header "Origin: $PAGE_ORIGIN" \
   --header 'Access-Control-Request-Method: PUT' \
-  --header 'Access-Control-Request-Headers: content-type' \
+  --header 'Access-Control-Request-Headers: content-type,x-amz-checksum-sha256,x-amz-sdk-checksum-algorithm' \
   --output /dev/null --write-out '%{http_code}' "$PREFLIGHT_URL")
 case "$STATUS" in
   2??) echo "버킷 $STORAGE_S3_BUCKET: $PAGE_ORIGIN 의 PUT preflight HTTP $STATUS 확인 완료." ;;
