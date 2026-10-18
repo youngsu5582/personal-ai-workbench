@@ -37,6 +37,9 @@ dependencies {
 	runtimeOnly("org.flywaydb:flyway-database-postgresql")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
+	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	// 코드에서 부르지 않는다. 클래스패스에 있기만 하면 Prometheus 형식 내보내기가 켜진다.
+	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 	implementation("org.springframework.modulith:spring-modulith-starter-core")

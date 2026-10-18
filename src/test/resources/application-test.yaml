@@ -59,6 +59,18 @@ workbench:
     jwt-secret: "test-secret-key-for-hs256-at-least-32-bytes"
     access-token-ttl: 15m
 
+# 노출 목록은 application.yaml 과 같아야 한다. 다르면 테스트가 배포와 다른 경로를 본다.
+management:
+  server:
+    # 배포처럼 앱 포트와 가른다. 고정 포트를 잡으면 동시에 도는 다른 실행과 부딪치므로 0 이다.
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - prometheus
+
 logging:
   level:
     root: WARN

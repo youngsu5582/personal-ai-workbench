@@ -47,10 +47,21 @@ class SecurityConfig {
             // 로그인 직후의 토큰 교환은 쿠키로만 인증되는 한 번짜리 GET 이라 CSRF 대상에서 뺀다.
             .csrf { it.ignoringRequestMatchers(HandoffCookie.PATH) }
             .authorizeHttpRequests {
-                // "/error" 가 빠지면 컨트롤러가 던진 401 이 ERROR dispatch 로 /error 에 재진입하고,
-                // 그게 인증 대상이라 로그인 진입점이 302 로 바꿔버린다. 상태 코드가 조용히 뒤집힌다.
-                it.requestMatchers("/", "/index.html", "/favicon.ico", "/error", HandoffCookie.PATH, "/login/**", "/oauth2/**")
-                    .permitAll()
+                it.requestMatchers(
+                    "/",
+                    "/index.html",
+                    "/favicon.ico",
+                    // "/error" 가 빠지면 컨트롤러가 던진 401 이 ERROR dispatch 로 /error 에 재진입하고,
+                    // 그게 인증 대상이라 로그인 진입점이 302 로 바꿔버린다. 상태 코드가 조용히 뒤집힌다.
+                    "/error",
+                    // management 포트에만 있는 경로라, 여기서 열어도 앱 포트(= ingress)로는 닿지 않는다.
+                    // probe 와 Prometheus 는 토큰 없이 부른다. `/**` 는 `/actuator/health` 자체도 포함한다.
+                    "/actuator/health/**",
+                    "/actuator/prometheus",
+                    HandoffCookie.PATH,
+                    "/login/**",
+                    "/oauth2/**",
+                ).permitAll()
                     .anyRequest().authenticated()
             }
             .oauth2Login { login ->
