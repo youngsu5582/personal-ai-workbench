@@ -6,6 +6,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import org.slf4j.LoggerFactory
 
@@ -41,6 +42,7 @@ class OpenAITextProvider(
                 input = request.prompt,
                 instructions = request.instructions,
                 text = request.jsonSchema?.let { OpenAITextOptions(OpenAIJsonSchemaFormat(name = SCHEMA_NAME, schema = it)) },
+                reasoning = request.effort?.let { OpenAIReasoning(effortOf(it)) },
             ),
         )
 
@@ -97,6 +99,16 @@ class OpenAITextProvider(
         "max_output_tokens" -> StopReason.MAX_TOKENS
         "content_filter" -> StopReason.CONTENT_FILTER
         else -> throw ExternalApiException(FailureKind.UNKNOWN, "알 수 없는 이유로 멈췄다: $reason")
+    }
+
+    /** 지금은 값이 1:1 로 대응한다. `minimal` 은 우리 모델 중 받는 것이 없어 눈금에 두지 않았다. */
+    private fun effortOf(effort: ReasoningEffort): String = when (effort) {
+        ReasoningEffort.NONE -> "none"
+        ReasoningEffort.LOW -> "low"
+        ReasoningEffort.MEDIUM -> "medium"
+        ReasoningEffort.HIGH -> "high"
+        ReasoningEffort.XHIGH -> "xhigh"
+        ReasoningEffort.MAX -> "max"
     }
 
     private companion object {

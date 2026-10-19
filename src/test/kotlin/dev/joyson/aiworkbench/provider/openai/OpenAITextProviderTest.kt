@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.provider.openai
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.FailureKind
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
@@ -69,6 +70,8 @@ class OpenAITextProviderTest {
             .andExpect(jsonPath("$.instructions").value("너는 편집자다"))
             .andExpect(jsonPath("$.store").value(false))
             .andExpect(jsonPath("$.text").doesNotExist())
+            // effort 를 주지 않으면 보내지 않는다 — 모델마다 기본값이 다르고, 그 기본값을 우리가 지어내지 않는다.
+            .andExpect(jsonPath("$.reasoning").doesNotExist())
             .andRespond(withSuccess(response("completed", outputText("요약")), MediaType.APPLICATION_JSON))
 
         provider.generateText("gpt-6-luna", ExternalApiTextRequest("세 줄로 요약해", instructions = "너는 편집자다"))
@@ -95,6 +98,17 @@ class OpenAITextProviderTest {
             .andRespond(withSuccess(response("completed", outputText("""{}""")), MediaType.APPLICATION_JSON))
 
         provider.generateText("gpt-6-luna", ExternalApiTextRequest("질문", jsonSchema = schema))
+
+        server.verify()
+    }
+
+    @Test
+    fun `effort 는 reasoning 안에 싣는다`() {
+        server.expect(requestTo("$BASE_URL${OpenAITextClient.RESPONSES_PATH}"))
+            .andExpect(jsonPath("$.reasoning.effort").value("high"))
+            .andRespond(withSuccess(response("completed", outputText("답")), MediaType.APPLICATION_JSON))
+
+        provider.generateText("gpt-6-luna", ExternalApiTextRequest("질문", effort = ReasoningEffort.HIGH))
 
         server.verify()
     }

@@ -20,6 +20,8 @@ data class OpenAIResponseRequest(
     val instructions: String? = null,
     /** 없으면 형식 없는 글이다. */
     val text: OpenAITextOptions? = null,
+    /** 없으면 모델 기본 effort 다. */
+    val reasoning: OpenAIReasoning? = null,
     /**
      * 저쪽에 응답을 남기지 않는다.
      *
@@ -30,6 +32,9 @@ data class OpenAIResponseRequest(
 )
 
 data class OpenAITextOptions(val format: OpenAIJsonSchemaFormat)
+
+/** `none` · `low` · `medium` · `high` · `xhigh` · `max`. 모델마다 받는 값이 다르다. */
+data class OpenAIReasoning(val effort: String)
 
 /** `text.format` 의 JSON Schema 변형. */
 class OpenAIJsonSchemaFormat(

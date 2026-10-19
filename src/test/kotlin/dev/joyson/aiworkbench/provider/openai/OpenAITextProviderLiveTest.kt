@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.provider.openai
 
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import org.junit.jupiter.api.condition.EnabledIf
 import org.springframework.http.HttpHeaders
@@ -76,6 +77,18 @@ class OpenAITextProviderLiveTest {
         val answer = JsonMapper.shared().readTree(response.text)
         assertEquals(listOf("reasoning", "answer"), answer.propertyNames().toList(), response.text)
         assertEquals(42, answer["answer"].asInt())
+    }
+
+    /** effort 를 받아주는지, 그리고 낮추면 추론 토큰이 줄어드는지 본다. 어느 값을 받는지는 모델마다 다르다. */
+    @Test
+    fun `effort 를 낮춰 부를 수 있다`() {
+        val response = generate(
+            ExternalApiTextRequest(prompt = "What is 6 times 7? Answer with the number only.", effort = ReasoningEffort.LOW),
+            "live-text-effort-low.json",
+        )
+
+        assertEquals(StopReason.COMPLETED, response.stopReason)
+        assertTrue(response.text.contains("42"), response.text)
     }
 
     private fun generate(request: ExternalApiTextRequest, fileName: String): ExternalApiTextResponse {
