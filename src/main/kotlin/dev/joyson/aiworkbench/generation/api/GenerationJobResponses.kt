@@ -7,6 +7,8 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
 import java.util.UUID
 
@@ -32,7 +34,15 @@ data class TaskResponse(
     val sequence: Int,
     val status: TaskStatus,
     val failureReason: String?,
+    /** 이미지 결과물. 글을 만든 Task 면 빈 목록이다. */
     val files: List<FileResponse>,
+    /** 글 결과물. 이미지를 만든 Task 면 빈 목록이다. */
+    val texts: List<TextResponse>,
+)
+
+data class TextResponse(
+    /** 모델이 낸 글. 받는 쪽이 고른 형식에 따라 모양이 갈릴 자리라 문자열로 못박지 않는다. */
+    val content: JsonNode,
 )
 
 data class FileResponse(
@@ -74,6 +84,7 @@ private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
     status = status,
     failureReason = failureReason,
     files = files.map { it.toResponse() },
+    texts = texts.map { TextResponse(JsonNodeFactory.instance.stringNode(it.content)) },
 )
 
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(

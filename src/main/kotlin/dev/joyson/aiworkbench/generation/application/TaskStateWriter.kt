@@ -6,6 +6,8 @@ import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GeneratedText
+import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import org.slf4j.LoggerFactory
@@ -36,6 +38,7 @@ class TaskStateWriter(
     private val taskRepository: GenerationJobTaskRepository,
     private val jobRepository: GenerationJobRepository,
     private val generatedFileRepository: GeneratedFileRepository,
+    private val generatedTextRepository: GeneratedTextRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -78,6 +81,20 @@ class TaskStateWriter(
                 )
             },
         )
+        task.transitionTo(TaskStatus.SUCCEEDED)
+        closeIfFinished(task)
+    }
+
+    /**
+     * 글 한 편으로 성공을 기록한다. 규칙은 파일로 끝난 [succeed] 와 같다.
+     *
+     * 보관소를 거치지 않으니 결과 행과 상태 전이가 한 트랜잭션에 든다 — 성공인데 글이 없는 행이 생길 틈이 없다.
+     */
+    @Transactional
+    fun succeed(taskId: Long, text: String, providerInfo: ProviderInfo?) {
+        val task = taskRepository.findById(taskId) ?: return
+
+        generatedTextRepository.save(GeneratedText(taskId = taskId, content = text, providerInfo = providerInfo))
         task.transitionTo(TaskStatus.SUCCEEDED)
         closeIfFinished(task)
     }
