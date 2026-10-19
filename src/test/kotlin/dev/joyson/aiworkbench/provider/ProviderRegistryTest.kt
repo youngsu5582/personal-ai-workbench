@@ -16,8 +16,18 @@ class ProviderRegistryTest {
             ExternalApiGenerateResponse(result = emptyList())
     }
 
+    private class FakeTextProvider(
+        override val name: String,
+        private val models: Set<String>,
+    ) : ExternalApiTextProvider {
+        override fun supports(model: String) = model in models
+        override fun generateText(model: String, request: ExternalApiTextRequest) =
+            ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
+    }
+
     private val openai = FakeProvider("openai", setOf("gpt-image-2"))
     private val gemini = FakeProvider("gemini", setOf("gemini-image"))
+    private val openaiText = FakeTextProvider("openai", setOf("gpt-6-luna"))
 
     @Test
     fun `모델을 다루는 어댑터를 찾아준다`() {
@@ -51,4 +61,21 @@ class ProviderRegistryTest {
         assertEquals(listOf("openai", "gemini"), registry.availableNames)
     }
 
+    /** 같은 이름이 양쪽에 있어도 모델이 어느 쪽 일인지는 찾는 함수가 가른다. */
+    @Test
+    fun `글을 만드는 모델은 텍스트 어댑터에서만 찾는다`() {
+        val registry = ProviderRegistry(listOf(openai), listOf(openaiText))
+
+        assertSame(openaiText, registry.findText("gpt-6-luna"))
+        assertNull(registry.find("gpt-6-luna"))
+        // 이미지 모델로 글을 요청하면 접수에서 걸러져야 한다.
+        assertNull(registry.findText("gpt-image-2"))
+    }
+
+    @Test
+    fun `이미지와 텍스트를 둘 다 하는 Provider 는 이름이 한 번만 나온다`() {
+        val registry = ProviderRegistry(listOf(openai, gemini), listOf(openaiText))
+
+        assertEquals(listOf("openai", "gemini"), registry.availableNames)
+    }
 }

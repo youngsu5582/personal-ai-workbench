@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.provider.config
 
 import dev.joyson.aiworkbench.StartupSummary
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
@@ -15,8 +16,11 @@ class ProviderConfig {
      * `List<ExternalApiProvider>` 를 그대로 주입받으면 후보가 0개일 때 기동이 실패한다.
      */
     @Bean
-    fun providerRegistry(providers: ObjectProvider<ExternalApiProvider>): ProviderRegistry =
-        ProviderRegistry(providers.orderedStream().toList())
+    fun providerRegistry(
+        providers: ObjectProvider<ExternalApiProvider>,
+        textProviders: ObjectProvider<ExternalApiTextProvider>,
+    ): ProviderRegistry =
+        ProviderRegistry(providers.orderedStream().toList(), textProviders.orderedStream().toList())
 
     /**
      * 기동 로그에 실을 한 줄.

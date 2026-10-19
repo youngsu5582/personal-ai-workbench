@@ -25,28 +25,10 @@ import java.net.http.HttpClient
 class OpenAIClientConfig {
 
     @Bean
-    fun openAIImageClient(properties: OpenAIProperties): OpenAIImageClient {
-        val apiKey = requireNotNull(properties.apiKey) {
-            "workbench.provider.openai.api-key 가 필요하다"
-        }
+    fun openAIImageClient(properties: OpenAIProperties): OpenAIImageClient = OpenAIImageClient(restClientOf(properties))
 
-        // 연결 타임아웃은 HttpClient 가, 읽기 타임아웃은 팩토리가 갖는다.
-        // 이 API 는 동기라 읽기 쪽이 길어야 한다 — 이미지를 다 만들 때까지 연결이 열려 있다.
-        val httpClient = HttpClient.newBuilder()
-            .connectTimeout(properties.connectTimeout)
-            .build()
-        val requestFactory = JdkClientHttpRequestFactory(httpClient).apply {
-            setReadTimeout(properties.readTimeout)
-        }
-
-        return OpenAIImageClient(
-            RestClient.builder()
-                .baseUrl(properties.baseUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer $apiKey")
-                .requestFactory(requestFactory)
-                .build(),
-        )
-    }
+    @Bean
+    fun openAITextClient(properties: OpenAIProperties): OpenAITextClient = OpenAITextClient(restClientOf(properties))
 
     /**
      * 어댑터도 같은 조건 아래 둔다.
@@ -56,4 +38,32 @@ class OpenAIClientConfig {
      */
     @Bean
     fun openAIProvider(client: OpenAIImageClient): OpenAIProvider = OpenAIProvider(client)
+
+    @Bean
+    fun openAITextProvider(client: OpenAITextClient): OpenAITextProvider = OpenAITextProvider(client)
+
+    /**
+     * 클라이언트마다 하나씩 만든다. 둘이 같은 키·주소·타임아웃을 쓰지만, 공유하려고 빈으로 올리면
+     * `RestClient` 를 주입받는 다른 곳에 후보가 하나 더 생긴다.
+     */
+    private fun restClientOf(properties: OpenAIProperties): RestClient {
+        val apiKey = requireNotNull(properties.apiKey) {
+            "workbench.provider.openai.api-key 가 필요하다"
+        }
+
+        // 연결 타임아웃은 HttpClient 가, 읽기 타임아웃은 팩토리가 갖는다.
+        // 이 API 들은 동기라 읽기 쪽이 길어야 한다 — 다 만들 때까지 연결이 열려 있다.
+        val httpClient = HttpClient.newBuilder()
+            .connectTimeout(properties.connectTimeout)
+            .build()
+        val requestFactory = JdkClientHttpRequestFactory(httpClient).apply {
+            setReadTimeout(properties.readTimeout)
+        }
+
+        return RestClient.builder()
+            .baseUrl(properties.baseUrl)
+            .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer $apiKey")
+            .requestFactory(requestFactory)
+            .build()
+    }
 }

@@ -14,6 +14,7 @@ package dev.joyson.aiworkbench.provider
  */
 class ProviderRegistry(
     private val providers: List<ExternalApiProvider>,
+    private val textProviders: List<ExternalApiTextProvider> = emptyList(),
 ) {
 
     /**
@@ -26,6 +27,18 @@ class ProviderRegistry(
      */
     fun find(model: String): ExternalApiProvider? = providers.firstOrNull { it.supports(model) }
 
-    /** 지금 쓸 수 있는 어댑터 이름들. 진단·로그용이다. */
-    val availableNames: List<String> get() = providers.map { it.name }
+    /**
+     * 이 모델로 글을 만들 수 있는 어댑터. 없으면 `null`.
+     *
+     * [find] 와 따로 묻는 이유는 이미지 모델과 텍스트 모델이 서로의 일을 못 해서다 —
+     * 같은 Provider 라도 이미지 모델 이름을 여기 주면 `null` 이다. 규칙은 [find] 와 같다.
+     */
+    fun findText(model: String): ExternalApiTextProvider? = textProviders.firstOrNull { it.supports(model) }
+
+    /**
+     * 지금 쓸 수 있는 어댑터 이름들. 진단·로그용이다.
+     *
+     * 한 Provider 가 이미지와 텍스트를 둘 다 하면 이름이 두 번 나오므로 한 번만 남긴다.
+     */
+    val availableNames: List<String> get() = (providers.map { it.name } + textProviders.map { it.name }).distinct()
 }
