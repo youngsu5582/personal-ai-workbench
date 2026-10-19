@@ -73,7 +73,7 @@ class OpenAITextProvider(
                 }
             }
 
-            INCOMPLETE -> stopReasonOf(response.incompleteDetails?.reason) to text
+            INCOMPLETE -> stopReasonOf(response) to text
 
             FAILED -> throw ExternalApiException(
                 FailureKind.PROVIDER_ERROR,
@@ -94,11 +94,19 @@ class OpenAITextProvider(
         )
     }
 
-    /** 모르는 이유로 멈췄으면 무엇이 잘렸는지 말할 수 없다. 모르는 채로 다시 하지 않는다. */
-    private fun stopReasonOf(reason: String?): StopReason = when (reason) {
+    /**
+     * 끝까지 가지 못한 이유. 이름을 붙이는 것은 잘림과 필터 둘뿐이다.
+     *
+     * 나머지도 예외로 바꾸지 않는다. 저쪽이 만들다 멈춘 과금된 응답이라, 예외가 되면 잘린 글 · 사용량 · 식별자가 함께 버려진다.
+     * 이유 문자열은 여기서만 보이므로 로그로 남긴다.
+     */
+    private fun stopReasonOf(response: OpenAIResponse): StopReason = when (val reason = response.incompleteDetails?.reason) {
         "max_output_tokens" -> StopReason.MAX_TOKENS
         "content_filter" -> StopReason.CONTENT_FILTER
-        else -> throw ExternalApiException(FailureKind.UNKNOWN, "알 수 없는 이유로 멈췄다: $reason")
+        else -> {
+            log.warn("응답이 다른 이유로 끝까지 가지 못했다. reason={} id={}", reason, response.id)
+            StopReason.INCOMPLETE
+        }
     }
 
     /** 지금은 값이 1:1 로 대응한다. `minimal` 은 우리 모델 중 받는 것이 없어 눈금에 두지 않았다. */

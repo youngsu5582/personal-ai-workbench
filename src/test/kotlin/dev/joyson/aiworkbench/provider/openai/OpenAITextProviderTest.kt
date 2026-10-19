@@ -162,6 +162,19 @@ class OpenAITextProviderTest {
         assertEquals("", result.text)
     }
 
+    /** 문서화된 사유는 잘림과 필터 말고도 있다(`max_messages`). 그것도 과금된 응답이라 사용량을 지켜야 한다. */
+    @Test
+    fun `다른 이유로 멈춘 응답도 사용량과 함께 답한다`() {
+        respondWith(response("incomplete", outputText("반쯤"), extra = """"incomplete_details":{"reason":"max_messages"},"""))
+
+        val result = provider.generateText("gpt-6-luna", ExternalApiTextRequest("질문"))
+
+        assertEquals(StopReason.INCOMPLETE, result.stopReason)
+        assertEquals("반쯤", result.text)
+        assertEquals("resp_1", result.providerId)
+        assertEquals(19, result.usage!!.raw["total_tokens"])
+    }
+
     @Test
     fun `저쪽 처리가 실패한 응답은 다시 해볼 만한 실패다`() {
         respondWith(response("failed", "", extra = """"error":{"code":"server_error","message":"터졌다"},"""))

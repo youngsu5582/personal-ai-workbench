@@ -39,6 +39,14 @@ enum class StopReason {
     /** 콘텐츠 필터가 중간에 멈췄다. */
     CONTENT_FILTER,
 
+    /**
+     * 위 둘 말고 다른 이유로 끝까지 가지 못했다(`max_messages` 등). 이유는 어댑터가 로그에 남긴다.
+     *
+     * 따로 이름을 붙이지 않는 이유는 부르는 쪽이 이것들을 다르게 다룰 일이 없어서다. 이유는 Provider 가 늘려 가므로
+     * 하나씩 이름을 붙이면 늘 한 발 늦고, 늦은 동안 그 응답은 예외가 되어 사용량을 잃는다.
+     */
+    INCOMPLETE,
+
     /** 모델이 답하기를 거절했다. [ExternalApiTextResponse.text] 가 거절 문구다. */
     REFUSED,
 }
