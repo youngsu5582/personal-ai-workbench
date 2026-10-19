@@ -4,6 +4,9 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
+import dev.joyson.aiworkbench.generation.domain.option.ImageOption
+import dev.joyson.aiworkbench.generation.domain.option.TextFormat
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
@@ -11,8 +14,10 @@ import dev.joyson.aiworkbench.storage.BlobKey
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ProviderRegistry
+import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.FileStorageException
 import dev.joyson.aiworkbench.usage.ProviderCallRecorder
@@ -27,6 +32,9 @@ import kotlin.time.TimeSource
 
 /**
  * Task 하나를 끝까지 처리한다 — 번역 → Provider 호출 → 보관 → 기록.
+ *
+ * 종류마다 부르는 포트와 결과를 두는 곳이 달라 경로가 둘이다. 이미지는 보관소에 바이트를 쓰고,
+ * 글은 행에 바로 둔다. 상태 전이 · 지출 기록 · 진행 중 지표는 두 경로가 같은 것을 쓴다.
  *
  * **트리거를 모른다.** 지금은 폴러가 부르고 나중에 메시지 컨슈머가 불러도 이 클래스는 그대로다.
  * 그래서 큐를 바꾸는 일이 "누가 `process` 를 부르는가" 한 줄로 끝난다.
@@ -59,6 +67,14 @@ class TaskWorker(
             return
         }
 
+        // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
+        when (val option = job.option) {
+            is ImageOption -> processImage(taskId, task, job, option)
+            is TextGenerateOption -> processText(taskId, task, job, option)
+        }
+    }
+
+    private fun processImage(taskId: Long, task: GenerationJobTask, job: GenerationJob, option: ImageOption) {
         // 접수 때 확인했더라도 그 사이 설정이 바뀌어 Provider 가 사라졌을 수 있다.
         val provider = providerRegistry.find(job.model) ?: run {
             stateWriter.fail(taskId, "다룰 수 있는 Provider 가 없다: ${job.model}", retryable = false)
@@ -74,7 +90,7 @@ class TaskWorker(
         val images = prepareInputs(taskId, job, inline = false) ?: return
 
         val response = try {
-            call(job, task, provider, images)
+            call(job, task, provider, option, images)
         } catch (e: ExternalApiException) {
             // 주소로 넘긴 입력을 저쪽이 받아가지 못했다. 같은 입력을 바이트로 실어 한 번만 더 보낸다.
             // 처음부터 바이트였다면 다시 보내도 같다.
@@ -85,7 +101,7 @@ class TaskWorker(
             log.warn("Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸다. uuid={}", task.uuid)
             val inlined = prepareInputs(taskId, job, inline = true) ?: return
             try {
-                call(job, task, provider, inlined)
+                call(job, task, provider, option, inlined)
             } catch (retried: ExternalApiException) {
                 failCall(taskId, retried)
                 return
@@ -106,6 +122,69 @@ class TaskWorker(
             processMark.elapsedMillis(),
             stored.map { it.storageKey },
         )
+    }
+
+    /**
+     * 글 한 편을 만든다. 입력 파일도 보관소도 없어 이미지 경로보다 짧다.
+     *
+     * 응답이 왔으면 지출은 **성공 호출로** 적는다 — 거절이나 잘림도 저쪽은 만들었고 과금했다.
+     * 그 글을 결과로 받을지는 그 다음에 정한다.
+     */
+    private fun processText(taskId: Long, task: GenerationJobTask, job: GenerationJob, option: TextGenerateOption) {
+        // 접수 때 확인했더라도 그 사이 설정이 바뀌어 Provider 가 사라졌을 수 있다.
+        val provider = providerRegistry.findText(job.model) ?: run {
+            stateWriter.fail(taskId, "다룰 수 있는 Provider 가 없다: ${job.model}", retryable = false)
+            return
+        }
+
+        log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
+
+        val processMark = TimeSource.Monotonic.markNow()
+        val request = ProviderRequestMapper.from(option)
+
+        // 이미지 경로의 call 과 같은 순서다 — 벽시계로 시각을, 단조 시계로 길이를 잰다.
+        val calledAt = Instant.now()
+        val callMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            activeCalls(provider.name, job.model).record(Supplier { provider.generateText(job.model, request) })
+        } catch (e: ExternalApiException) {
+            record(
+                ProviderCallMapper.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
+                ),
+            )
+            failCall(taskId, e)
+            return
+        }
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+
+        unusableReason(response, option.output)?.let { reason ->
+            // 같은 요청을 다시 보내도 대개 같은 답이 온다. 다시 하면 돈만 또 나간다.
+            stateWriter.fail(taskId, reason, retryable = false)
+            return
+        }
+
+        stateWriter.succeed(
+            taskId,
+            response.text,
+            ProviderInfo(providerId = response.providerId).takeIf { !it.isEmpty },
+        )
+        log.info("task 처리를 완료했다. uuid={} 소요={}ms 글={}자", task.uuid, processMark.elapsedMillis(), response.text.length)
+    }
+
+    /**
+     * 받은 글을 결과로 쓸 수 없는 이유. 쓸 수 있으면 null 이다.
+     *
+     * 잘린 글은 형식이 없으면 읽을 수는 있지만 받지 않는다 — 받는 쪽이 그것이 잘린 줄 알 길이 없다.
+     * 사유에 글을 조금 붙인다. 거절이면 그 문구가 왜 실패했는지를 말해 준다.
+     */
+    private fun unusableReason(response: ExternalApiTextResponse, format: TextFormat): String? = when {
+        response.stopReason != StopReason.COMPLETED ->
+            "모델이 끝까지 답하지 않았다(${response.stopReason}): ${response.text.take(REASON_EXCERPT)}"
+        // strict 로 보냈으니 일어나면 안 되는 일이다. 받는 쪽이 파싱하다 터지는 것보다 여기서 멈춘다.
+        !format.conforms(response.text) -> "요청한 형식이 아닌 답이 왔다: ${response.text.take(REASON_EXCERPT)}"
+        else -> null
     }
 
     /** 준비에 실패하면 이번 호출은 나가지 않는다 — 나간 돈이 없으므로 지출도 적지 않는다. */
@@ -133,9 +212,10 @@ class TaskWorker(
         job: GenerationJob,
         task: GenerationJobTask,
         provider: ExternalApiProvider,
+        option: ImageOption,
         images: List<ResolvedFile>,
     ): ExternalApiGenerateResponse {
-        val request = ProviderRequestMapper.from(job.option, images)
+        val request = ProviderRequestMapper.from(option, images)
 
         // 호출만 따로 잰다. 보관 지연이 섞이면 이 숫자로 Provider 를 비교할 수 없다.
         // 기록에 남는 시각은 벽시계지만 길이는 단조 시계로 잰다 — 시계가 보정되면 음수 지연이 나온다.
@@ -251,6 +331,9 @@ class TaskWorker(
 
     private companion object {
         const val CALL_FAILED = "Provider 호출이 실패했다"
+
+        /** 실패 사유에 붙일 글의 길이. 사유 칸이 255자라 앞의 설명과 함께 들어가야 한다. */
+        const val REASON_EXCERPT = 100
 
         /** `_count` 가 같은 이름의 Timer 와 뜻이 다르다. 누적 호출 수로 읽으면 안 된다. */
         const val ACTIVE_CALL_DESCRIPTION =

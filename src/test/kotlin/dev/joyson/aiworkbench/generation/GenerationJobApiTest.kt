@@ -150,6 +150,40 @@ class GenerationJobApiTest @Autowired constructor(
     private fun editOption(sources: String) =
         """{"type":"image-generate","prompt":"수채화로","sources":$sources,"size":$SIZE}"""
 
+    @Test
+    fun `글 생성은 텍스트 모델로 접수된다`() {
+        request(body(1, TEXT_OPTION, model = FAKE_TEXT_MODEL)).andExpect { status { isAccepted() } }
+        request(body(1, SCHEMA_OPTION, model = FAKE_TEXT_MODEL)).andExpect { status { isAccepted() } }
+    }
+
+    /**
+     * 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
+     * 접수를 통과시키면 몇 초 뒤 Task 실패로만 드러난다.
+     */
+    @Test
+    fun `종류와 맞지 않는 모델은 400 이다`() {
+        request(body(1, TEXT_OPTION, model = FAKE_MODEL)).andExpect { status { isBadRequest() } }
+        request(body(1, OPTION, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `객체가 아닌 스키마는 400 이다`() {
+        val option = """{"type":"text-generate","prompt":"풀어","output":{"type":"json-schema","schema":"이건 JSON 이 아니다"}}"""
+        request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `눈금에 없는 effort 는 400 이다`() {
+        val option = """{"type":"text-generate","prompt":"요약해","effort":"minimal"}"""
+        request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `빈 instructions 는 400 이다`() {
+        val option = """{"type":"text-generate","prompt":"요약해","instructions":" "}"""
+        request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
     /** 애노테이션 인자는 컴파일 타임 상수라 도메인 상수를 참조할 수 없다. 어긋나면 여기서 잡는다. */
     @Test
     fun `요청 제약의 상한이 도메인 상한과 같다`() {
@@ -167,5 +201,9 @@ private object GenerationRequestConstraints {
 }
 
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
+private const val FAKE_TEXT_MODEL = SharedTestConfig.FAKE_TEXT_MODEL
 private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
 private const val OPTION = """{"type":"image-generate","prompt":"고양이","size":$SIZE}"""
+private const val TEXT_OPTION = """{"type":"text-generate","prompt":"세 줄로 요약해"}"""
+private const val SCHEMA_OPTION =
+    """{"type":"text-generate","prompt":"태그를 골라","output":{"type":"json-schema","schema":{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}}}}}"""

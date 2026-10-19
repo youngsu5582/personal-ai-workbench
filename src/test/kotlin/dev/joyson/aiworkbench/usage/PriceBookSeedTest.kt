@@ -1,6 +1,8 @@
 package dev.joyson.aiworkbench.usage
 
 import dev.joyson.aiworkbench.TestcontainersConfiguration
+import dev.joyson.aiworkbench.provider.openai.OpenAIImageModel
+import dev.joyson.aiworkbench.provider.openai.OpenAITextModel
 import dev.joyson.aiworkbench.usage.domain.ModelPriceBook
 import dev.joyson.aiworkbench.usage.domain.ModelPriceBookRepository
 import dev.joyson.aiworkbench.usage.domain.PriceRates
@@ -67,6 +69,40 @@ class PriceBookSeedTest @Autowired constructor(
     fun `gpt-image-1 은 텍스트 5 · 이미지 입력 10 · 출력 40 이다`() {
         // 150 × 5 + 50 × 10 + 4000 × 40 = 161,250
         assertEquals(0, BigDecimal("0.16125").compareTo(priceOf("gpt-image-1")))
+    }
+
+    /** Responses API 응답의 usage 모양이다. 추론 토큰과 캐시 토큰은 각각 output · input 의 내역이다. */
+    private val textUsage = mapOf(
+        "input_tokens" to 2000,
+        "input_tokens_details" to mapOf("cached_tokens" to 0),
+        "output_tokens" to 1000,
+        "output_tokens_details" to mapOf("reasoning_tokens" to 400),
+        "total_tokens" to 3000,
+    )
+
+    private fun textPriceOf(model: String): BigDecimal? =
+        repository.findEffective("openai", model, afterSeed).single().price(textUsage)
+
+    @Test
+    fun `텍스트 모델은 입력과 출력 토큰에 매긴다`() {
+        // 2000 × 10 + 1000 × 50 = 70,000
+        assertEquals(0, BigDecimal("0.07").compareTo(textPriceOf("gpt-6-astra")))
+        // 2000 × 2 + 1000 × 10 = 14,000
+        assertEquals(0, BigDecimal("0.014").compareTo(textPriceOf("gpt-6.1-sol")))
+        // 2000 × 0.10 + 1000 × 0.50 = 700
+        assertEquals(0, BigDecimal("0.0007").compareTo(textPriceOf("gpt-6-luna")))
+        // 2000 × 2 + 1000 × 12 = 16,000
+        assertEquals(0, BigDecimal("0.016").compareTo(textPriceOf("gpt-5.6-terra")))
+    }
+
+    /** 단가표가 없는 모델의 호출은 전부 "비용을 모른다" 가 된다. 모델을 더할 때 표를 빠뜨리면 여기서 걸린다. */
+    @Test
+    fun `어댑터가 다루는 OpenAI 모델은 모두 단가표가 있다`() {
+        val models = OpenAIImageModel.entries.map { it.modelName } + OpenAITextModel.entries.map { it.modelName }
+
+        val missing = models.filter { repository.findEffective("openai", it, afterSeed).isEmpty() }
+
+        assertTrue(missing.isEmpty(), "단가표가 없는 모델: $missing")
     }
 
     @Test

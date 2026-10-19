@@ -3,6 +3,10 @@ package dev.joyson.aiworkbench
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
+import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PartialContent
 import org.springframework.boot.test.context.TestConfiguration
@@ -35,6 +39,15 @@ class SharedTestConfig {
             ExternalApiGenerateResponse(result = emptyList())
     }
 
+    /** 글 생성도 같은 이유로 하나 둔다. 이미지 모델과 이름이 달라야 "종류가 맞지 않는 모델" 을 볼 수 있다. */
+    @Bean
+    fun fakeTextProvider(): ExternalApiTextProvider = object : ExternalApiTextProvider {
+        override val name = FAKE_PROVIDER
+        override fun supports(model: String) = model == FAKE_TEXT_MODEL
+        override fun generateText(model: String, request: ExternalApiTextRequest) =
+            ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
+    }
+
     /** 테스트가 실제 디스크에 파일을 남기지 않게 한다. */
     @Bean
     @Primary
@@ -61,5 +74,6 @@ class SharedTestConfig {
     companion object {
         const val FAKE_PROVIDER = "fake"
         const val FAKE_MODEL = "fake-model"
+        const val FAKE_TEXT_MODEL = "fake-text-model"
     }
 }

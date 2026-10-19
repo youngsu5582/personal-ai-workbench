@@ -1,13 +1,18 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
+import dev.joyson.aiworkbench.generation.domain.option.TextFormat
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 
 /**
  * 우리 도메인 어휘를 Provider 포트의 어휘로 옮긴다.
@@ -15,7 +20,8 @@ import dev.joyson.aiworkbench.provider.ImageQuality
  * 이 방향으로만 번역한다. `provider` 는 `generation` 을 모르므로, 두 어휘를 잇는 책임은
  * 의존하는 쪽인 여기에 있다.
  *
- * [GenerationOption] 이 `sealed` 라 새 생성 종류를 추가하면 아래 `when` 이 컴파일 에러로 드러난다.
+ * 종류마다 나가는 포트가 달라 함수를 종류별로 둔다. 어느 쪽을 부를지는 워커가 종류로 가른다 —
+ * 그 `when` 이 [GenerationOption] 이 `sealed` 라는 것으로 빠진 종류를 컴파일 에러로 알려준다.
  *
  * 상태도 의존도 없는 순수 번역이라 빈이 아니라 `object` 다. 주입해도 갈아끼울 것이 없고
  * — 이 저장소는 목 라이브러리를 쓰지 않아 순수 함수에는 대역을 만들 것조차 없다 —
@@ -29,26 +35,35 @@ object ProviderRequestMapper {
      *   기본값이 빈 목록이라 참조가 없는 옵션을 옮길 때는 부르는 쪽이 달라지지 않는다.
      */
     fun from(
-        option: GenerationOption,
+        option: ImageOption,
         images: List<ResolvedFile> = emptyList(),
-    ): ExternalApiGenerateRequest = when (option) {
-        is ImageOption -> {
-            // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 참조를 읽어 넘기다 빠뜨렸거나 잘못 넘긴 것이다.
-            // 포트는 이미지가 있는지로 경로를 고르므로, 장수가 어긋난 채 보내면 조용히 다른 요청이 되어 과금된다.
-            require(images.size == option.sources.size) {
-                "읽어 넘긴 참조 이미지 수가 옵션과 다르다: 참조 ${option.sources.size}장, 넘긴 것 ${images.size}장"
-            }
-
-            val (width, height) = pixelsOf(option.size)
-            ExternalApiGenerateRequest(
-                prompt = option.prompt,
-                width = width,
-                height = height,
-                quality = qualityOf(option.quality),
-                images = images.map { inputOf(it) },
-            )
+    ): ExternalApiGenerateRequest {
+        // 여기서 걸리면 요청이 아니라 우리 코드의 버그다 — 부르는 쪽이 참조를 읽어 넘기다 빠뜨렸거나 잘못 넘긴 것이다.
+        // 포트는 이미지가 있는지로 경로를 고르므로, 장수가 어긋난 채 보내면 조용히 다른 요청이 되어 과금된다.
+        require(images.size == option.sources.size) {
+            "읽어 넘긴 참조 이미지 수가 옵션과 다르다: 참조 ${option.sources.size}장, 넘긴 것 ${images.size}장"
         }
+
+        val (width, height) = pixelsOf(option.size)
+        return ExternalApiGenerateRequest(
+            prompt = option.prompt,
+            width = width,
+            height = height,
+            quality = qualityOf(option.quality),
+            images = images.map { inputOf(it) },
+        )
     }
+
+    /** 형식 없는 글이면 스키마를 싣지 않는다 — 포트에서 스키마가 없다는 것이 곧 형식 없는 글이다. */
+    fun from(option: TextGenerateOption): ExternalApiTextRequest = ExternalApiTextRequest(
+        prompt = option.prompt,
+        instructions = option.instructions,
+        jsonSchema = when (val output = option.output) {
+            TextFormat.Text -> null
+            is TextFormat.JsonSchema -> output.schema
+        },
+        effort = option.effort?.let(::effortOf),
+    )
 
     /** 준비한 입력 이미지를 포트의 어휘로 옮긴다. */
     private fun inputOf(image: ResolvedFile): ExternalApiFileInput = when (image) {
@@ -84,6 +99,16 @@ object ProviderRequestMapper {
             val longerSide = maxOf(size.ratio.width, size.ratio.height)
             (longEdge * size.ratio.width / longerSide) to (longEdge * size.ratio.height / longerSide)
         }
+    }
+
+    /** [qualityOf] 와 같이 `when` 으로 옮긴다 — 한쪽에 값이 늘면 컴파일러가 알려준다. */
+    private fun effortOf(effort: Effort): ReasoningEffort = when (effort) {
+        Effort.NONE -> ReasoningEffort.NONE
+        Effort.LOW -> ReasoningEffort.LOW
+        Effort.MEDIUM -> ReasoningEffort.MEDIUM
+        Effort.HIGH -> ReasoningEffort.HIGH
+        Effort.XHIGH -> ReasoningEffort.XHIGH
+        Effort.MAX -> ReasoningEffort.MAX
     }
 
     /**

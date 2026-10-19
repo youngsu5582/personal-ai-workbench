@@ -5,6 +5,8 @@ import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
+import dev.joyson.aiworkbench.generation.domain.GeneratedText
+import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.storage.Sha256
@@ -50,6 +52,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
     private val taskRepository: GenerationJobTaskTestRepository,
     private val fileRepository: GeneratedFileTestRepository,
     private val fileStorage: FileStorage,
+    private val textRepository: GeneratedTextRepository,
 ) : IntegrationTest() {
 
     private fun tokenOf(subject: String): String {
@@ -64,11 +67,11 @@ class GenerationJobQueryApiTest @Autowired constructor(
         return tokenService.issueAccessToken(user.uuid, user.displayName).accessToken
     }
 
-    private fun submit(token: String, taskCount: Int): String =
+    private fun submit(token: String, taskCount: Int, option: String = OPTION, model: String = FAKE_MODEL): String =
         mockMvc.post("/api/jobs") {
             header("Authorization", "Bearer $token")
             contentType = MediaType.APPLICATION_JSON
-            content = """{"option":$OPTION,"model":"$FAKE_MODEL","taskCount":$taskCount}"""
+            content = """{"option":$option,"model":"$model","taskCount":$taskCount}"""
         }.andReturn().response.contentAsString
             .substringAfter("\"uuid\":\"").substringBefore("\"")
 
@@ -187,6 +190,54 @@ class GenerationJobQueryApiTest @Autowired constructor(
         }
     }
 
+    /** 워커가 꺼져 있어 성공을 직접 옮기고 글을 넣는다. 워커가 쓰는 것과 같은 모양이다. */
+    private fun textJobAnswered(token: String, option: String, content: String): String {
+        val jobUuid = submit(token, taskCount = 1, option = option, model = FAKE_TEXT_MODEL)
+        val job = jobRepository.findByUuid(UUID.fromString(jobUuid))!!
+        val task = taskRepository.findAllByJobIdOrderBySequence(job.id!!).single()
+        succeed(task)
+        textRepository.save(GeneratedText(taskId = task.id!!, content = content))
+        return jobUuid
+    }
+
+    @Test
+    fun `형식 없는 글은 문자열로 준다`() {
+        val token = tokenOf("text-owner")
+        val jobUuid = textJobAnswered(token, """{"type":"text-generate","prompt":"요약해"}""", "세 줄 요약")
+
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.option.type") { value("text-generate") }
+            jsonPath("$.tasks[0].texts[0].content") { value("세 줄 요약") }
+            jsonPath("$.tasks[0].files.length()") { value(0) }
+        }
+    }
+
+    /**
+     * 구조화된 답은 객체로 준다. 키는 모델이 낸 순서 그대로다 — jsonb 를 거쳤다면 짧은 키(`answer`)가 앞으로 왔다.
+     * 옵션의 스키마도 받은 순서 그대로 문자열로 되돌아온다.
+     */
+    @Test
+    fun `구조화된 답은 객체로 주고 키 순서를 지킨다`() {
+        val token = tokenOf("schema-owner")
+        val schema = """{"type":"object","properties":{"reasoning":{"type":"string"},"answer":{"type":"string"}}}"""
+        val option = """{"type":"text-generate","prompt":"풀어","output":{"type":"json-schema","schema":$schema}}"""
+        val jobUuid = textJobAnswered(token, option, """{"reasoning":"6 곱하기 7","answer":"42"}""")
+
+        val body = query(jobUuid, token)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.tasks[0].texts[0].content.answer") { value("42") }
+            }
+            .andReturn().response.contentAsString
+
+        assertTrue(body.contains(""""content":{"reasoning":"6 곱하기 7","answer":"42"}"""), body)
+        assertTrue(body.contains(""""schema":${jsonString(schema)}"""), "스키마의 키 순서가 저장을 거치며 바뀌었다: $body")
+    }
+
+    /** 문자열로 직렬화된 모양. 스키마에 따옴표 말고는 escape 할 글자가 없다. */
+    private fun jsonString(raw: String) = "\"" + raw.replace("\"", "\\\"") + "\""
+
     @Test
     fun `응답이 준 주소로 파일을 받는다`() {
         val token = tokenOf("download-owner")
@@ -253,6 +304,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
 
     companion object {
         private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
+        private const val FAKE_TEXT_MODEL = SharedTestConfig.FAKE_TEXT_MODEL
         private const val MIME = "image/png"
         private val OPTION =
             """{"type":"image-generate","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""

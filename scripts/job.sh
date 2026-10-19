@@ -55,7 +55,7 @@ while :; do
   sleep "$INTERVAL"
 done
 
-# Task 를 자리째 보여준다. 실패한 자리도 목록에 남는다.
+# Task 를 자리째 보여준다. 실패한 자리도 목록에 남는다. 글은 본문을 그대로 찍는다.
 # 파일마다 그대로 복사해 받을 수 있는 명령을 붙인다. 받으려면 토큰이 필요하다 —
 # 서명된 URL 과 달리 매 요청마다 소유권을 확인한다.
 # -L 은 보관소가 302 로 넘기는 경우를 위해서다. curl 은 다른 호스트로 넘어갈 때
@@ -81,4 +81,10 @@ for task in job.get("tasks", []):
         print("     {}  {}x{}  {:,} bytes".format(url, f["width"], f["height"], f["fileSize"]))
         print("     curl -L -H \"Authorization: Bearer $({})\" -o {} {}".format(
             token, shlex.quote("{}.{}".format(f["sha256"], ext)), shlex.quote(url)))
+    # 글은 응답에 바로 실려 온다. 구조화된 답은 객체라 들여 써서 보인다.
+    for t in task.get("texts", []):
+        content = t["content"]
+        rendered = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, indent=2)
+        for line in rendered.splitlines():
+            print("     " + line)
 '

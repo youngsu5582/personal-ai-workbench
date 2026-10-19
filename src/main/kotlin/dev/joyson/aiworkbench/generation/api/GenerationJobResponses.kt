@@ -7,7 +7,10 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
+import dev.joyson.aiworkbench.generation.domain.option.TextFormat
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
 import java.util.UUID
@@ -41,7 +44,12 @@ data class TaskResponse(
 )
 
 data class TextResponse(
-    /** 모델이 낸 글. 받는 쪽이 고른 형식에 따라 모양이 갈릴 자리라 문자열로 못박지 않는다. */
+    /**
+     * **요청한 형식이 값의 모양을 정한다.** `text` 면 문자열, `json-schema` 면 그 스키마를 따르는 객체다.
+     *
+     * 구조화된 답을 문자열로 내보내지 않는다. 받는 쪽이 매번 다시 파싱해야 한다면 스키마를 준 의미가 반쯤 사라진다.
+     * 키 순서는 모델이 낸 그대로다 — 저장은 원문이고, 읽을 때 순서를 지키는 파서로 읽는다.
+     */
     val content: JsonNode,
 )
 
@@ -69,23 +77,33 @@ data class FileResponse(
     val fileSize: Int,
 )
 
-fun GenerationJobView.toResponse(): GenerationJobDetailResponse = GenerationJobDetailResponse(
-    uuid = uuid,
-    status = status,
-    model = model,
-    option = option,
-    createdAt = createdAt,
-    progress = progress,
-    tasks = tasks.map { it.toResponse() },
-)
+fun GenerationJobView.toResponse(): GenerationJobDetailResponse {
+    // 글의 모양은 Task 마다가 아니라 요청 하나에 정해진다.
+    val textFormat = (option as? TextGenerateOption)?.output ?: TextFormat.Text
+    return GenerationJobDetailResponse(
+        uuid = uuid,
+        status = status,
+        model = model,
+        option = option,
+        createdAt = createdAt,
+        progress = progress,
+        tasks = tasks.map { it.toResponse(textFormat) },
+    )
+}
 
-private fun GenerationJobTaskView.toResponse(): TaskResponse = TaskResponse(
+private fun GenerationJobTaskView.toResponse(textFormat: TextFormat): TaskResponse = TaskResponse(
     sequence = sequence,
     status = status,
     failureReason = failureReason,
     files = files.map { it.toResponse() },
-    texts = texts.map { TextResponse(JsonNodeFactory.instance.stringNode(it.content)) },
+    texts = texts.map { TextResponse(contentOf(it.content, textFormat)) },
 )
+
+/** 성공으로 기록된 글은 워커가 형식을 확인한 뒤라 여기서 파싱이 실패하지 않는다. */
+private fun contentOf(content: String, format: TextFormat): JsonNode = when (format) {
+    TextFormat.Text -> JsonNodeFactory.instance.stringNode(content)
+    is TextFormat.JsonSchema -> JsonMapper.shared().readTree(content)
+}
 
 private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(
     sha256 = sha256,

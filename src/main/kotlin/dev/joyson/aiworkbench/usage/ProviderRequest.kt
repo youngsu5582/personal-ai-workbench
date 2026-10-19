@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes(
     JsonSubTypes.Type(value = ImageRequest::class, name = "image"),
+    JsonSubTypes.Type(value = TextRequest::class, name = "text"),
 )
 sealed interface ProviderRequest
 
@@ -49,3 +50,23 @@ data class ImageRequest(
         require(width > 0 && height > 0) { "가로·세로는 양수여야 한다" }
     }
 }
+
+/**
+ * 글을 만들라고 보냈다.
+ *
+ * 글은 토큰이 곧 단가라 계산 근거는 `usageRaw` 에 다 있다. 여기 적는 것은 같은 모델의 호출을
+ * 가를 축이다 — 스키마를 줬는지(그 스키마가 입력 토큰에 더해진다), 얼마나 생각하게 했는지.
+ *
+ * 프롬프트와 스키마 본문은 적지 않는다. 사용자의 글이고, 원장은 돈의 기록이다.
+ */
+data class TextRequest(
+    /** `text` · `json-schema`. 요청 옵션의 판별자와 같은 표기다. */
+    val format: String,
+
+    /**
+     * 보낸 effort. 보내지 않았으면 null 이고, 그때는 모델 기본값이 적용됐다.
+     *
+     * 추론 토큰은 출력으로 과금돼 같은 모델에서도 이 값이 비용을 가른다. 비용 차이를 설명하는 축이라 적는다.
+     */
+    val effort: String? = null,
+) : ProviderRequest
