@@ -16,13 +16,18 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.GeneratedFileTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTestRepository
 import dev.joyson.aiworkbench.generation.GenerationJobTaskTestRepository
+import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
+import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -36,6 +41,7 @@ class TaskStateWriterTest @Autowired constructor(
     private val jobRepository: GenerationJobTestRepository,
     private val taskRepository: GenerationJobTaskTestRepository,
     private val generatedFileRepository: GeneratedFileTestRepository,
+    private val meterRegistry: MeterRegistry,
     private val generatedTextRepository: GeneratedTextRepository,
 ) : IntegrationTest() {
 
@@ -102,6 +108,7 @@ class TaskStateWriterTest @Autowired constructor(
     fun `글 한 편으로 성공하면 행에 남고 마지막 Task 에서 Job 이 닫힌다`() {
         val (jobId, taskIds) = newJob(taskCount = 1)
         writer.claim(limit = 1)
+        val before = attempts("succeeded")
 
         writer.succeed(taskIds[0], "요약입니다", ProviderInfo(providerId = "resp_1"))
 
@@ -110,6 +117,9 @@ class TaskStateWriterTest @Autowired constructor(
         assertEquals("resp_1", text.providerInfo?.providerId)
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(taskIds[0]).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(jobId).get().status)
+        val task = taskRepository.findById(taskIds[0]).get()
+        assertFalse(assertNotNull(task.finishedAt).isBefore(assertNotNull(task.startedAt)))
+        assertEquals(1, attempts("succeeded") - before)
     }
 
     @Test
@@ -151,4 +161,73 @@ class TaskStateWriterTest @Autowired constructor(
         assertEquals(GenerationJobTask.MAX_ATTEMPTS, task.attemptCount)
         assertEquals(TaskStatus.FAILED, task.status)
     }
+
+    /** 대기는 접수부터 집힐 때까지, 처리는 집힐 때부터 끝날 때까지다. Task 마다 둘이 나와야 느린 Task 를 가를 수 있다. */
+    @Test
+    fun `집힐 때 시작 시각을, 끝날 때 끝난 시각을 남긴다`() {
+        val (_, taskIds) = newJob(taskCount = 1)
+
+        writer.claim(limit = 1)
+
+        val running = taskRepository.findById(taskIds[0]).get()
+        val started = assertNotNull(running.startedAt)
+        assertNull(running.finishedAt, "아직 끝나지 않았다")
+
+        writer.succeed(taskIds[0], listOf(StoredFile(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "k0", metadata())))
+
+        val finished = assertNotNull(taskRepository.findById(taskIds[0]).get().finishedAt)
+        assertFalse(finished.isBefore(started))
+    }
+
+    /** 시작 시각은 마지막 시도의 것이다. 첫 시도의 것이 남으면 재시도한 Task 의 처리 시간이 앞선 대기까지 먹는다. */
+    @Test
+    fun `큐로 되돌아가면 끝난 시각을 지우고, 다시 집히면 시작 시각을 바꾼다`() {
+        val (_, taskIds) = newJob(taskCount = 1)
+        writer.claim(limit = 1)
+        val firstStart = Instant.now().minusSeconds(3_600)
+        taskRepository.saveAndFlush(taskRepository.findById(taskIds[0]).get().apply { startedAt = firstStart })
+
+        writer.fail(taskIds[0], reason = "429", retryable = true)
+        assertNull(taskRepository.findById(taskIds[0]).get().finishedAt, "다시 큐에 들어간 것은 끝난 것이 아니다")
+
+        writer.claim(limit = 1)
+        assertTrue(taskRepository.findById(taskIds[0]).get().startedAt!!.isAfter(firstStart))
+    }
+
+    /** 재시도율은 큐로 되돌린 시도의 수다. 닫히는 실패까지 재시도로 세면 재시도가 없어도 수가 오른다. */
+    @Test
+    fun `시도를 결과별로 센다`() {
+        val (_, taskIds) = newJob(taskCount = 4)
+        writer.claim(limit = 4)
+        // 컨텍스트를 공유하므로 다른 테스트가 센 것이 남아 있다. 늘어난 만큼만 본다.
+        val before = listOf("succeeded", "retried", "failed").associateWith(::attempts)
+
+        writer.succeed(taskIds[0], listOf(StoredFile(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "k0", metadata())))
+        writer.fail(taskIds[1], reason = "429", retryable = true)
+        writer.fail(taskIds[2], reason = "503", retryable = true)
+        writer.fail(taskIds[3], reason = "400 잘못된 요청", retryable = false)
+
+        // 건수를 다르게 둔다. 같으면 재시도와 실패를 뒤바꿔 세도 통과한다.
+        val expected = mapOf("succeeded" to 1L, "retried" to 2L, "failed" to 1L)
+        before.forEach { (outcome, count) -> assertEquals(expected.getValue(outcome), attempts(outcome) - count, outcome) }
+    }
+
+    /** 시도 길이는 벽시계 두 시각의 차다. 시계가 뒤로 가 음수가 되어도 건수는 빠지면 안 된다 — 재시도율이 그 건수다. */
+    @Test
+    fun `시계가 뒤로 가도 시도는 센다`() {
+        val (_, taskIds) = newJob(taskCount = 1)
+        writer.claim(limit = 1)
+        // 집힌 시각을 미래로 둬 끝난 시각이 그보다 앞서게 한다 — 그 사이 시계가 뒤로 간 것과 같다.
+        taskRepository.saveAndFlush(
+            taskRepository.findById(taskIds[0]).get().apply { startedAt = Instant.now().plusSeconds(3_600) },
+        )
+        val before = attempts("failed")
+
+        writer.fail(taskIds[0], reason = "400 잘못된 요청", retryable = false)
+
+        assertEquals(1, attempts("failed") - before)
+    }
+
+    private fun attempts(outcome: String): Long =
+        meterRegistry.get("workbench.generation.task.attempt").tag("outcome", outcome).timer().count()
 }

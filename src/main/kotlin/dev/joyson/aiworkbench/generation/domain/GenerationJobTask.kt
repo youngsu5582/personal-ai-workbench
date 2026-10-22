@@ -70,6 +70,14 @@ class GenerationJobTask(
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),
+
+    /** 마지막으로 집힌 시각. 재시도로 다시 집히면 바뀐다. 한 번도 집히지 않았으면 null 이다. */
+    @Column(name = "started_at")
+    var startedAt: Instant? = null,
+
+    /** 끝난 시각. 다시 큐로 돌아가면 지운다 — 끝난 것이 아니다. */
+    @Column(name = "finished_at")
+    var finishedAt: Instant? = null,
 ) {
 
     /**
@@ -83,11 +91,18 @@ class GenerationJobTask(
         when (next) {
             TaskStatus.RUNNING -> {
                 attemptCount += 1
+                startedAt = Instant.now()
                 providerTaskId?.let { this.providerTaskId = it }
             }
-            TaskStatus.FAILED -> this.failureReason = failureReason?.take(FAILURE_REASON_LENGTH)
-            TaskStatus.PENDING -> this.failureReason = null
-            TaskStatus.SUCCEEDED -> Unit
+            TaskStatus.FAILED -> {
+                this.failureReason = failureReason?.take(FAILURE_REASON_LENGTH)
+                finishedAt = Instant.now()
+            }
+            TaskStatus.PENDING -> {
+                this.failureReason = null
+                finishedAt = null
+            }
+            TaskStatus.SUCCEEDED -> finishedAt = Instant.now()
         }
     }
 

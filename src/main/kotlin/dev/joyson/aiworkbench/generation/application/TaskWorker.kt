@@ -24,11 +24,14 @@ import dev.joyson.aiworkbench.usage.ProviderCallRecorder
 import dev.joyson.aiworkbench.usage.RecordProviderCallCommand
 import io.micrometer.core.instrument.LongTaskTimer
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.time.Duration
 import java.time.Instant
 import java.util.function.Supplier
 import kotlin.time.TimeSource
+import kotlin.time.toJavaDuration
 
 /**
  * Task 하나를 끝까지 처리한다 — 번역 → Provider 호출 → 보관 → 기록.
@@ -58,6 +61,19 @@ class TaskWorker(
     private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 결과 하나를 보관소에 쓰는 시간. 보관소는 배포마다 하나라 tag 로 가를 것이 없다.
+     * 실패도 결과로 붙여 같은 이름에 둔다 — 실패가 오래 걸렸는지(타임아웃) 곧바로였는지(거절)도 보여야 한다.
+     */
+    private val storageWritten = storageWriteTimer(meterRegistry, "success")
+    private val storageWriteFailed = storageWriteTimer(meterRegistry, "failure")
+
+    private fun storageWriteTimer(registry: MeterRegistry, outcome: String): Timer =
+        Timer.builder("workbench.storage.write")
+            .tag("outcome", outcome)
+            .serviceLevelObjectives(*STORAGE_WRITE_BUCKETS)
+            .register(registry)
 
     fun process(taskId: Long) {
         val task = taskRepository.findById(taskId) ?: return
@@ -89,6 +105,8 @@ class TaskWorker(
         // 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
         val images = prepareInputs(taskId, job, inline = false) ?: return
 
+        // 바이트로 다시 보내는 경우까지 Provider 구간에 넣는다. 그것도 저쪽이 입력을 못 받아가 쓴 시간이다.
+        val providerMark = TimeSource.Monotonic.markNow()
         val response = try {
             call(job, task, provider, option, images)
         } catch (e: ExternalApiException) {
@@ -108,18 +126,27 @@ class TaskWorker(
             }
         }
 
+        val providerMillis = providerMark.elapsedMillis()
+
+        val storeMark = TimeSource.Monotonic.markNow()
         val stored = try {
             store(job, response)
         } catch (e: FileStorageException) {
             stateWriter.fail(taskId, e.message ?: "결과를 보관하지 못했다", e.retryable)
             return
         }
+        val storeMillis = storeMark.elapsedMillis()
 
         stateWriter.succeed(taskId, stored)
+        // 한 줄로 이 Task 가 어디서 시간을 썼는지 남긴다. 집계는 지표가 하고, 이 줄은 하나를 쫓을 때 쓴다.
+        // 대기는 접수부터 마지막으로 집힐 때까지라 재시도한 Task 는 앞선 시도의 시간도 들어 있다.
         log.info(
-            "task 처리를 완료했다. uuid={} 소요={}ms 파일={}",
+            "task 처리를 완료했다. uuid={} 대기={}ms 소요={}ms provider={}ms 보관={}ms 파일={}",
             task.uuid,
+            task.startedAt?.let { Duration.between(task.createdAt, it).toMillis() },
             processMark.elapsedMillis(),
+            providerMillis,
+            storeMillis,
             stored.map { it.storageKey },
         )
     }
@@ -309,7 +336,7 @@ class TaskWorker(
             digest = digest,
             mimeType = result.metadata.mimeType,
         ).value
-        fileStorage.put(key, result.image, result.metadata.mimeType)
+        write(key, result.image, result.metadata.mimeType)
 
         StoredFile(
             sha256 = digest.hex,
@@ -329,8 +356,23 @@ class TaskWorker(
         )
     }
 
+    private fun write(key: String, content: ByteArray, contentType: String) {
+        val mark = TimeSource.Monotonic.markNow()
+        try {
+            fileStorage.put(key, content, contentType)
+        } catch (e: Exception) {
+            storageWriteFailed.record(mark.elapsedNow().toJavaDuration())
+            throw e
+        }
+        storageWritten.record(mark.elapsedNow().toJavaDuration())
+    }
+
     private companion object {
         const val CALL_FAILED = "Provider 호출이 실패했다"
+
+        /** 객체 하나를 쓰는 데 수 ms 에서 수 초다. 로컬 디스크와 원격 S3 를 함께 담는 범위로 둔다. */
+        val STORAGE_WRITE_BUCKETS: Array<Duration> =
+            arrayOf(10L, 50L, 100L, 250L, 500L, 1_000L, 2_500L, 10_000L).map(Duration::ofMillis).toTypedArray()
 
         /** 실패 사유에 붙일 글의 길이. 사유 칸이 255자라 앞의 설명과 함께 들어가야 한다. */
         const val REASON_EXCERPT = 100
