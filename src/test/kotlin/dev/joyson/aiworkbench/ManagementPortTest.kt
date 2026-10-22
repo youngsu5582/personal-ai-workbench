@@ -82,6 +82,19 @@ class ManagementPortTest {
         assertTrue(response.body().contains("jvm_memory_used_bytes"), response.body().take(500))
     }
 
+    /**
+     * 대시보드와 알림은 Micrometer 이름이 아니라 레지스트리가 바꾼 이름에 묶인다(단위 접미사).
+     * Provider 호출 지표는 첫 호출 때 생기므로 여기서 보지 않는다.
+     */
+    @Test
+    fun `Task 시도 지표가 Prometheus 이름으로 나간다`() {
+        val body = get(managementPort, "/actuator/prometheus").body()
+
+        listOf(
+            """workbench_generation_task_attempt_seconds_count{outcome="retried"}""",
+        ).forEach { assertTrue(body.contains(it), "$it 이 없다") }
+    }
+
     private fun get(port: Int, path: String): HttpResponse<String> =
         client.send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofString())
 }
