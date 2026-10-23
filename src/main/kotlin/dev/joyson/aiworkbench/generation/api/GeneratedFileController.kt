@@ -38,10 +38,13 @@ class GeneratedFileController(
 
             // 302 다. 301 이면 브라우저가 캐시하는데, 그 주소는 곧 만료된다.
             is FileDownload.Redirect ->
-                ResponseEntity.status(HttpStatus.FOUND).location(download.url).build<Void>()
+                ResponseEntity.status(HttpStatus.FOUND)
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                    .location(download.url).build<Void>()
 
             is FileDownload.Streamed ->
                 ResponseEntity.ok()
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                     .contentType(MediaType.parseMediaType(download.contentType))
                     // inline 이라 브라우저가 바로 그린다. <img src> 로 쓰려면 attachment 면 안 된다.
                     .header(
