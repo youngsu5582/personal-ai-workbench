@@ -27,6 +27,8 @@ class S3PresignedUrlIssuer(
                 .getObjectRequest { get ->
                     get.bucket(bucket)
                         .key(key)
+                        // 만료된 URL이 캐시에서 계속 응답되지 않도록 응답 정책도 서명한다.
+                        .responseCacheControl("private, no-store")
                         // 키가 내용 주소라 그대로 두면 64자 해시가 파일명이 된다.
                         // 이 값은 서명에 포함되므로 받는 쪽이 고칠 수 없다.
                         .responseContentDisposition(contentDisposition(fileName))
