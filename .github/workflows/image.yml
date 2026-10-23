@@ -1,0 +1,63 @@
+name: publish-image
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/youngsu5582/personal-ai-workbench
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=main
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 배포는 digest 로 가리킨다. 사람이 어느 커밋인지 알아보도록 sha 태그를 앞에 붙여 남긴다.
+      - name: Record the deployable reference
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          ref="$(printf '%s\n' "$TAGS" | grep ':sha-')@${DIGEST}"
+          {
+            echo "### 배포할 이미지"
+            echo
+            echo '```'
+            echo "$ref"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
