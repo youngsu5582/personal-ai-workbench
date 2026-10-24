@@ -43,6 +43,7 @@ import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.FileStorageException
 import dev.joyson.aiworkbench.usage.FailureKind as RecordedFailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.upload.UploadedFiles
@@ -450,6 +451,36 @@ class TaskWorkerTest @Autowired constructor(
         val call = callRepository.findAllByTaskUuid(task.uuid).single()
         assertTrue(call.latencyMs < THRESHOLD_MS, "보관 시간이 Provider 지연에 섞였다: ${call.latencyMs}ms")
     }
+
+    /**
+     * 보관 시간은 Provider 지연과 따로 잰다. 느려진 것이 저쪽인지 우리 보관소인지 가르려면 둘이 다른 지표여야 한다.
+     * 실패도 센다 — 보관에 실패한 Task 는 다시 큐로 가므로, 이 수가 없으면 재시도가 어디서 오는지 모른다.
+     */
+    @Test
+    fun `보관소에 쓴 시간을 결과별로 잰다`() {
+        // 컨텍스트를 공유하므로 다른 테스트가 센 것이 남아 있다. 늘어난 만큼만 본다.
+        val writtenBefore = storageWrites("success")
+        val failedBefore = storageWrites("failure")
+        val brokenStorage = object : FileStorage {
+            override fun put(key: String, content: ByteArray, contentType: String) =
+                throw FileStorageException(retryable = true, message = "보관소가 응답하지 않는다")
+            override fun read(key: String): ByteArray? = null
+            override fun readRange(key: String, range: LongRange) = error("일부만 읽지 않는다")
+            override fun delete(key: String) = error("지우지 않는다")
+        }
+
+        val (_, stored) = newTask()
+        workerWith(provider { success() }).process(stored.id!!)
+        val (_, broken) = newTask()
+        workerWith(provider { success() }, fileStorage = brokenStorage).process(broken.id!!)
+
+        assertEquals(1, storageWrites("success") - writtenBefore)
+        assertEquals(1, storageWrites("failure") - failedBefore)
+        assertEquals(TaskStatus.PENDING, taskRepository.findById(broken.id!!).get().status)
+    }
+
+    private fun storageWrites(outcome: String): Long =
+        meterRegistry.get("workbench.storage.write").tag("outcome", outcome).timer().count()
 
     /**
      * 기록이 실패하면 그 호출의 토큰 수는 **영영 사라진다** — 응답은 한 번뿐이다.

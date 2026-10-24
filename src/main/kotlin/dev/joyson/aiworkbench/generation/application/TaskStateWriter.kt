@@ -10,9 +10,12 @@ import dev.joyson.aiworkbench.generation.domain.GeneratedText
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.util.UUID
 
 /** 저장까지 끝난 결과물 하나. */
@@ -38,9 +41,22 @@ class TaskStateWriter(
     private val taskRepository: GenerationJobTaskRepository,
     private val jobRepository: GenerationJobRepository,
     private val generatedFileRepository: GeneratedFileRepository,
+    meterRegistry: MeterRegistry,
     private val generatedTextRepository: GeneratedTextRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /**
+     * 시도 한 번의 길이를 결과별로 잰다. 재시도율도 여기서 나온다 — `outcome="retried"` 의 개수다.
+     *
+     * 결과 셋을 기동할 때 만들어 둔다. 처음 생길 때까지 시계열이 없으면 "0 번" 과 "모른다" 가 구분되지 않는다.
+     */
+    private val attempts: Map<String, Timer> = listOf(SUCCEEDED, RETRIED, FAILED).associateWith { outcome ->
+        Timer.builder("workbench.generation.task.attempt")
+            .tag("outcome", outcome)
+            .serviceLevelObjectives(*ATTEMPT_BUCKETS)
+            .register(meterRegistry)
+    }
 
     /**
      * 처리할 Task 를 집어 RUNNING 으로 바꾼다.
@@ -82,6 +98,7 @@ class TaskStateWriter(
             },
         )
         task.transitionTo(TaskStatus.SUCCEEDED)
+        recordAttempt(task, SUCCEEDED)
         closeIfFinished(task)
     }
 
@@ -96,6 +113,7 @@ class TaskStateWriter(
 
         generatedTextRepository.save(GeneratedText(taskId = taskId, content = text, providerInfo = providerInfo))
         task.transitionTo(TaskStatus.SUCCEEDED)
+        recordAttempt(task, SUCCEEDED)
         closeIfFinished(task)
     }
 
@@ -112,6 +130,9 @@ class TaskStateWriter(
         task.transitionTo(TaskStatus.FAILED, failureReason = reason)
 
         val canRetry = retryable && task.attemptCount < GenerationJobTask.MAX_ATTEMPTS
+        // 되돌릴지는 여기서만 정해지므로 결과도 여기서 붙인다. 큐로 되돌리면 끝난 시각이 지워지니 그 전에 잰다.
+        recordAttempt(task, if (canRetry) RETRIED else FAILED)
+
         if (canRetry) {
             log.info("task 를 다시 큐에 넣는다. uuid={} 시도={} 사유={}", task.uuid, task.attemptCount, reason)
             task.transitionTo(TaskStatus.PENDING)
@@ -122,9 +143,31 @@ class TaskStateWriter(
         closeIfFinished(task)
     }
 
+    /**
+     * 집히기 전에 실패한 Task 는 시작 시각이 없다. 재지 않은 것은 세지 않는다.
+     *
+     * 길이는 저장한 벽시계 두 시각의 차라, 그 사이 시계가 뒤로 보정되면 음수가 된다.
+     * Timer 는 음수를 버리고 그러면 결과별 건수(재시도율)까지 빠진다 — 0 으로 올려 건수는 지킨다.
+     */
+    private fun recordAttempt(task: GenerationJobTask, outcome: String) {
+        val started = task.startedAt ?: return
+        val finished = task.finishedAt ?: return
+        attempts.getValue(outcome).record(Duration.between(started, finished).coerceAtLeast(Duration.ZERO))
+    }
+
     private fun closeIfFinished(task: GenerationJobTask) {
         if (jobRepository.closeIfAllTasksFinished(task.jobId) > 0) {
             log.info("job 의 모든 task 가 끝났다. jobId={}", task.jobId)
         }
+    }
+
+    private companion object {
+        const val SUCCEEDED = "succeeded"
+        const val RETRIED = "retried"
+        const val FAILED = "failed"
+
+        /** 시도 한 번은 Provider 호출과 보관을 합친 길이라 건당 수십 초다. 그 범위에 맞춘 여섯 개만 둔다. */
+        val ATTEMPT_BUCKETS: Array<Duration> =
+            arrayOf(5L, 10L, 30L, 60L, 120L, 300L).map(Duration::ofSeconds).toTypedArray()
     }
 }

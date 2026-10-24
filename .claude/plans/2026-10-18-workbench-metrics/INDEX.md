@@ -4,7 +4,8 @@ Status: active
 
 ## Progress
 - [x] 1단계 앱 metric — Provider 호출 Timer (#60)
-- [ ] 1단계 후속 — Task 시도 기록(새 테이블 없이 Task 행 안에) · 시도 Timer(재시도율) · 보관 Timer · 로그 추적(MDC) (#60 위에 쌓는 PR)
+- [x] #62 충돌 해결 — Task 시작·끝 시각, 시도·보관 Timer 를 최신 main 의 이미지·글 생성과 통합
+- [ ] 1단계 후속 설계 — Task 시도 이력 · 로그 추적(MDC)
 - [x] 2단계 로컬 compose 에 Prometheus · Grafana — 대시보드와 PromQL 을 k3s 없이 먼저 만든다 (profile `observability`)
 - [ ] 2단계 후속 — Loki · Alloy. 1단계 후속의 MDC 가 들어간 뒤 붙인다 — 그래야 Task 하나로 로그를 모을 수 있다
 - [ ] k3s 학습 — #56 의 커밋을 하나씩 Rancher Desktop 에 올려 본다
@@ -39,10 +40,12 @@ Status: active
 - **토큰 · 비용** — 지표로 두지 않는다. 사용량은 Provider 마다 모양이 다른 원문(`ProviderUsage.raw`)이고 비용은 Provider 가 직접 답할 때만 있다. `provider_calls` 에 쌓이는 원문으로 단가표 작업 때 계산한다
 
 ## Resume Point
-1단계 후속 — #62. #60 이 머지돼 #62 는 main 위로 다시 쌓아야 한다(지금은 옛 #60 커밋 위라 충돌 상태). Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
-1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 **아직 확정 전**이다. 스키마라 확정한 뒤에 시작한다
-2. 시도 Timer(outcome 별, 재시도율은 `retried` 개수) · 보관 Timer, 둘 다 설명을 붙인다
-3. 로그 추적 — MDC 로 job · task · 시도 번호를 모든 워커 로그에 싣는다. 실패 · 재시도 로그에도 소요 시간
+#62 는 최신 main 을 병합해 충돌을 해결했다. 검증과 원격 반영은 `../2026-10-22-pr62-conflicts/INDEX.md` 에서 확인한다.
+- 현재 구현은 마지막 시도의 `started_at` · `finished_at` 이다. 기존 행은 채우지 않는다. 마이그레이션은 main 의 V13 다음인 V14 로 둔다.
+- 재시도율은 시도 Timer 의 `outcome="retried"` 개수다. 글 생성의 성공도 같은 Timer 에 기록한다.
+- 시도 길이는 벽시계 차를 0 이상으로 올려 건수를 지킨다. 앞으로 보정될 때 길이가 부푸는 것과 트랜잭션 커밋 전 기록의 드문 과대 집계는 기존 결정을 유지한다.
+- 보관 Timer 는 이미지 바이트 쓰기를 결과별로 잰다. 글은 DB 행에 저장되므로 포함하지 않는다.
+- Task 시도 이력(`attempts jsonb`)과 MDC 는 후속 설계 후보이며 이번 충돌 해결에서 추가하지 않는다.
 
 2단계(로컬 Prometheus · Grafana)는 끝났다. 쓰는 법은 `docs/development.md` 의 "지표 보기". 정해 둔 것:
 - 앱과 개발 DB 를 `host.docker.internal` 로 부른다. 개발 DB 가 다른 워크트리의 compose 에서 떠 있을 수 있어 서비스 이름으로는 못 닿는다. Rancher Desktop 에서 `host-gateway` 를 덧붙이면 VM 브리지로 바뀌어 오히려 닿지 않는다
