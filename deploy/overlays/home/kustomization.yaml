@@ -10,9 +10,6 @@ resources:
   - garage-config.yaml
   - garage.yaml
 
-patches:
-  - path: workbench-home-patch.yaml
-
 images:
   - name: ghcr.io/youngsu5582/personal-ai-workbench
     # 띄울 이미지는 digest 로 가리킨다. 태그(main)는 옮겨 가서 apply 해도 Pod 가 바뀌지 않고,
