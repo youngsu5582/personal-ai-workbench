@@ -9,6 +9,8 @@ resources:
   - postgres.yaml
   - garage-config.yaml
   - garage.yaml
+  - ingress.yaml
+  - cloudflared.yaml
 
 images:
   - name: ghcr.io/youngsu5582/personal-ai-workbench

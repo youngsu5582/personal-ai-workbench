@@ -46,6 +46,11 @@ spring:
               - profile
               - email
 
+server:
+  # TLS 는 Traefik 이 끊는다. X-Forwarded-* 를 읽어야 OAuth redirect_uri 가 https 로 만들어진다.
+  # framework 는 헤더를 보낸 쪽을 가리지 않는다 — Pod 에 닿는 바깥 길이 Traefik 하나일 때만 안전하다.
+  forward-headers-strategy: framework
+
 # 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
 workbench:
   auth:
