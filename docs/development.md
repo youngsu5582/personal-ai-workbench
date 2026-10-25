@@ -493,7 +493,7 @@ WORKBENCH_PUBLIC_ORIGIN=<public Workbench origin, including https://>
 
 ```bash
 sudo k3s kubectl -n workbench exec garage-0 -- \
-  /garage bucket allow --owner workbench --key workbench-app
+  /garage bucket allow --read --write --owner workbench --key workbench-app
 sudo k3s kubectl -n workbench rollout restart deployment/workbench
 sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 ```
