@@ -9,7 +9,7 @@ data:
         {
           "ID": "workbench-public-upload",
           "AllowedOrigins": [
-            "https://workbench.youngsu5582.today"
+            "__WORKBENCH_PUBLIC_ORIGIN__"
           ],
           "AllowedMethods": [
             "PUT"
