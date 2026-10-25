@@ -475,6 +475,34 @@ docker compose --profile s3 exec -T garage /garage bucket allow --owner workbenc
 화면의 이미지는 선택한 원본 미리보기이며, 업로드 성공은 보관소의 PUT 수락을 의미한다.
 네트워크 오류가 나면 페이지 origin과 CORS 설정, 브라우저에서 접근 가능한 보관소 주소를 확인한다.
 
+### 홈서버 K3s 배포
+
+`deploy/overlays/home`은 Workbench Pod의 init container에서 Garage의 `PutBucketCors`를 실행한다.
+Git에는 CORS method/header 정책만 두고, 배포별 public origin은 `runtime.env`의
+`WORKBENCH_PUBLIC_ORIGIN`으로 주입한다. 따라서 특정 운영 도메인이 ConfigMap이나 Deployment
+manifest에 들어가지 않고, Pod를 다시 만들 때마다 해당 환경의 정책으로 재조정된다.
+이 init container가 사용할 S3 키에는 버킷 owner 권한이 필요하다. 아래의 `workbench-app`은
+K3s 부트스트랩에서 `STORAGE_S3_ACCESS_KEY`를 만든 키 이름이다. 기존에 다른 키 이름을 사용했다면
+그 키 이름을 지정한다.
+
+`runtime.env`를 복사해 Secret을 만들기 전에 다음 항목도 환경에 맞게 채운다.
+
+```text
+WORKBENCH_PUBLIC_ORIGIN=<public Workbench origin, including https://>
+```
+
+```bash
+sudo k3s kubectl -n workbench exec garage-0 -- \
+  /garage bucket allow --read --write --owner workbench --key workbench-app
+sudo k3s kubectl -n workbench rollout restart deployment/workbench
+sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
+```
+
+로그에 `Garage CORS policy verified`가 나오고 Workbench rollout이 완료된 뒤,
+브라우저가 실제로 접근하는 public file hostname에서 `OPTIONS` preflight도 확인한다.
+다른 환경별 origin이 필요하면 해당 환경의 `WORKBENCH_PUBLIC_ORIGIN` Secret 값만 바꾼다.
+`workbench-cors.yaml`에는 운영 주소를 추가하지 않는다.
+
 ## 도메인 문서
 
 구현 시 사용하는 도메인 용어·불변식·Aggregate 경계는 [`docs/domain/domain-model.md`](domain/domain-model.md)에 정리한다.

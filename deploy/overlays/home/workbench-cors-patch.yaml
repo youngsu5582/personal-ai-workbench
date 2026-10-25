@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workbench
+spec:
+  template:
+    spec:
+      volumes:
+        - name: workbench-cors
+          configMap:
+            name: workbench-cors
+      initContainers:
+        - name: configure-garage-cors
+          image: amazon/aws-cli:2.27.41@sha256:bc6b7bba44ce38f9604ede49c584824af919047ea03fbcc7c7610671fdef95d8
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              export AWS_ACCESS_KEY_ID="$STORAGE_S3_ACCESS_KEY"
+              export AWS_SECRET_ACCESS_KEY="$STORAGE_S3_SECRET_KEY"
+              export AWS_DEFAULT_REGION="${STORAGE_S3_REGION:-garage}"
+              export AWS_S3_ADDRESSING_STYLE=path
+              export AWS_EC2_METADATA_DISABLED=true
+              export AWS_PAGER=""
+              export HOME=/tmp
+              origin="$WORKBENCH_PUBLIC_ORIGIN"
+              case "$origin" in
+                https://*) ;;
+                *)
+                  echo "WORKBENCH_PUBLIC_ORIGIN must start with https://" >&2
+                  exit 1
+                  ;;
+              esac
+              host="${origin#https://}"
+              case "$host" in
+                ''|*[!A-Za-z0-9.-]*)
+                  echo "WORKBENCH_PUBLIC_ORIGIN must contain only an https hostname" >&2
+                  exit 1
+                  ;;
+              esac
+              sed "s|__WORKBENCH_PUBLIC_ORIGIN__|$origin|g" \
+                /etc/workbench-cors/cors.json >/tmp/cors.json
+              aws --no-cli-pager \
+                --endpoint-url http://garage:3900 \
+                --region "$AWS_DEFAULT_REGION" \
+                s3api put-bucket-cors \
+                --bucket "$STORAGE_S3_BUCKET" \
+                --cors-configuration file:///tmp/cors.json
+              aws --no-cli-pager \
+                --endpoint-url http://garage:3900 \
+                --region "$AWS_DEFAULT_REGION" \
+                s3api get-bucket-cors \
+                --bucket "$STORAGE_S3_BUCKET" >/dev/null
+              echo "Garage CORS policy verified for $STORAGE_S3_BUCKET"
+          env:
+            - name: STORAGE_S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: workbench-runtime
+                  key: STORAGE_S3_BUCKET
+            - name: STORAGE_S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: workbench-runtime
+                  key: STORAGE_S3_REGION
+                  optional: true
+            - name: STORAGE_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: workbench-runtime
+                  key: STORAGE_S3_ACCESS_KEY
+            - name: STORAGE_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: workbench-runtime
+                  key: STORAGE_S3_SECRET_KEY
+            - name: WORKBENCH_PUBLIC_ORIGIN
+              valueFrom:
+                secretKeyRef:
+                  name: workbench-runtime
+                  key: WORKBENCH_PUBLIC_ORIGIN
+          volumeMounts:
+            - name: workbench-cors
+              mountPath: /etc/workbench-cors
+              readOnly: true
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
