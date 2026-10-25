@@ -9,6 +9,10 @@ resources:
   - postgres.yaml
   - garage-config.yaml
   - garage.yaml
+  - workbench-cors.yaml
+
+patches:
+  - path: workbench-cors-patch.yaml
 
 images:
   - name: ghcr.io/youngsu5582/personal-ai-workbench

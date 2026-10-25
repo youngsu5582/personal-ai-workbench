@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workbench-cors
+data:
+  cors.json: |
+    {
+      "CORSRules": [
+        {
+          "ID": "workbench-public-upload",
+          "AllowedOrigins": [
+            "https://workbench.youngsu5582.today"
+          ],
+          "AllowedMethods": [
+            "PUT"
+          ],
+          "AllowedHeaders": [
+            "content-type",
+            "content-length",
+            "x-amz-checksum-sha256",
+            "x-amz-sdk-checksum-algorithm"
+          ],
+          "MaxAgeSeconds": 300
+        }
+      ]
+    }
