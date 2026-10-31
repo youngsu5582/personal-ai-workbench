@@ -30,6 +30,10 @@ class OpenAIClientConfig {
     @Bean
     fun openAITextClient(properties: OpenAIProperties): OpenAITextClient = OpenAITextClient(restClientOf(properties))
 
+    @Bean
+    fun openAIDecisionClient(properties: OpenAIProperties): OpenAIDecisionClient =
+        OpenAIDecisionClient(restClientOf(properties))
+
     /**
      * 어댑터도 같은 조건 아래 둔다.
      *
@@ -41,6 +45,9 @@ class OpenAIClientConfig {
 
     @Bean
     fun openAITextProvider(client: OpenAITextClient): OpenAITextProvider = OpenAITextProvider(client)
+
+    @Bean
+    fun openAIDecisionProvider(client: OpenAIDecisionClient): OpenAIDecisionProvider = OpenAIDecisionProvider(client)
 
     /**
      * 클라이언트마다 하나씩 만든다. 둘이 같은 키·주소·타임아웃을 쓰지만, 공유하려고 빈으로 올리면
