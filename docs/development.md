@@ -557,3 +557,27 @@ AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된�
 ```
 
 토큰은 URL에도 localStorage에도 저장하지 않는다. 새로고침하면 사라지는 것이 정상이다.
+
+## 시스템 프롬프트 템플릿
+
+인증된 사용자는 템플릿을 저장하고, 실행할 때 변수와 사용자 프롬프트를 전달할 수 있다.
+
+```http
+POST /api/templates
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"name":"글 요약","instructions":"너는 {{role}}이다. {{language}}로 답해라."}
+```
+
+응답의 uuid로 조회·수정·삭제하고, 목록은 `GET /api/templates`에서 확인한다. 개별 경로는 `/api/templates/{uuid}`이며 수정은 PUT, 삭제는 DELETE다. 다른 사용자의 템플릿은 없는 것과 같이 처리한다.
+
+```http
+POST /api/templates/{uuid}/jobs
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"variables":{"role":"기술 편집자","language":"한국어"},"prompt":"이 글을 요약해줘: ...","model":"gpt-6-luna","taskCount":1}
+```
+
+변수 이름은 영문자 또는 밑줄로 시작하고 영문자·숫자·밑줄로 구성한다. `{{role}}`처럼 공백 없이 쓰며, 사용된 변수와 전달된 변수는 정확히 일치해야 한다. 생성 접수 응답은 기존 Job과 같이 202와 uuid다. 완성된 시스템 프롬프트는 Job에 저장되므로 이후 템플릿을 수정하거나 삭제해도 접수된 작업은 바뀌지 않는다. 템플릿 실행은 현재 일반 텍스트 출력만 지원한다.
