@@ -210,7 +210,7 @@ class TaskWorker(
     }
 
     /**
-     * 입력 파일을 준비해 [call] 을 부른다. 실패하면 Task 를 닫고 null 이다.
+     * 입력 파일을 준비해 [send] 를 부른다. 실패하면 Task 를 닫고 null 이다.
      *
      * 호출 전에 소유권을 다시 확인하고 바이트 또는 새 읽기 주소를 준비한다.
      * 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
@@ -222,11 +222,11 @@ class TaskWorker(
         taskId: Long,
         task: GenerationJobTask,
         job: GenerationJob,
-        call: (List<ResolvedFile>) -> T,
+        send: (List<ResolvedFile>) -> T,
     ): T? {
         val images = prepareInputs(taskId, job, inline = false) ?: return null
         return try {
-            call(images)
+            send(images)
         } catch (e: ExternalApiException) {
             if (e.kind != FailureKind.INPUT_UNREACHABLE || images.none { it is ResolvedFile.Url }) {
                 failCall(taskId, e)
@@ -235,7 +235,7 @@ class TaskWorker(
             log.warn("Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸다. uuid={}", task.uuid)
             val inlined = prepareInputs(taskId, job, inline = true) ?: return null
             try {
-                call(inlined)
+                send(inlined)
             } catch (retried: ExternalApiException) {
                 failCall(taskId, retried)
                 null
