@@ -38,11 +38,11 @@ data class TaskResponse(
     val sequence: Int,
     val status: TaskStatus,
     val failureReason: String?,
-    /** 이미지 결과물. 글을 만든 Task 면 빈 목록이다. */
+    /** 이미지 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val files: List<FileResponse>,
-    /** 글 결과물. 이미지를 만든 Task 면 빈 목록이다. */
+    /** 글 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val texts: List<TextResponse>,
-    /** 판정 결과물. 판정이 아닌 Task 면 빈 목록이다. */
+    /** 판정 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val decisions: List<DecisionResponse>,
 )
 

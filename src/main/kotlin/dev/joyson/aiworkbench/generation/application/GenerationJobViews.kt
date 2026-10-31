@@ -33,7 +33,8 @@ data class GenerationJobView(
 )
 
 /**
- * 결과물은 종류마다 자기 목록에 온다. 이미지 Task 면 [files] 말고는, 글 Task 면 [texts] 말고는 빈 목록이다 —
+ * 결과물은 종류마다 자기 목록에 온다. 이미지 Task 는 [files] 만, 글 Task 는 [texts] 만, 판정 Task 는 [decisions] 만 차고
+ * 나머지는 빈 목록이다 —
  * null 이 아니라 빈 목록이어서 "해당 없음" 과 "아직 없음" 을 받는 쪽이 가를 필요가 없다.
  */
 data class GenerationJobTaskView(
