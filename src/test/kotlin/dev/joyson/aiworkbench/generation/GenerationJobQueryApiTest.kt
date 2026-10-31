@@ -249,6 +249,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
             .andReturn().response
 
         assertEquals(MIME, response.contentType?.substringBefore(';'))
+        assertEquals("private, no-store", response.getHeader("Cache-Control"))
         assertContentEquals(bytes, response.contentAsByteArray)
         // 파일명은 형식에서 짓는다. 보관소 키가 해시로 바뀌어도 받는 쪽 이름은 그대로다.
         assertTrue(

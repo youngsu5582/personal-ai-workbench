@@ -89,6 +89,21 @@ class S3PresignedUrlIssuerTest {
     }
 
     @Test
+    fun `서명 주소의 응답은 캐시에 저장하지 않고 정책을 바꿀 수 없다`() {
+        val key = "users/a/blobs/cache-policy.png"
+        storage.put(key, png, "image/png")
+
+        val url = issuer().issue(key, "cat.png")
+        val response = get(url)
+        assertEquals(200, response.statusCode())
+        assertEquals("private, no-store", response.headers().firstValue("cache-control").orElse(null))
+
+        val tampered = URI.create(url.toString().replace("response-cache-control=", "response-cache-control=public"))
+        assertNotEquals(url, tampered)
+        assertNotEquals(200, get(tampered).statusCode())
+    }
+
+    @Test
     fun `수명이 지난 주소는 거부된다`() {
         // 서명이 인증을 대신하므로, 수명이 곧 유출 시 피해 범위다.
         val key = "users/a/blobs/99/aa/99aa.png"
@@ -96,6 +111,7 @@ class S3PresignedUrlIssuerTest {
 
         // 1초로 발급하고 지나기를 기다린다. 이 테스트만 느린 대신, 만료가 실제로 동작함을 본다.
         val url = issuer(ttl = Duration.ofSeconds(1)).issue(key, "cat.png")
+        assertEquals(200, get(url).statusCode())
         Thread.sleep(1_500)
 
         // 상태 코드를 못 박지 않는다 — Garage 는 400, AWS S3 는 403 을 준다.

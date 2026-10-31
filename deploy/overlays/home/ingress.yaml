@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: workbench
+  annotations:
+    # TLS 는 Cloudflare 가 끊는다. 클러스터 안은 cloudflared → Traefik 이 http 로 잇는다.
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  # 바깥에 여는 것은 이 두 호스트뿐이다. 나머지(management 포트 · DB · Garage RPC)는 Service 로만 닿는다.
+  rules:
+    - host: workbench.youngsu5582.today
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: workbench
+                port:
+                  name: http
+    - host: workbench-file.youngsu5582.today
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: garage
+                port:
+                  name: s3

@@ -10,6 +10,8 @@ resources:
   - garage-config.yaml
   - garage.yaml
   - workbench-cors.yaml
+  - ingress.yaml
+  - cloudflared.yaml
 
 patches:
   - path: workbench-cors-patch.yaml
