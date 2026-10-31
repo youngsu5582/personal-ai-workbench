@@ -8,8 +8,10 @@ metadata:
 spec:
   valuesContent: |-
     # 클러스터 안에서만 연다. 바깥에서 오는 길은 cloudflared 하나다.
+    # 차트(40.x)는 Service 종류를 service.spec 아래에서 읽는다. service.type 은 모르는 키라 무시된다.
     service:
-      type: ClusterIP
+      spec:
+        type: ClusterIP
     ports:
       web:
         # cloudflared(클러스터 Pod 대역)가 넘긴 X-Forwarded-* 를 믿는다.
