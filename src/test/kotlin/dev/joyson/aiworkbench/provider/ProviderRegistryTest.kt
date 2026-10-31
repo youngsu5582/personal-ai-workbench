@@ -25,6 +25,15 @@ class ProviderRegistryTest {
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }
 
+    private class FakeDecisionProvider(
+        override val name: String,
+        private val models: Set<String>,
+    ) : ExternalApiDecisionProvider {
+        override fun supports(model: String) = model in models
+        override fun decide(model: String, request: ExternalApiDecisionRequest) =
+            ExternalApiDecisionResponse(answers = emptyList())
+    }
+
     private val openai = FakeProvider("openai", setOf("gpt-image-2"))
     private val gemini = FakeProvider("gemini", setOf("gemini-image"))
     private val openaiText = FakeTextProvider("openai", setOf("gpt-6-luna"))
@@ -70,6 +79,18 @@ class ProviderRegistryTest {
         assertNull(registry.find("gpt-6-luna"))
         // 이미지 모델로 글을 요청하면 접수에서 걸러져야 한다.
         assertNull(registry.findText("gpt-image-2"))
+    }
+
+    /** 같은 모델 이름이 글과 판정을 둘 다 해도 어느 일인지는 찾는 함수가 가른다. */
+    @Test
+    fun `판정하는 모델은 판정 어댑터에서만 찾는다`() {
+        val openaiDecision = FakeDecisionProvider("openai", setOf("gpt-6-luna"))
+        val registry = ProviderRegistry(listOf(openai), listOf(openaiText), listOf(openaiDecision))
+
+        assertSame(openaiDecision, registry.findDecision("gpt-6-luna"))
+        assertSame(openaiText, registry.findText("gpt-6-luna"))
+        assertNull(registry.findDecision("gpt-image-2"))
+        assertEquals(listOf("openai"), registry.availableNames)
     }
 
     @Test

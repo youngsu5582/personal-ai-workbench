@@ -15,6 +15,7 @@ package dev.joyson.aiworkbench.provider
 class ProviderRegistry(
     private val providers: List<ExternalApiProvider>,
     private val textProviders: List<ExternalApiTextProvider> = emptyList(),
+    private val decisionProviders: List<ExternalApiDecisionProvider> = emptyList(),
 ) {
 
     /**
@@ -35,10 +36,14 @@ class ProviderRegistry(
      */
     fun findText(model: String): ExternalApiTextProvider? = textProviders.firstOrNull { it.supports(model) }
 
+    /** 이 모델로 판정할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
+    fun findDecision(model: String): ExternalApiDecisionProvider? = decisionProviders.firstOrNull { it.supports(model) }
+
     /**
      * 지금 쓸 수 있는 어댑터 이름들. 진단·로그용이다.
      *
-     * 한 Provider 가 이미지와 텍스트를 둘 다 하면 이름이 두 번 나오므로 한 번만 남긴다.
+     * 한 Provider 가 여러 종류를 하면 이름이 여러 번 나오므로 한 번만 남긴다.
      */
-    val availableNames: List<String> get() = (providers.map { it.name } + textProviders.map { it.name }).distinct()
+    val availableNames: List<String>
+        get() = (providers.map { it.name } + textProviders.map { it.name } + decisionProviders.map { it.name }).distinct()
 }

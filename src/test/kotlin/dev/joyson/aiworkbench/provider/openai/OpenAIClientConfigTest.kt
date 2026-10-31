@@ -15,6 +15,7 @@ class OpenAIClientConfigTest {
         runner.run { context ->
             assertThat(context).doesNotHaveBean(OpenAIProvider::class.java)
             assertThat(context).doesNotHaveBean(OpenAITextProvider::class.java)
+            assertThat(context).doesNotHaveBean(OpenAIDecisionProvider::class.java)
         }
     }
 
@@ -30,6 +31,7 @@ class OpenAIClientConfigTest {
         runner.withPropertyValues("workbench.provider.openai.api-key=sk-test").run { context ->
             assertThat(context).hasSingleBean(OpenAIProvider::class.java)
             assertThat(context).hasSingleBean(OpenAITextProvider::class.java)
+            assertThat(context).hasSingleBean(OpenAIDecisionProvider::class.java)
         }
     }
 }
