@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.provider.config
 
 import dev.joyson.aiworkbench.StartupSummary
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import org.springframework.beans.factory.ObjectProvider
@@ -19,8 +20,12 @@ class ProviderConfig {
     fun providerRegistry(
         providers: ObjectProvider<ExternalApiProvider>,
         textProviders: ObjectProvider<ExternalApiTextProvider>,
-    ): ProviderRegistry =
-        ProviderRegistry(providers.orderedStream().toList(), textProviders.orderedStream().toList())
+        decisionProviders: ObjectProvider<ExternalApiDecisionProvider>,
+    ): ProviderRegistry = ProviderRegistry(
+        providers.orderedStream().toList(),
+        textProviders.orderedStream().toList(),
+        decisionProviders.orderedStream().toList(),
+    )
 
     /**
      * 기동 로그에 실을 한 줄.
