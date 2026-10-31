@@ -1,0 +1,63 @@
+# 바깥과 클러스터를 잇는 관이다. 길 안내는 하지 않는다 — 받은 요청을 전부 Traefik 에 넘기고, Traefik 이 Ingress 로 가른다.
+# 터널의 Public hostname(workbench · workbench-file)은 Cloudflare 대시보드에서 둘 다 Traefik 으로 보낸다(README).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflared
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5
+          # 이미지의 진입점이 이미 `cloudflared --no-autoupdate` 다.
+          args: ["tunnel", "--metrics", "0.0.0.0:2000", "run"]
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflared-token
+                  key: TUNNEL_TOKEN
+          ports:
+            - name: metrics
+              containerPort: 2000
+          # Cloudflare 엣지와 연결돼 있을 때만 200 이다.
+          # 교체할 때 새 Pod 가 터널에 붙기 전에 옛 Pod 가 내려가지 않게 한다.
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # 끊긴 채 떠 있으면 다시 띄운다.
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
