@@ -36,9 +36,15 @@ internal class CodeNames(classes: JavaClasses) {
         }
     }
 
-    /** Kotlin 은 프로퍼티를 getter 로, `internal` 멤버를 `이름$모듈` 로 옮긴다. companion 멤버는 [declares] 가 따로 본다. */
+    /**
+     * Kotlin 은 프로퍼티를 getter 로, `internal` 멤버를 `이름$모듈` 로, value class 가 걸린 함수를
+     * `이름-impl` · `이름-해시` 로 옮긴다. companion 멤버는 [declares] 가 따로 본다.
+     *
+     * 꼬리를 떼고 비교하지 않는다. 백틱 이름(`SHA-256 은 …`)에는 `-` 가 그대로 들어가서, 떼면 있는 이름이 잘린다.
+     */
     private fun String.isCompiledFrom(member: String): Boolean {
         val accessor = member.replaceFirstChar { it.uppercase() }
-        return this == member || startsWith("$member$") || this == "get$accessor" || this == "is$accessor"
+        return listOf(member, "get$accessor", "is$accessor").any { this == it || startsWith("$it-") } ||
+            startsWith("$member$")
     }
 }

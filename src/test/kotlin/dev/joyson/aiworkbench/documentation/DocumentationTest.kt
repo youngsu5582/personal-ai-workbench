@@ -24,7 +24,7 @@ class DocumentationTest {
     @TestFactory
     fun `문서가 가리키는 이름과 링크가 지금 있다`(): List<DynamicTest> = DOCS.map { file ->
         dynamicTest(file.path) {
-            val problems = check(MarkdownDocument.of(file))
+            val problems = check(MarkdownDocument.of(file), names = NAMES_UNCHECKED.none { file.path.startsWith(it) })
             assertTrue(problems.isEmpty()) {
                 buildString {
                     appendLine("${file.path} 에서 ${problems.size}건")
@@ -46,6 +46,9 @@ class DocumentationTest {
         "`owner_user_uuid` 와 `users.uuid` 도 있다" to false,
         "우리 코드가 쓰는 `Long` 과 남의 이름 `Authorization` 도 된다" to false,
         "숫자가 섞인 `S3FileStorageTest` 도 있다. 전부 대문자인 `UUID` 는 이름으로 보지 않는다" to false,
+        "value class 의 멤버 `Sha256.base64` 와 value class 를 받는 `BlobKey.uploaded` 도 있다" to false,
+        "`-` 가 든 `UploadApiTest.SHA-256 은 소문자 hex 64자만 받는다` 도 있다" to false,
+        "`runtime.env` 는 파일 이름이다" to false,
         "`S3NoSuchStorage` 는 없다" to true,
         "`no_such_table.status` 는 없다" to true,
         "`NoSuchThing` 은 없다" to true,
@@ -112,6 +115,14 @@ class DocumentationTest {
         val NAMES = NameCheck(CodeNames(CLASSES), SchemaNames.current())
         val API = ApiPathCheck(ApiPaths.of(CLASSES))
 
-        fun check(doc: MarkdownDocument) = NAMES.check(doc) + LinkCheck.check(doc) + API.check(doc)
+        /**
+         * 이름 검사에서 빼는 문서. 링크와 API 경로는 그대로 본다.
+         *
+         * ADR 은 결정한 때의 기록이다. 고르지 않은 대안과 그때 지운 이름이 본문이라 지금 코드에 없는 것이 맞다.
+         */
+        val NAMES_UNCHECKED = listOf("docs/adr/")
+
+        fun check(doc: MarkdownDocument, names: Boolean = true) =
+            (if (names) NAMES.check(doc) else emptyList()) + LinkCheck.check(doc) + API.check(doc)
     }
 }

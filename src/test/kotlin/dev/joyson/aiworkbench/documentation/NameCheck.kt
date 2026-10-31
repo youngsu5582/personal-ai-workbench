@@ -53,12 +53,13 @@ internal class NameCheck(private val code: CodeNames, private val schema: Schema
             "MultipartFile" to "일부러 쓰지 않는 Spring 타입 — 직접 업로드를 택한 이유에 나온다",
             "DDLDatabase" to "jOOQ 코드 생성기가 마이그레이션을 읽는 해석기 — build.gradle.kts 만 쓴다",
             "bucket.localhost" to "S3 가상 호스트 방식의 주소 예시",
+            "PutBucketCors" to "S3 API 동작 이름 — 홈서버 배포가 Garage 버킷에 CORS 를 걸 때 부른다",
         )
 
         private val QUALIFIED = Regex("([A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*)\\.(.+)")
         private val TYPE = Regex("[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*")
         private val TABLE_COLUMN = Regex("([a-z][a-z0-9_]*)\\.([a-z][a-z0-9_]*)")
         private val SNAKE = Regex("[a-z][a-z0-9]*(_[a-z0-9]+)+")
-        private val FILE = Regex("\\.(kt|kts|java|md|sql|ya?ml|json|sh|ts|cjs|svg|png|toml|properties|txt|html|gradle)$")
+        private val FILE = Regex("\\.(kt|kts|java|md|sql|ya?ml|json|sh|ts|cjs|svg|png|toml|properties|txt|html|gradle|env)$")
     }
 }
