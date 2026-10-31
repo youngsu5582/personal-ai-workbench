@@ -47,6 +47,7 @@ class DocumentationTest {
         "우리 코드가 쓰는 `Long` 과 남의 이름 `Authorization` 도 된다" to false,
         "숫자가 섞인 `S3FileStorageTest` 도 있다. 전부 대문자인 `UUID` 는 이름으로 보지 않는다" to false,
         "value class 의 멤버 `Sha256.base64` 와 value class 를 받는 `BlobKey.uploaded` 도 있다" to false,
+        "`-` 가 든 `UploadApiTest.SHA-256 은 소문자 hex 64자만 받는다` 도 있다" to false,
         "`runtime.env` 는 파일 이름이다" to false,
         "`S3NoSuchStorage` 는 없다" to true,
         "`no_such_table.status` 는 없다" to true,
