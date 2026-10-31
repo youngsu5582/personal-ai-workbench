@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
  *
  * 이 파일은 **우리 도메인을 모른다.** 텍스트 DTO 와 같은 자리다 — 옮기는 일은 어댑터가 한다.
  *
- * **미검증.** 필드 이름과 모양은 실제 API 로 확인하지 않았다. 확인하는 자리는 `OpenAIDecisionProviderLiveTest` 다.
+ * 실제 호출로 확인한 범위는 [OpenAIDecisionModel] 이 말한다. 이미지 근거를 http 주소로 넘기는 모양은 미검증이다.
  */
 data class OpenAIDecisionRequest(
     val model: String,

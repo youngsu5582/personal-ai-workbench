@@ -6,14 +6,19 @@ import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest.Option
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest.Question
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse.Answer
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import org.junit.jupiter.api.condition.EnabledIf
 import org.springframework.http.HttpHeaders
 import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 import tools.jackson.databind.json.JsonMapper
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.net.http.HttpClient
 import java.nio.file.Path
 import java.time.Duration
+import javax.imageio.ImageIO
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.writeText
 import kotlin.test.Test
@@ -81,6 +86,30 @@ class OpenAIDecisionProviderLiveTest {
         assertIs<Answer.Score>(response.answers[2])
     }
 
+    /** 이미지 근거를 바이트(data URL)로 실어 받아 주는지 본다. 빨간 정사각형 하나라 답이 분명하다. */
+    @Test
+    fun `이미지 근거를 받는다`() {
+        val response = decide(
+            ExternalApiDecisionRequest(
+                input = listOf(
+                    Input.Image(ExternalApiFileInput.Bytes(redSquare(), "image/png", "red.png")),
+                    Input.Text("위 이미지를 보고 답한다."),
+                ),
+                questions = listOf(Question.Predicate("is_red", "이미지의 대부분이 빨간색인가?")),
+            ),
+            "live-decision-image.json",
+        )
+
+        val predicate = assertIs<Answer.Predicate>(response.answers.single())
+        assertTrue(predicate.probability > 0.5, "빨간 이미지를 빨갛다고 보지 않았다: ${predicate.probability}")
+    }
+
+    private fun redSquare(): ByteArray {
+        val image = BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB)
+        image.createGraphics().apply { color = Color.RED; fillRect(0, 0, 64, 64); dispose() }
+        return ByteArrayOutputStream().also { ImageIO.write(image, "png", it) }.toByteArray()
+    }
+
     private fun decide(request: ExternalApiDecisionRequest, fileName: String): ExternalApiDecisionResponse {
         val response = provider.decide(model, request)
 
@@ -94,6 +123,8 @@ class OpenAIDecisionProviderLiveTest {
         println("model=$model answers=${response.answers} usage=$usage")
 
         assertTrue(usage?.containsKey("input_tokens") == true, "input_tokens 가 없다: $usage")
+        // 판정은 출력 토큰이 없다. 생기면 같은 모델의 텍스트 단가표가 판정에도 출력 단가를 매긴다.
+        assertEquals(0, (usage?.get("output_tokens") as? Number)?.toInt() ?: 0, "출력 토큰이 생겼다: $usage")
         return response
     }
 }

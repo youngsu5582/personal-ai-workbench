@@ -9,7 +9,10 @@ package dev.joyson.aiworkbench.provider.openai
  * 여기 없는 모델은 `supports` 가 false 를 답한다. 모델은 경로를 가르지 않는다 — 모두 `/v1/decisions` 다.
  */
 enum class OpenAIDecisionModel(val modelName: String) {
-    /** 미검증. */
+    /**
+     * 실제 호출로 확인함(2026-10-31) — 글 근거, 바이트로 실은 이미지 근거, 세 질문 종류(predicate · choice · score).
+     * `usage` 의 `output_tokens` 는 0 이라 같은 모델의 텍스트 단가표가 입력 단가만 매긴다.
+     */
     GPT_6_LUNA("gpt-6-luna"),
     ;
 
