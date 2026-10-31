@@ -430,7 +430,8 @@ Content-Type: application/json
 }
 ```
 
-결과는 `GET /api/jobs/{uuid}` 의 `tasks[].decisions[].answers` 에 질문 순서대로 실린다.
+결과는 `GET /api/jobs/{uuid}` 의 `tasks[].decisions[].answers` 에 실린다.
+답은 `name` 으로 질문을 가리킨다 — 순서는 Provider 가 준 그대로라 질문의 순서에 기대지 않는다.
 각 답의 `type` 이 질문의 종류이고, 모델이 그 질문에 답하기를 거절했으면 `refusal` 이다.
 
 - 한 호출이 질문을 모두 답하므로 `taskCount` 는 1 이어야 한다. 아니면 400 이다.

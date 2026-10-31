@@ -45,7 +45,7 @@ data class GenerationJobTaskView(
     val decisions: List<GeneratedDecisionView> = emptyList(),
 )
 
-/** 판정 한 번의 답들. 질문의 순서대로다. */
+/** 판정 한 번의 답들. 답은 [DecisionAnswer.name] 으로 질문을 가리킨다. */
 data class GeneratedDecisionView(
     val answers: List<DecisionAnswer>,
 )

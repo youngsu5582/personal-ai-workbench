@@ -14,8 +14,8 @@ import java.time.Instant
 /**
  * 판정 한 번의 답들. [GeneratedText] · [GeneratedFile] 의 짝이다 — Task 는 호출이고 결과물은 종류마다 자기 행에 둔다.
  *
- * 답을 질문마다 행으로 펼치지 않는다. 한 호출이 함께 낸 답이라 따로 읽을 일이 없고,
- * 순서(질문의 순서)는 목록이 지킨다.
+ * 답을 질문마다 행으로 펼치지 않는다. 한 호출이 함께 낸 답이라 따로 읽을 일이 없다.
+ * 답은 [DecisionAnswer.name] 으로 질문을 가리키고, 목록의 순서는 Provider 가 준 그대로다.
  */
 @Entity
 @Table(

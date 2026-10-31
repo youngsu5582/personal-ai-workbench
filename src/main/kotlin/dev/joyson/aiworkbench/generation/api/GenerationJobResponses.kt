@@ -47,7 +47,10 @@ data class TaskResponse(
 )
 
 data class DecisionResponse(
-    /** 질문의 순서대로다. 각 답의 `type` 이 질문의 종류(`predicate` · `choice` · `score`)이거나 `refusal` 이다. */
+    /**
+     * 답은 `name` 으로 질문을 가리킨다. 순서는 Provider 가 준 그대로라 질문의 순서와 같다고 기대지 않는다.
+     * 각 답의 `type` 이 질문의 종류(`predicate` · `choice` · `score`)이거나 `refusal` 이다.
+     */
     val answers: List<DecisionAnswer>,
 )
 
