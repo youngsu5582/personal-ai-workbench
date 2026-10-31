@@ -25,6 +25,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 @JsonSubTypes(
     JsonSubTypes.Type(value = ImageOption::class, name = "image-generate"),
     JsonSubTypes.Type(value = TextGenerateOption::class, name = "text-generate"),
+    JsonSubTypes.Type(value = DecisionOption::class, name = "decision"),
 )
 sealed interface GenerationOption {
     /**

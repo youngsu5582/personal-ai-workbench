@@ -1,5 +1,8 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
@@ -9,6 +12,7 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ImageQuality
@@ -64,6 +68,43 @@ object ProviderRequestMapper {
         },
         effort = option.effort?.let(::effortOf),
     )
+
+    /**
+     * 근거를 받은 순서대로 옮긴다. 이미지 근거는 [images] 에서 같은 순서로 하나씩 꺼낸다.
+     *
+     * @param images [DecisionOption.sources] 를 같은 순서로 준비한 것.
+     */
+    fun from(option: DecisionOption, images: List<ResolvedFile>): ExternalApiDecisionRequest {
+        // 여기서 걸리면 우리 코드의 버그다 — 부르는 쪽이 근거 이미지를 읽어 넘기다 빠뜨렸거나 잘못 넘긴 것이다.
+        require(images.size == option.sources.size) {
+            "읽어 넘긴 근거 이미지 수가 옵션과 다르다: 근거 ${option.sources.size}장, 넘긴 것 ${images.size}장"
+        }
+
+        val prepared = images.iterator()
+        return ExternalApiDecisionRequest(
+            input = option.input.map { evidence ->
+                when (evidence) {
+                    is DecisionEvidence.Text -> ExternalApiDecisionRequest.Input.Text(evidence.text)
+                    is DecisionEvidence.Image -> ExternalApiDecisionRequest.Input.Image(inputOf(prepared.next()))
+                }
+            },
+            questions = option.questions.map(::questionOf),
+        )
+    }
+
+    private fun questionOf(question: DecisionQuestion): ExternalApiDecisionRequest.Question = when (question) {
+        is DecisionQuestion.Predicate -> ExternalApiDecisionRequest.Question.Predicate(question.name, question.instructions)
+        is DecisionQuestion.Choice -> ExternalApiDecisionRequest.Question.Choice(
+            question.name,
+            question.instructions,
+            question.choices.map { ExternalApiDecisionRequest.Option(it.value, it.description) },
+        )
+        is DecisionQuestion.Score -> ExternalApiDecisionRequest.Question.Score(
+            question.name,
+            question.instructions,
+            question.levels.map { ExternalApiDecisionRequest.Option(it.label, it.description) },
+        )
+    }
 
     /** 준비한 입력 이미지를 포트의 어휘로 옮긴다. */
     private fun inputOf(image: ResolvedFile): ExternalApiFileInput = when (image) {

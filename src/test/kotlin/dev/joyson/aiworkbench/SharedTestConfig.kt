@@ -1,5 +1,8 @@
 package dev.joyson.aiworkbench
 
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
@@ -48,6 +51,15 @@ class SharedTestConfig {
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }
 
+    /** 판정도 같은 이유로 하나 둔다. */
+    @Bean
+    fun fakeDecisionProvider(): ExternalApiDecisionProvider = object : ExternalApiDecisionProvider {
+        override val name = FAKE_PROVIDER
+        override fun supports(model: String) = model == FAKE_DECISION_MODEL
+        override fun decide(model: String, request: ExternalApiDecisionRequest) =
+            ExternalApiDecisionResponse(answers = emptyList())
+    }
+
     /** 테스트가 실제 디스크에 파일을 남기지 않게 한다. */
     @Bean
     @Primary
@@ -75,5 +87,6 @@ class SharedTestConfig {
         const val FAKE_PROVIDER = "fake"
         const val FAKE_MODEL = "fake-model"
         const val FAKE_TEXT_MODEL = "fake-text-model"
+        const val FAKE_DECISION_MODEL = "fake-decision-model"
     }
 }

@@ -1,10 +1,12 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
@@ -30,6 +32,7 @@ class GenerationJobService(
     private val generationJobTaskRepository: GenerationJobTaskRepository,
     private val generatedFileRepository: GeneratedFileRepository,
     private val generatedTextRepository: GeneratedTextRepository,
+    private val generatedDecisionRepository: GeneratedDecisionRepository,
     /**
      * 보관소가 주소에 서명할 수 있을 때만 있다. 없으면 목록의 `previewUrl` 이 전부 `null` 이고,
      * 받는 쪽은 web 이 만드는 우리 경로로 폴백한다.
@@ -55,6 +58,7 @@ class GenerationJobService(
         val supported = when (command.option) {
             is ImageOption -> providerRegistry.find(command.model) != null
             is TextGenerateOption -> providerRegistry.findText(command.model) != null
+            is DecisionOption -> providerRegistry.findDecision(command.model) != null
         }
         if (!supported) throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
@@ -84,11 +88,17 @@ class GenerationJobService(
         val filesByTaskId = generatedFileRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
         // 종류로 가려 한쪽만 묻지 않는다. 쿼리 하나를 아끼려고 종류마다 분기를 두면, 종류가 늘 때 고칠 곳이 하나 더 생긴다.
         val textsByTaskId = generatedTextRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
+        val decisionsByTaskId = generatedDecisionRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
 
         return job.toView(
             progress = GenerationJobProgress.of(job.taskCount, tasks),
             tasks = tasks.map {
-                it.toView(filesByTaskId[it.id].orEmpty(), presignedUrlIssuer, textsByTaskId[it.id].orEmpty())
+                it.toView(
+                    filesByTaskId[it.id].orEmpty(),
+                    presignedUrlIssuer,
+                    textsByTaskId[it.id].orEmpty(),
+                    decisionsByTaskId[it.id].orEmpty(),
+                )
             },
         )
     }
@@ -109,6 +119,7 @@ class GenerationJobService(
             // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
             is ImageOption -> option.sources
             is TextGenerateOption -> return
+            is DecisionOption -> option.sources
         }
 
         sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }

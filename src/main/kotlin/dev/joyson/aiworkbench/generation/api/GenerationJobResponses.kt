@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.generation.api
 import dev.joyson.aiworkbench.generation.application.GeneratedFileView
 import dev.joyson.aiworkbench.generation.application.GenerationJobTaskView
 import dev.joyson.aiworkbench.generation.application.GenerationJobView
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
@@ -37,10 +38,20 @@ data class TaskResponse(
     val sequence: Int,
     val status: TaskStatus,
     val failureReason: String?,
-    /** 이미지 결과물. 글을 만든 Task 면 빈 목록이다. */
+    /** 이미지 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val files: List<FileResponse>,
-    /** 글 결과물. 이미지를 만든 Task 면 빈 목록이다. */
+    /** 글 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val texts: List<TextResponse>,
+    /** 판정 결과물. 다른 종류의 Task 면 빈 목록이다. */
+    val decisions: List<DecisionResponse>,
+)
+
+data class DecisionResponse(
+    /**
+     * 답은 `name` 으로 질문을 가리킨다. 순서는 Provider 가 준 그대로라 질문의 순서와 같다고 기대지 않는다.
+     * 각 답의 `type` 이 질문의 종류(`predicate` · `choice` · `score`)이거나 `refusal` 이다.
+     */
+    val answers: List<DecisionAnswer>,
 )
 
 data class TextResponse(
@@ -97,6 +108,7 @@ private fun GenerationJobTaskView.toResponse(textFormat: TextFormat): TaskRespon
     failureReason = failureReason,
     files = files.map { it.toResponse() },
     texts = texts.map { TextResponse(contentOf(it.content, textFormat)) },
+    decisions = decisions.map { DecisionResponse(it.answers) },
 )
 
 /** 성공으로 기록된 글은 워커가 형식을 확인한 뒤라 여기서 파싱이 실패하지 않는다. */

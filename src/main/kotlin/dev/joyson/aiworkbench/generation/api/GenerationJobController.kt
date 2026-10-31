@@ -3,9 +3,11 @@ package dev.joyson.aiworkbench.generation.api
 import dev.joyson.aiworkbench.generation.application.GenerationCommand
 import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.ownership.OwnerContext
 import jakarta.validation.Valid
+import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotNull
@@ -64,6 +66,10 @@ data class GenerationRequest(
     @field:Max(4)
     val taskCount: Int,
 ) {
+    /** 판정 호출 한 번이 질문을 모두 답한다. Task 를 늘리면 같은 호출을 그만큼 다시 낸다. 도메인에도 같은 불변식이 있다. */
+    @get:AssertTrue(message = "판정은 taskCount 가 1이어야 한다")
+    val isSingleTaskForDecision: Boolean get() = option !is DecisionOption || taskCount == 1
+
     fun toCommand(): GenerationCommand {
         return GenerationCommand(
             option = requireNotNull(option),

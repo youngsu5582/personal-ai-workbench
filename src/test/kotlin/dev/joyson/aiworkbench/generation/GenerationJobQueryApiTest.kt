@@ -5,6 +5,9 @@ import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecision
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedText
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
@@ -53,6 +56,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
     private val fileRepository: GeneratedFileTestRepository,
     private val fileStorage: FileStorage,
     private val textRepository: GeneratedTextRepository,
+    private val decisionRepository: GeneratedDecisionRepository,
 ) : IntegrationTest() {
 
     private fun tokenOf(subject: String): String {
@@ -236,6 +240,35 @@ class GenerationJobQueryApiTest @Autowired constructor(
     }
 
     /** 문자열로 직렬화된 모양. 스키마에 따옴표 말고는 escape 할 글자가 없다. */
+    /** 답은 질문의 순서대로, 각자 자기 종류의 값으로 나간다. 거절도 답의 하나로 같은 자리에 온다. */
+    @Test
+    fun `판정 결과는 답의 목록으로 준다`() {
+        val token = tokenOf("decision-owner")
+        val option = """{"type":"decision","input":[{"type":"text","text":"환불하고 싶어요"}],""" +
+            """"questions":[{"type":"predicate","name":"needs_review","instructions":"사람 확인이 필요한가?"},""" +
+            """{"type":"choice","name":"intent","instructions":"고른다","choices":[{"value":"refund","description":"환불"},{"value":"other","description":"기타"}]}]}"""
+        val jobUuid = submit(token, taskCount = 1, option = option, model = FAKE_DECISION_MODEL)
+        val task = taskRepository.findAllByJobIdOrderBySequence(jobRepository.findByUuid(UUID.fromString(jobUuid))!!.id!!).single()
+        succeed(task)
+        decisionRepository.save(
+            GeneratedDecision(
+                taskId = task.id!!,
+                answers = listOf(DecisionAnswer.Predicate("needs_review", 0.9), DecisionAnswer.Refusal("intent")),
+            ),
+        )
+
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.option.type") { value("decision") }
+            jsonPath("$.tasks[0].decisions[0].answers[0].type") { value("predicate") }
+            jsonPath("$.tasks[0].decisions[0].answers[0].probability") { value(0.9) }
+            jsonPath("$.tasks[0].decisions[0].answers[1].type") { value("refusal") }
+            jsonPath("$.tasks[0].decisions[0].answers[1].name") { value("intent") }
+            jsonPath("$.tasks[0].texts.length()") { value(0) }
+            jsonPath("$.tasks[0].files.length()") { value(0) }
+        }
+    }
+
     private fun jsonString(raw: String) = "\"" + raw.replace("\"", "\\\"") + "\""
 
     @Test
@@ -306,6 +339,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
     companion object {
         private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
         private const val FAKE_TEXT_MODEL = SharedTestConfig.FAKE_TEXT_MODEL
+        private const val FAKE_DECISION_MODEL = SharedTestConfig.FAKE_DECISION_MODEL
         private const val MIME = "image/png"
         private val OPTION =
             """{"type":"image-generate","prompt":"고양이","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}"""

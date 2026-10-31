@@ -184,6 +184,38 @@ class GenerationJobApiTest @Autowired constructor(
         request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
     }
 
+    @Test
+    fun `판정은 판정 모델로 접수된다`() {
+        request(body(1, DECISION_OPTION, model = FAKE_DECISION_MODEL)).andExpect { status { isAccepted() } }
+    }
+
+    @Test
+    fun `판정 모델이 아니면 판정은 400 이다`() {
+        request(body(1, DECISION_OPTION, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+        request(body(1, TEXT_OPTION, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    /** 한 호출이 질문을 모두 답한다. Task 를 늘리면 같은 호출을 그만큼 다시 낸다. */
+    @Test
+    fun `판정을 여러 Task 로 접수하면 400 이다`() {
+        request(body(2, DECISION_OPTION, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    /** 근거 이미지도 이미지 생성의 참조처럼 접수에서 소유를 확인한다. 받아 두면 남의 파일로 판정하게 된다. */
+    @Test
+    fun `가진 적 없는 파일을 근거로 판정하면 400 이다`() {
+        val option = """{"type":"decision","input":[{"type":"image","source":${generated()}}],""" +
+            """"questions":[{"type":"predicate","name":"is_red","instructions":"대부분 빨간가?"}]}"""
+        request(body(1, option, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `선택지가 하나뿐인 질문은 400 이다`() {
+        val option = """{"type":"decision","input":[{"type":"text","text":"환불"}],""" +
+            """"questions":[{"type":"choice","name":"intent","instructions":"고른다","choices":[{"value":"refund","description":"환불"}]}]}"""
+        request(body(1, option, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
     /** 애노테이션 인자는 컴파일 타임 상수라 도메인 상수를 참조할 수 없다. 어긋나면 여기서 잡는다. */
     @Test
     fun `요청 제약의 상한이 도메인 상한과 같다`() {
@@ -202,8 +234,12 @@ private object GenerationRequestConstraints {
 
 private const val FAKE_MODEL = SharedTestConfig.FAKE_MODEL
 private const val FAKE_TEXT_MODEL = SharedTestConfig.FAKE_TEXT_MODEL
+private const val FAKE_DECISION_MODEL = SharedTestConfig.FAKE_DECISION_MODEL
 private const val SIZE = """{"type":"ratio","ratio":"1:1","resolution":"1k"}"""
 private const val OPTION = """{"type":"image-generate","prompt":"고양이","size":$SIZE}"""
 private const val TEXT_OPTION = """{"type":"text-generate","prompt":"세 줄로 요약해"}"""
 private const val SCHEMA_OPTION =
     """{"type":"text-generate","prompt":"태그를 골라","output":{"type":"json-schema","schema":{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}}}}}"""
+private const val DECISION_OPTION =
+    """{"type":"decision","input":[{"type":"text","text":"환불하고 싶어요"}],""" +
+        """"questions":[{"type":"predicate","name":"needs_review","instructions":"사람 확인이 필요한가?"}]}"""

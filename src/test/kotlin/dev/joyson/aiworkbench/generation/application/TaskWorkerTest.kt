@@ -30,14 +30,24 @@ import java.net.URI
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
 import dev.joyson.aiworkbench.provider.StopReason
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
+import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.usage.DecisionRequest
 import dev.joyson.aiworkbench.usage.TextRequest
 import dev.joyson.aiworkbench.provider.ImageMetadata
 import dev.joyson.aiworkbench.provider.ProviderRegistry
@@ -81,6 +91,7 @@ class TaskWorkerTest @Autowired constructor(
     private val uploadedFiles: UploadedFiles,
     private val meterRegistry: MeterRegistry,
     private val generatedTextRepository: GeneratedTextRepository,
+    private val generatedDecisionRepository: GeneratedDecisionRepository,
 ) : IntegrationTest() {
     private val image = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 
@@ -130,10 +141,11 @@ class TaskWorkerTest @Autowired constructor(
         presignedUrlIssuer: PresignedUrlIssuer? = null,
         uploadedFiles: UploadedFiles = this.uploadedFiles,
         textProvider: ExternalApiTextProvider? = null,
+        decisionProvider: ExternalApiDecisionProvider? = null,
     ) = TaskWorker(
         taskRepository = taskPort,
         jobRepository = jobPort,
-        providerRegistry = ProviderRegistry(listOf(provider), listOfNotNull(textProvider)),
+        providerRegistry = ProviderRegistry(listOf(provider), listOfNotNull(textProvider), listOfNotNull(decisionProvider)),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
         fileSourceResolver = FileSourceResolver(generatedFileFinder, uploadedFiles, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
@@ -980,9 +992,102 @@ class TaskWorkerTest @Autowired constructor(
         assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty(), "부르지 않았는데 지출이 적혔다")
     }
 
+    private fun decisionProvider(behavior: (ExternalApiDecisionRequest) -> ExternalApiDecisionResponse) =
+        object : ExternalApiDecisionProvider {
+            override val name = PROVIDER
+            override fun supports(model: String) = model == DECISION_MODEL
+            override fun decide(model: String, request: ExternalApiDecisionRequest) = behavior(request)
+        }
+
+    private fun decisionWorker(behavior: (ExternalApiDecisionRequest) -> ExternalApiDecisionResponse) =
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }, decisionProvider = decisionProvider(behavior))
+
+    private fun decisionOption(vararg input: DecisionEvidence) = DecisionOption(
+        input = input.toList(),
+        questions = listOf(
+            DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?"),
+            DecisionQuestion.Choice("intent", "의도를 고른다", listOf(DecisionChoice("refund", "환불"), DecisionChoice("other", "기타"))),
+        ),
+    )
+
+    private fun decided(vararg answers: ExternalApiDecisionResponse.Answer) = ExternalApiDecisionResponse(
+        answers = answers.toList(),
+        usage = ProviderUsage(raw = tokens),
+        providerId = "dec_1",
+    )
+
+    /** 거절도 답의 하나다. Task 를 실패로 닫지 않고, 나머지 답과 함께 남긴다. */
+    @Test
+    fun `판정하면 답이 행에 남고 Job 이 닫힌다`() {
+        val (job, task) = newTask(model = DECISION_MODEL, option = decisionOption(DecisionEvidence.Text("환불하고 싶어요")))
+
+        decisionWorker {
+            decided(
+                ExternalApiDecisionResponse.Answer.Predicate("needs_review", 0.9),
+                ExternalApiDecisionResponse.Answer.Refusal("intent"),
+            )
+        }.process(task.id!!)
+
+        val decision = generatedDecisionRepository.findAllByTaskIdIn(listOf(task.id!!)).single()
+        assertEquals(
+            listOf(DecisionAnswer.Predicate("needs_review", 0.9), DecisionAnswer.Refusal("intent")),
+            decision.answers,
+        )
+        assertEquals("dec_1", decision.providerInfo?.providerId)
+        assertTrue(storage.written.isEmpty(), "판정은 보관소를 거치지 않는다")
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    @Test
+    fun `판정 호출의 지출은 질문 수와 사용량으로 적힌다`() {
+        val (_, task) = newTask(model = DECISION_MODEL, option = decisionOption(DecisionEvidence.Text("환불하고 싶어요")))
+
+        decisionWorker { decided(ExternalApiDecisionResponse.Answer.Predicate("needs_review", 0.9)) }.process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.succeeded)
+        // 질문과 이미지가 늘면 입력 토큰이 는다. 같은 모델의 호출을 가르는 축이라 원장에 남는다.
+        assertEquals(DecisionRequest(questions = 2, images = 0), call.request)
+        assertEquals(tokens, call.usageRaw)
+    }
+
+    @Test
+    fun `근거 이미지는 읽어서 받은 순서대로 넘긴다`() {
+        // 근거는 우리가 만든 것이어야 하므로 먼저 하나 만든다.
+        val (first, firstTask) = newTask()
+        workerWith(provider { success() }).process(firstTask.id!!)
+        val source = generatedFileRepository.findAllByTaskId(firstTask.id!!).single()
+        val (_, task) = newTask(
+            model = DECISION_MODEL,
+            option = decisionOption(DecisionEvidence.Image(FileSource.Generated(source.sha256)), DecisionEvidence.Text("파손됐나요")),
+            ownerUuid = first.ownerUserUuid,
+        )
+        var sent: ExternalApiDecisionRequest? = null
+
+        decisionWorker { sent = it; decided(ExternalApiDecisionResponse.Answer.Predicate("needs_review", 0.1)) }.process(task.id!!)
+
+        val input = assertNotNull(sent).input
+        val evidence = assertIs<ExternalApiDecisionRequest.Input.Image>(input[0]).image
+        assertContentEquals(image, assertIs<ExternalApiFileInput.Bytes>(evidence).bytes, "보관소에서 읽은 바이트가 그대로 실려야 한다")
+        assertEquals(ExternalApiDecisionRequest.Input.Text("파손됐나요"), input[1])
+        assertEquals(1, assertIs<DecisionRequest>(callRepository.findAllByTaskUuid(task.uuid).single().request).images)
+    }
+
+    @Test
+    fun `판정할 Provider 가 사라졌으면 닫는다`() {
+        val (_, task) = newTask(model = DECISION_MODEL, option = decisionOption(DecisionEvidence.Text("환불하고 싶어요")))
+
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty(), "부르지 않았는데 지출이 적혔다")
+    }
+
     private companion object {
         const val MODEL = "fake-image-1"
         const val TEXT_MODEL = "fake-text-1"
+        const val DECISION_MODEL = "fake-decision-1"
         const val PROVIDER = "fake"
 
         /**

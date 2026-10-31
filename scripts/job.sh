@@ -87,4 +87,14 @@ for task in job.get("tasks", []):
         rendered = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, indent=2)
         for line in rendered.splitlines():
             print("     " + line)
+    # 판정은 질문마다 답 하나다. 종류에 따라 값이 다르다.
+    for d in task.get("decisions", []):
+        for a in d["answers"]:
+            value = {"predicate": "probability", "choice": "choice", "score": "score"}.get(a["type"])
+            line = "     {} {}".format(a.get("name") or "?", a["type"])
+            if value:
+                line += " = {}".format(a[value])
+            if a.get("confidence") is not None:
+                line += "  (confidence {})".format(a["confidence"])
+            print(line)
 '

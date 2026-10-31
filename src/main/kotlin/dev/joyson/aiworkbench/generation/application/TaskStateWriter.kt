@@ -6,6 +6,9 @@ import dev.joyson.aiworkbench.generation.domain.ProviderInfo
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecision
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedText
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
@@ -39,6 +42,7 @@ class TaskStateWriter(
     private val jobRepository: GenerationJobRepository,
     private val generatedFileRepository: GeneratedFileRepository,
     private val generatedTextRepository: GeneratedTextRepository,
+    private val generatedDecisionRepository: GeneratedDecisionRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -95,6 +99,16 @@ class TaskStateWriter(
         val task = taskRepository.findById(taskId) ?: return
 
         generatedTextRepository.save(GeneratedText(taskId = taskId, content = text, providerInfo = providerInfo))
+        task.transitionTo(TaskStatus.SUCCEEDED)
+        closeIfFinished(task)
+    }
+
+    /** 판정이 끝났다. 글과 같은 순서다 — 결과물 행을 먼저 쓰고 상태를 옮긴다. */
+    @Transactional
+    fun succeed(taskId: Long, answers: List<DecisionAnswer>, providerInfo: ProviderInfo?) {
+        val task = taskRepository.findById(taskId) ?: return
+
+        generatedDecisionRepository.save(GeneratedDecision(taskId = taskId, answers = answers, providerInfo = providerInfo))
         task.transitionTo(TaskStatus.SUCCEEDED)
         closeIfFinished(task)
     }

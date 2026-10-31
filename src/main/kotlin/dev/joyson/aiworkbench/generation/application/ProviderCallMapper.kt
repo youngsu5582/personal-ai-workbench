@@ -2,12 +2,14 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.CostUnit
 import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.usage.DecisionRequest
 import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
 import dev.joyson.aiworkbench.usage.ProviderRequest
@@ -82,6 +84,30 @@ object ProviderCallMapper {
     ): RecordProviderCallCommand = base(job, task, providerName, textRequestOf(request), latencyMs, calledAt)
         .failedWith(failureReason, failureKind)
 
+    /** 판정 호출. 어떤 질문에 답을 거절했어도 응답을 받았으면 성공한 호출이다 — 글과 같은 이유다. */
+    fun succeeded(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiDecisionRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        usage: ProviderUsage?,
+    ): RecordProviderCallCommand = base(job, task, providerName, decisionRequestOf(request), latencyMs, calledAt)
+        .succeededWith(usage)
+
+    fun failed(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiDecisionRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        failureReason: String,
+        failureKind: ProviderFailureKind,
+    ): RecordProviderCallCommand = base(job, task, providerName, decisionRequestOf(request), latencyMs, calledAt)
+        .failedWith(failureReason, failureKind)
+
     private fun base(
         job: GenerationJob,
         task: GenerationJobTask,
@@ -128,6 +154,11 @@ object ProviderCallMapper {
     private fun textRequestOf(request: ExternalApiTextRequest) = TextRequest(
         format = if (request.jsonSchema == null) "text" else "json-schema",
         effort = request.effort?.name?.lowercase(),
+    )
+
+    private fun decisionRequestOf(request: ExternalApiDecisionRequest) = DecisionRequest(
+        questions = request.questions.size,
+        images = request.input.count { it is ExternalApiDecisionRequest.Input.Image },
     )
 
     /**

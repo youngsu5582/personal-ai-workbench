@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
@@ -11,6 +12,8 @@ import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
@@ -71,6 +74,7 @@ class TaskWorker(
         when (val option = job.option) {
             is ImageOption -> processImage(taskId, task, job, option)
             is TextGenerateOption -> processText(taskId, task, job, option)
+            is DecisionOption -> processDecision(taskId, task, job, option)
         }
     }
 
@@ -85,28 +89,7 @@ class TaskWorker(
 
         val processMark = TimeSource.Monotonic.markNow()
 
-        // 호출 전에 소유권을 다시 확인하고 바이트 또는 새 읽기 주소를 준비한다.
-        // 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
-        val images = prepareInputs(taskId, job, inline = false) ?: return
-
-        val response = try {
-            call(job, task, provider, option, images)
-        } catch (e: ExternalApiException) {
-            // 주소로 넘긴 입력을 저쪽이 받아가지 못했다. 같은 입력을 바이트로 실어 한 번만 더 보낸다.
-            // 처음부터 바이트였다면 다시 보내도 같다.
-            if (e.kind != FailureKind.INPUT_UNREACHABLE || images.none { it is ResolvedFile.Url }) {
-                failCall(taskId, e)
-                return
-            }
-            log.warn("Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸다. uuid={}", task.uuid)
-            val inlined = prepareInputs(taskId, job, inline = true) ?: return
-            try {
-                call(job, task, provider, option, inlined)
-            } catch (retried: ExternalApiException) {
-                failCall(taskId, retried)
-                return
-            }
-        }
+        val response = callWithInputs(taskId, task, job) { images -> call(job, task, provider, option, images) } ?: return
 
         val stored = try {
             store(job, response)
@@ -171,6 +154,93 @@ class TaskWorker(
             ProviderInfo(providerId = response.providerId).takeIf { !it.isEmpty },
         )
         log.info("task 처리를 완료했다. uuid={} 소요={}ms 글={}자", task.uuid, processMark.elapsedMillis(), response.text.length)
+    }
+
+    /**
+     * 근거를 정해 둔 질문으로 판정한다. 근거 이미지가 있으면 이미지 경로처럼 준비해 넘긴다.
+     *
+     * 어떤 질문에 답을 거절한 것은 Task 의 실패가 아니다 — 거절도 답의 하나로 남고, 나머지 답은 쓸 수 있다.
+     */
+    private fun processDecision(taskId: Long, task: GenerationJobTask, job: GenerationJob, option: DecisionOption) {
+        // 접수 때 확인했더라도 그 사이 설정이 바뀌어 Provider 가 사라졌을 수 있다.
+        val provider = providerRegistry.findDecision(job.model) ?: run {
+            stateWriter.fail(taskId, "다룰 수 있는 Provider 가 없다: ${job.model}", retryable = false)
+            return
+        }
+
+        log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
+
+        val processMark = TimeSource.Monotonic.markNow()
+        val response = callWithInputs(taskId, task, job) { images -> callDecision(job, task, provider, option, images) } ?: return
+
+        stateWriter.succeed(
+            taskId,
+            DecisionAnswerMapper.from(response.answers),
+            ProviderInfo(providerId = response.providerId).takeIf { !it.isEmpty },
+        )
+        log.info("task 처리를 완료했다. uuid={} 소요={}ms 답={}개", task.uuid, processMark.elapsedMillis(), response.answers.size)
+    }
+
+    /** 이미지 경로의 [call] 과 같은 순서다 — 실패한 호출도 적고, 성공은 결과를 쓰기 전에 적는다. */
+    private fun callDecision(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        provider: ExternalApiDecisionProvider,
+        option: DecisionOption,
+        images: List<ResolvedFile>,
+    ): ExternalApiDecisionResponse {
+        val request = ProviderRequestMapper.from(option, images)
+
+        val calledAt = Instant.now()
+        val callMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            activeCalls(provider.name, job.model).record(Supplier { provider.decide(job.model, request) })
+        } catch (e: ExternalApiException) {
+            record(
+                ProviderCallMapper.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
+                ),
+            )
+            throw e
+        }
+
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+        return response
+    }
+
+    /**
+     * 입력 파일을 준비해 [send] 를 부른다. 실패하면 Task 를 닫고 null 이다.
+     *
+     * 호출 전에 소유권을 다시 확인하고 바이트 또는 새 읽기 주소를 준비한다.
+     * 주소를 큐에 저장하면 대기 중 만료되므로 실행과 재시도마다 발급한다.
+     *
+     * 주소로 넘긴 입력을 저쪽이 받아가지 못했으면 같은 입력을 바이트로 실어 한 번만 더 보낸다.
+     * 처음부터 바이트였다면 다시 보내도 같다.
+     */
+    private fun <T> callWithInputs(
+        taskId: Long,
+        task: GenerationJobTask,
+        job: GenerationJob,
+        send: (List<ResolvedFile>) -> T,
+    ): T? {
+        val images = prepareInputs(taskId, job, inline = false) ?: return null
+        return try {
+            send(images)
+        } catch (e: ExternalApiException) {
+            if (e.kind != FailureKind.INPUT_UNREACHABLE || images.none { it is ResolvedFile.Url }) {
+                failCall(taskId, e)
+                return null
+            }
+            log.warn("Provider 가 입력 주소를 받아가지 못해 바이트로 다시 보낸다. uuid={}", task.uuid)
+            val inlined = prepareInputs(taskId, job, inline = true) ?: return null
+            try {
+                send(inlined)
+            } catch (retried: ExternalApiException) {
+                failCall(taskId, retried)
+                null
+            }
+        }
     }
 
     /**

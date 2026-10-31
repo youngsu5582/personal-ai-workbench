@@ -80,10 +80,12 @@ class OpenAIDecisionProviderLiveTest {
         )
 
         assertEquals(3, response.answers.size, response.answers.toString())
-        val predicate = assertIs<Answer.Predicate>(response.answers[0])
+        // 순서는 보장되지 않으므로 이름으로 짝을 짓는다.
+        val byName = response.answers.associateBy { it.name }
+        val predicate = assertIs<Answer.Predicate>(byName["is_cancellation"])
         assertTrue(predicate.probability in 0.0..1.0, "확률 범위가 아니다: ${predicate.probability}")
-        assertEquals("cancel", assertIs<Answer.Choice>(response.answers[1]).choice)
-        assertIs<Answer.Score>(response.answers[2])
+        assertEquals("cancel", assertIs<Answer.Choice>(byName["intent"]).choice)
+        assertIs<Answer.Score>(byName["urgency"])
     }
 
     /** 이미지 근거를 바이트(data URL)로 실어 받아 주는지 본다. 빨간 정사각형 하나라 답이 분명하다. */

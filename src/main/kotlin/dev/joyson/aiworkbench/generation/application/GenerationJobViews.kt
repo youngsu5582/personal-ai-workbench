@@ -2,6 +2,8 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecision
 import dev.joyson.aiworkbench.generation.domain.GeneratedText
 import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -31,7 +33,8 @@ data class GenerationJobView(
 )
 
 /**
- * 결과물은 종류마다 자기 목록에 온다. 이미지 Task 면 [texts] 가, 글 Task 면 [files] 가 빈 목록이다 —
+ * 결과물은 종류마다 자기 목록에 온다. 이미지 Task 는 [files] 만, 글 Task 는 [texts] 만, 판정 Task 는 [decisions] 만 차고
+ * 나머지는 빈 목록이다 —
  * null 이 아니라 빈 목록이어서 "해당 없음" 과 "아직 없음" 을 받는 쪽이 가를 필요가 없다.
  */
 data class GenerationJobTaskView(
@@ -40,6 +43,12 @@ data class GenerationJobTaskView(
     val failureReason: String?,
     val files: List<GeneratedFileView>,
     val texts: List<GeneratedTextView> = emptyList(),
+    val decisions: List<GeneratedDecisionView> = emptyList(),
+)
+
+/** 판정 한 번의 답들. 답은 [DecisionAnswer.name] 으로 질문을 가리킨다. */
+data class GeneratedDecisionView(
+    val answers: List<DecisionAnswer>,
 )
 
 /**
@@ -94,10 +103,13 @@ internal fun GeneratedFile.toView(presignedUrlIssuer: PresignedUrlIssuer?): Gene
 
 internal fun GeneratedText.toView(): GeneratedTextView = GeneratedTextView(content = content)
 
+internal fun GeneratedDecision.toView(): GeneratedDecisionView = GeneratedDecisionView(answers = answers)
+
 internal fun GenerationJobTask.toView(
     files: List<GeneratedFile>,
     presignedUrlIssuer: PresignedUrlIssuer?,
     texts: List<GeneratedText> = emptyList(),
+    decisions: List<GeneratedDecision> = emptyList(),
 ): GenerationJobTaskView =
     GenerationJobTaskView(
         sequence = sequence,
@@ -105,6 +117,7 @@ internal fun GenerationJobTask.toView(
         failureReason = failureReason,
         files = files.map { it.toView(presignedUrlIssuer) },
         texts = texts.map { it.toView() },
+        decisions = decisions.map { it.toView() },
     )
 
 internal fun GenerationJob.toView(

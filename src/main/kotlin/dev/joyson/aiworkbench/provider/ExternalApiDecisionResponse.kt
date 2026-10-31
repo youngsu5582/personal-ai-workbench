@@ -1,7 +1,10 @@
 package dev.joyson.aiworkbench.provider
 
 data class ExternalApiDecisionResponse(
-    /** 질문마다 하나. 비어 있는 응답은 어댑터가 실패로 바꾸므로 여기까지 오지 않는다. */
+    /**
+     * 저쪽이 준 답 그대로다. 질문마다 하나씩 오는지, 질문의 순서와 같은지는 보장하지 않는다 —
+     * 답은 [Answer.name] 으로 질문을 가리킨다. 비어 있는 응답은 어댑터가 실패로 바꾸므로 여기까지 오지 않는다.
+     */
     val answers: List<Answer>,
 
     /** Provider 가 이 호출에 대해 말한 사용량·비용. 아무것도 말하지 않는 Provider 는 null 이다. */
