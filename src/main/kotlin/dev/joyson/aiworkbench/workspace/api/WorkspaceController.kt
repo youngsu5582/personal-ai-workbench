@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * 서비스 소유자는 요청 본문이 아니라 인증에서 확정된 [OwnerContext] 에서 얻는다.
+ * 다른 사용자의 서비스는 존재 여부를 노출하지 않도록 상세 조회와 수정에서 404 로 응답한다.
+ */
 @RestController
 @RequestMapping("/api/services")
 class WorkspaceController(private val service: WorkspaceService) {
