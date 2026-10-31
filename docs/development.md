@@ -388,6 +388,57 @@ URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. �
 보관소 endpoint를 설정한다. 실제 OpenAI URL 편집 호출은 아직 미검증이며, 전송 계약은 대역 테스트로 검증한다.
 [OpenAI 공식 편집 API 계약](https://developers.openai.com/api/reference/resources/images/methods/edit)
 
+## 판정
+
+근거(글 · 이미지)를 정해 둔 질문으로 판정한다. 요청 종류는 `"type": "decision"` 이다.
+질문은 세 종류이고, 종류마다 답의 모양이 다르다.
+
+| 질문 | 받는 답 |
+|---|---|
+| `predicate` | 참일 확률 `probability` (0 ~ 1) |
+| `choice` | `choices` 의 `value` 중 하나인 `choice` 와 `confidence` |
+| `score` | `levels` 에 대한 `score` 와 `confidence` |
+
+```bash
+./scripts/decision.sh "다음 달부터 구독을 해지하고 싶어요"
+./scripts/decision.sh "사진을 보고 파손 여부를 판단해줘" <generated-file-sha256>
+SOURCE_TYPE=uploaded ./scripts/decision.sh "파손 여부" <uploaded-file-sha256>
+```
+
+```http
+POST /api/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "option": {
+    "type": "decision",
+    "input": [
+      {"type": "text", "text": "다음 달부터 구독을 해지하고 싶어요"},
+      {"type": "image", "source": {"type": "uploaded", "sha256": "<uploaded-file-sha256>"}}
+    ],
+    "questions": [
+      {"type": "predicate", "name": "needs_review", "instructions": "사람의 확인이 필요한가?"},
+      {"type": "choice", "name": "intent", "instructions": "주된 의도를 고른다",
+       "choices": [{"value": "cancel", "description": "해지를 원한다"}, {"value": "question", "description": "정보를 묻는다"}]},
+      {"type": "score", "name": "urgency", "instructions": "처리 긴급도",
+       "levels": [{"label": "low", "description": "급하지 않다"}, {"label": "high", "description": "빨리 처리해야 한다"}]}
+    ]
+  },
+  "model": "gpt-6-luna",
+  "taskCount": 1
+}
+```
+
+결과는 `GET /api/jobs/{uuid}` 의 `tasks[].decisions[].answers` 에 질문 순서대로 실린다.
+각 답의 `type` 이 질문의 종류이고, 모델이 그 질문에 답하기를 거절했으면 `refusal` 이다.
+
+- 한 호출이 질문을 모두 답하므로 `taskCount` 는 1 이어야 한다. 아니면 400 이다.
+- 판정 모델이 아닌 모델로 판정을, 판정 모델로 다른 종류를 요청하면 접수에서 400 이다.
+- 거절은 Task 의 실패가 아니다. 나머지 답과 함께 남는다.
+- 이미지 근거는 이미지 생성의 참조와 같이 접수 때 소유를 확인한다. 주소로 넘겼다가 저쪽이 받아 가지 못하면 바이트로 한 번 더 보낸다.
+- 요청 · 응답 본문을 실제 API 로 확인했는지는 `OpenAIDecisionModel` 의 표시가 말한다.
+
 ## 직접 업로드 URL 발급
 
 S3 호환 보관소에서는 Bearer 토큰으로 `POST /api/uploads`를 호출한다.
