@@ -36,9 +36,14 @@ internal class CodeNames(classes: JavaClasses) {
         }
     }
 
-    /** Kotlin 은 프로퍼티를 getter 로, `internal` 멤버를 `이름$모듈` 로 옮긴다. companion 멤버는 [declares] 가 따로 본다. */
+    /**
+     * Kotlin 은 프로퍼티를 getter 로, `internal` 멤버를 `이름$모듈` 로, value class 가 걸린 함수를
+     * `이름-impl` · `이름-해시` 로 옮긴다. companion 멤버는 [declares] 가 따로 본다.
+     */
     private fun String.isCompiledFrom(member: String): Boolean {
+        // `-` 는 자바 식별자에 올 수 없어, 있으면 Kotlin 이 붙인 꼬리다.
+        val name = substringBefore('-')
         val accessor = member.replaceFirstChar { it.uppercase() }
-        return this == member || startsWith("$member$") || this == "get$accessor" || this == "is$accessor"
+        return name == member || name.startsWith("$member$") || name == "get$accessor" || name == "is$accessor"
     }
 }
