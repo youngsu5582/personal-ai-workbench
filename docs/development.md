@@ -565,6 +565,16 @@ sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 
 현재는 `ApplicationModules.verify()` 기반의 모듈 경계 검증 테스트를 사용한다.
 
+## 서비스 관리
+
+사용자마다 기본 서비스가 하나 있으며, 로그인 토큰으로 서비스를 만들고 관리한다.
+
+- `POST /api/services` — 이름을 담아 생성한다.
+- `GET /api/services` · `GET /api/services/{uuid}` — 내 서비스 목록과 상세를 조회한다.
+- `PUT /api/services/{uuid}` — 이름을 바꾼다. 다른 사용자의 서비스는 조회하거나 수정할 수 없다.
+
+서비스 관리는 생성 작업이나 파일의 접근 범위를 바꾸지 않는다. 서비스별 데이터 격리와 API 키는 후속 작업이다.
+
 ## 인증
 
 Google 로그인으로 사용자를 확인하고, **그 다음부터는 이 서비스가 직접 발급한 JWT** 로 API를 호출한다.
