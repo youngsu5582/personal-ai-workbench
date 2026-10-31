@@ -3,7 +3,13 @@ package dev.joyson.aiworkbench.generation
 import dev.joyson.aiworkbench.storage.Sha256
 import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.GeneratedDecision
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionLevel
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
@@ -55,6 +61,62 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val size = assertIs<ImageSize.ByRatio>(option.size, "중첩된 다형성 정보가 보존되지 않았다")
         assertEquals(AspectRatio.SIXTEEN_NINE, size.ratio)
         assertEquals(Resolution.TWO_K, size.resolution)
+    }
+
+    /** 근거와 질문이 둘 다 다형이고, 이미지 근거 안의 참조도 다형이다. */
+    @Test
+    fun `판정 옵션의 근거와 질문이 원래 타입으로 읽힌다`() {
+        val source = FileSource.Uploaded(Sha256.of("근거".toByteArray()).hex)
+        val saved = GenerationJob(
+            ownerUserUuid = UUID.randomUUID(),
+            option = DecisionOption(
+                input = listOf(DecisionEvidence.Text("파손됐어요"), DecisionEvidence.Image(source)),
+                questions = listOf(
+                    DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?"),
+                    DecisionQuestion.Score("urgency", "얼마나 급한가", listOf(DecisionLevel("low", "낮음"), DecisionLevel("high", "높음"))),
+                ),
+            ),
+            model = "gpt-6-luna",
+            taskCount = 1,
+        ).also { em.persist(it); em.flush() }
+        em.clear()
+
+        val option = assertIs<DecisionOption>(em.find(GenerationJob::class.java, saved.id!!)!!.option)
+
+        assertEquals(listOf(DecisionEvidence.Text("파손됐어요"), DecisionEvidence.Image(source)), option.input)
+        assertEquals("high", assertIs<DecisionQuestion.Score>(option.questions[1]).levels[1].label)
+    }
+
+    /** 답의 목록은 jsonb 한 칸이다. 원소마다 자기 종류로 돌아와야 한다. */
+    @Test
+    fun `판정의 답이 원래 타입으로 읽힌다`() {
+        val answers = listOf(
+            DecisionAnswer.Predicate("needs_review", 0.9),
+            DecisionAnswer.Choice("intent", "refund", 0.98),
+            DecisionAnswer.Score("urgency", 0.75, null),
+            DecisionAnswer.Refusal("other"),
+        )
+        val saved = GeneratedDecision(taskId = 1, answers = answers).also { em.persist(it); em.flush() }
+        em.clear()
+
+        assertEquals(answers, em.find(GeneratedDecision::class.java, saved.id!!)!!.answers)
+    }
+
+    /** 요청 바인딩이 먼저 막는다. 여기서 걸리면 그 검사를 거치지 않은 우리 코드의 버그다. */
+    @Test
+    fun `판정은 Task 를 하나만 만든다`() {
+        fun decisionJob(taskCount: Int) = GenerationJob(
+            ownerUserUuid = UUID.randomUUID(),
+            option = DecisionOption(
+                input = listOf(DecisionEvidence.Text("환불하고 싶어요")),
+                questions = listOf(DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?")),
+            ),
+            model = "gpt-6-luna",
+            taskCount = taskCount,
+        )
+
+        assertFailsWith<IllegalArgumentException> { decisionJob(taskCount = 2) }
+        decisionJob(taskCount = 1)
     }
 
     @Test

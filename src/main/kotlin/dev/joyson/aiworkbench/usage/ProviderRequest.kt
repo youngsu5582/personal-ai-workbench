@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
 @JsonSubTypes(
     JsonSubTypes.Type(value = ImageRequest::class, name = "image"),
     JsonSubTypes.Type(value = TextRequest::class, name = "text"),
+    JsonSubTypes.Type(value = DecisionRequest::class, name = "decision"),
 )
 sealed interface ProviderRequest
 
@@ -69,4 +70,17 @@ data class TextRequest(
      * 추론 토큰은 출력으로 과금돼 같은 모델에서도 이 값이 비용을 가른다. 비용 차이를 설명하는 축이라 적는다.
      */
     val effort: String? = null,
+) : ProviderRequest
+
+/**
+ * 판정하라고 보냈다.
+ *
+ * 글과 같이 토큰이 단가라 계산 근거는 `usageRaw` 에 있다. 여기 적는 것은 같은 모델의 호출을 가를 축이다 —
+ * 질문이 몇 개였는지, 이미지 근거가 몇 장이었는지. 둘 다 입력 토큰을 늘린다.
+ *
+ * 근거와 질문 본문은 적지 않는다. 사용자의 글이고, 원장은 돈의 기록이다.
+ */
+data class DecisionRequest(
+    val questions: Int,
+    val images: Int = 0,
 ) : ProviderRequest

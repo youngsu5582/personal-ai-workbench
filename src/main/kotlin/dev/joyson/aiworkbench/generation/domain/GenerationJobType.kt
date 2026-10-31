@@ -6,4 +6,6 @@ enum class GenerationJobType(@get:JsonValue val value: String) {
     IMAGE_GENERATE("image-generate"),
 
     TEXT_GENERATE("text-generate"),
+
+    DECISION("decision"),
 }

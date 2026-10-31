@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.domain
 
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -105,6 +106,8 @@ class GenerationJob(
         require(taskCount in 1..MAX_TASK_COUNT) {
             "결과물 개수는 1~$MAX_TASK_COUNT 이어야 한다: $taskCount"
         }
+        // 판정 호출 한 번이 질문을 모두 답한다. Task 를 늘리면 같은 호출을 그만큼 다시 낸다.
+        require(option !is DecisionOption || taskCount == 1) { "판정은 결과물 개수가 1이어야 한다: $taskCount" }
     }
 
     /**

@@ -2,6 +2,11 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
+import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
+import dev.joyson.aiworkbench.generation.domain.option.DecisionLevel
+import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
@@ -10,6 +15,7 @@ import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.ImageQuality
 import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
@@ -153,5 +159,40 @@ class ProviderRequestMapperTest {
         val request = ProviderRequestMapper.from(TextGenerateOption(prompt = "풀어", output = TextFormat.JsonSchema(schema)))
 
         assertEquals(schema, request.jsonSchema)
+    }
+
+    private val evidenceImage = ResolvedFile.Bytes(byteArrayOf(1), "image/png", "evidence.png")
+
+    private fun decisionOption(vararg input: DecisionEvidence) = DecisionOption(
+        input = input.toList(),
+        questions = listOf(
+            DecisionQuestion.Choice("kind", "무슨 문제인가", listOf(DecisionChoice("damage", "파손"), DecisionChoice("other", "기타"))),
+            DecisionQuestion.Score("urgency", "얼마나 급한가", listOf(DecisionLevel("low", "낮음"), DecisionLevel("high", "높음"))),
+        ),
+    )
+
+    /** 근거의 순서가 곧 모델이 읽는 순서다. 이미지 근거는 준비해 넘긴 것을 같은 순서로 꺼낸다. */
+    @Test
+    fun `판정 근거를 받은 순서대로 옮긴다`() {
+        val source = FileSource.Uploaded(Sha256.of("근거".toByteArray()).hex)
+
+        val request = ProviderRequestMapper.from(
+            decisionOption(DecisionEvidence.Text("파손됐어요"), DecisionEvidence.Image(source)),
+            listOf(evidenceImage),
+        )
+
+        assertEquals(ExternalApiDecisionRequest.Input.Text("파손됐어요"), request.input[0])
+        assertIs<ExternalApiFileInput.Bytes>(assertIs<ExternalApiDecisionRequest.Input.Image>(request.input[1]).image)
+        val score = assertIs<ExternalApiDecisionRequest.Question.Score>(request.questions[1])
+        // 단계의 이름이 답에 그대로 돌아오는 값이다.
+        assertEquals(listOf("low", "high"), score.levels.map { it.value })
+    }
+
+    /** 여기서 걸리면 우리 코드의 버그다. 장수가 어긋난 채 보내면 근거가 조용히 빠진 판정이 과금된다. */
+    @Test
+    fun `근거 이미지 수가 옵션과 다르면 옮기지 않는다`() {
+        val option = decisionOption(DecisionEvidence.Image(FileSource.Uploaded(Sha256.of("근거".toByteArray()).hex)))
+
+        assertFailsWith<IllegalArgumentException> { ProviderRequestMapper.from(option, emptyList()) }
     }
 }
