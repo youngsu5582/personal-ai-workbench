@@ -24,7 +24,7 @@ class DocumentationTest {
     @TestFactory
     fun `문서가 가리키는 이름과 링크가 지금 있다`(): List<DynamicTest> = DOCS.map { file ->
         dynamicTest(file.path) {
-            val problems = check(MarkdownDocument.of(file))
+            val problems = check(MarkdownDocument.of(file), names = NAMES_UNCHECKED.none { file.path.startsWith(it) })
             assertTrue(problems.isEmpty()) {
                 buildString {
                     appendLine("${file.path} 에서 ${problems.size}건")
@@ -112,6 +112,14 @@ class DocumentationTest {
         val NAMES = NameCheck(CodeNames(CLASSES), SchemaNames.current())
         val API = ApiPathCheck(ApiPaths.of(CLASSES))
 
-        fun check(doc: MarkdownDocument) = NAMES.check(doc) + LinkCheck.check(doc) + API.check(doc)
+        /**
+         * 이름 검사에서 빼는 문서. 링크와 API 경로는 그대로 본다.
+         *
+         * ADR 은 결정한 때의 기록이다. 고르지 않은 대안과 그때 지운 이름이 본문이라 지금 코드에 없는 것이 맞다.
+         */
+        val NAMES_UNCHECKED = listOf("docs/adr/")
+
+        fun check(doc: MarkdownDocument, names: Boolean = true) =
+            (if (names) NAMES.check(doc) else emptyList()) + LinkCheck.check(doc) + API.check(doc)
     }
 }
