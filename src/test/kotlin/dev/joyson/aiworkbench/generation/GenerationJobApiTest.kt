@@ -201,6 +201,14 @@ class GenerationJobApiTest @Autowired constructor(
         request(body(2, DECISION_OPTION, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
     }
 
+    /** 근거 이미지도 이미지 생성의 참조처럼 접수에서 소유를 확인한다. 받아 두면 남의 파일로 판정하게 된다. */
+    @Test
+    fun `가진 적 없는 파일을 근거로 판정하면 400 이다`() {
+        val option = """{"type":"decision","input":[{"type":"image","source":${generated()}}],""" +
+            """"questions":[{"type":"predicate","name":"is_red","instructions":"대부분 빨간가?"}]}"""
+        request(body(1, option, model = FAKE_DECISION_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
     @Test
     fun `선택지가 하나뿐인 질문은 400 이다`() {
         val option = """{"type":"decision","input":[{"type":"text","text":"환불"}],""" +
