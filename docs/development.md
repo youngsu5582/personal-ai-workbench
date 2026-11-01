@@ -575,6 +575,15 @@ sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 
 서비스 범위 요청은 `X-Workspace-Id` 헤더로 내 서비스 UUID를 고른다. 헤더를 생략하면 기본 서비스를 쓴다.
 작업·파일·업로드·사용량은 선택한 서비스 범위에서 조회한다. `GET /api/usage/total`은 로그인 사용자의 모든 서비스 사용량을 합친다.
+
+서비스 키 관리는 로그인 토큰으로만 요청한다. 서비스마다 여러 키를 발급할 수 있다.
+
+- `POST /api/services/{workspaceUuid}/keys` — 이름과 선택적인 미래 만료 시각을 담아 발급한다. 만료 시각을 생략하면 무기한이다. 응답의 `secret` 은 한 번만 반환하므로 안전한 비밀 저장소에 보관한다.
+- `GET /api/services/{workspaceUuid}/keys` — 원문 없이 이름, 식별 힌트, 발급·만료·폐기 시각을 조회한다.
+- `DELETE /api/services/{workspaceUuid}/keys/{keyUuid}` — 키를 폐기한다. 폐기한 키는 복구할 수 없고 목록에 남는다.
+
+키 원문을 잃어버리면 해당 키를 폐기하고 새로 발급한다. 교체할 때는 새 키를 먼저 배포한 뒤 기존 키를 폐기한다. 키를 비밀번호처럼 취급하고 소스 코드나 브라우저에 넣지 않는다.
+
 서비스 소유권과 격리의 설계 근거는 [ADR 0004](adr/0004-service-ownership.md)에 정리한다.
 
 ## 인증

@@ -37,6 +37,10 @@ class WorkspaceService(private val repository: WorkspaceRepository) : WorkspaceR
     @Transactional(readOnly = true)
     fun find(owner: UUID, uuid: UUID): Workspace? = repository.findByUuidAndOwnerUserUuid(uuid, owner)
 
+    @Transactional(readOnly = true)
+    override fun isOwnedBy(workspaceUuid: UUID, ownerUuid: UUID): Boolean =
+        repository.findByUuidAndOwnerUserUuid(workspaceUuid, ownerUuid) != null
+
     @Transactional
     fun rename(owner: UUID, uuid: UUID, name: String): Workspace? =
         repository.findByUuidAndOwnerUserUuid(uuid, owner)?.apply { this.name = name }
