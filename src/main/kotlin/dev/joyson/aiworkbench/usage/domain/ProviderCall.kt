@@ -63,6 +63,9 @@ class ProviderCall(
     @Column(name = "owner_user_uuid", nullable = false, updatable = false)
     val ownerUserUuid: UUID,
 
+    @Column(name = "workspace_uuid", nullable = false, updatable = false)
+    val workspaceUuid: UUID,
+
     @Column(nullable = false, updatable = false)
     val provider: String,
 

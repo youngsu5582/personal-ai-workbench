@@ -22,7 +22,7 @@ import java.util.UUID
 @Entity
 @Table(
     name = "uploaded_files",
-    uniqueConstraints = [UniqueConstraint(name = "uk_uploaded_files_owner_sha256", columnNames = ["owner_user_uuid", "sha256"])],
+    uniqueConstraints = [UniqueConstraint(name = "uk_uploaded_files_workspace_sha256", columnNames = ["workspace_uuid", "sha256"])],
 )
 class UploadedFile(
 
@@ -33,6 +33,9 @@ class UploadedFile(
     /** 다른 모듈의 행을 가리키므로 FK 없이 uuid 로 둔다 — 근거는 `V2__owner_user_uuid.sql`. */
     @Column(name = "owner_user_uuid", nullable = false, updatable = false)
     val ownerUserUuid: UUID,
+
+    @Column(name = "workspace_uuid", nullable = false, updatable = false)
+    val workspaceUuid: UUID,
 
     /** 소유자와 함께 파일을 찾는 공개 식별자. 기존 행은 일회성 변환 후 NOT NULL 로 고정한다. */
     @Column(length = 64, nullable = false, updatable = false)
