@@ -260,7 +260,7 @@ class TaskWorker(
     /** 준비에 실패하면 이번 호출은 나가지 않는다 — 나간 돈이 없으므로 지출도 적지 않는다. */
     private fun prepareInputs(taskId: Long, job: GenerationJob, inline: Boolean): List<ResolvedFile>? =
         try {
-            fileSourceResolver.resolve(job.ownerUserUuid, job.option, inline)
+            fileSourceResolver.resolve(job.workspaceUuid, job.option, inline)
         } catch (e: FileSourceUnavailableException) {
             stateWriter.fail(taskId, e.message ?: "입력 이미지를 읽지 못했다", e.retryable)
             null
@@ -375,7 +375,7 @@ class TaskWorker(
         // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
         val digest = Sha256.of(result.image)
         val key = BlobKey.of(
-            ownerUuid = job.ownerUserUuid,
+            workspaceUuid = job.workspaceUuid,
             digest = digest,
             mimeType = result.metadata.mimeType,
         ).value

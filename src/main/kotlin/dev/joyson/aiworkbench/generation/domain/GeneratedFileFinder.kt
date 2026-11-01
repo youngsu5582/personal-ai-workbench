@@ -16,5 +16,5 @@ data class FileLocation(
  */
 interface GeneratedFileFinder {
 
-    fun findOwned(sha256: String, ownerUuid: UUID): FileLocation?
+    fun findOwned(sha256: String, workspaceUuid: UUID): FileLocation?
 }

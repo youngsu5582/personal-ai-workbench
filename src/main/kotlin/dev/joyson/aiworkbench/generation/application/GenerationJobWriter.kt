@@ -22,10 +22,11 @@ class GenerationJobWriter(
      * 그 판단은 [GenerationJobService] 가 하고, 이 클래스는 쓰기와 트랜잭션만 맡는다.
      */
     @Transactional
-    fun create(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
+    fun create(ownerUuid: UUID, workspaceUuid: UUID, command: GenerationCommand): GenerationJobView {
         val job = generationJobRepository.save(
             GenerationJob(
                 ownerUserUuid = ownerUuid,
+                workspaceUuid = workspaceUuid,
                 option = command.option,
                 model = command.model,
                 taskCount = command.taskCount

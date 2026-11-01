@@ -159,10 +159,12 @@ class TaskWorkerTest @Autowired constructor(
         size: ImageSize = ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K),
         option: GenerationOption = ImageOption("고양이", size),
         ownerUuid: UUID = UUID.randomUUID(),
+        workspaceUuid: UUID = ownerUuid,
     ): Pair<GenerationJob, GenerationJobTask> {
         val job = jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = ownerUuid,
+                workspaceUuid = workspaceUuid,
                 option = option,
                 model = model,
                 taskCount = 1,
@@ -182,7 +184,7 @@ class TaskWorkerTest @Autowired constructor(
         val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
         // 자리는 내용이 정하고, 소유자로 먼저 갈린다.
         assertEquals(
-            BlobKey.of(job.ownerUserUuid, Sha256.of(image), "image/png").value,
+            BlobKey.of(job.workspaceUuid, Sha256.of(image), "image/png").value,
             file.storageKey,
         )
         assertContentEquals(image, storage.read(file.storageKey))
@@ -227,7 +229,7 @@ class TaskWorkerTest @Autowired constructor(
         workerWith(provider { success() }).process(task.id!!)
 
         val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
-        assertTrue(file.storageKey.startsWith("users/${job.ownerUserUuid}/blobs/"))
+        assertTrue(file.storageKey.startsWith("workspaces/${job.workspaceUuid}/blobs/"))
     }
 
     private fun twoResults(first: ByteArray, second: ByteArray) = ExternalApiGenerateResponse(
@@ -351,7 +353,7 @@ class TaskWorkerTest @Autowired constructor(
 
     @Test
     fun `호출 한 번이 지출 한 줄로 남는다`() {
-        val (job, task) = newTask()
+        val (job, task) = newTask(workspaceUuid = UUID.randomUUID())
         val usage = ProviderUsage(raw = mapOf("total_tokens" to 4200))
 
         workerWith(provider { success(usage) }).process(task.id!!)
@@ -363,6 +365,7 @@ class TaskWorkerTest @Autowired constructor(
         assertEquals(job.uuid, call.jobUuid)
         // 소유자를 여기 복사해 둬야 지출 조회가 Job 을 조인하지 않는다.
         assertEquals(job.ownerUserUuid, call.ownerUserUuid)
+        assertEquals(job.workspaceUuid, call.workspaceUuid)
         assertNotNull(call.usageRaw)
     }
 

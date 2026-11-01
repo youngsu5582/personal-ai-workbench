@@ -41,6 +41,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     private fun job(prompt: String = "고양이", taskCount: Int = 2) =
         GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             option = option(prompt),
             model = "gpt-image-2",
             taskCount = taskCount,
@@ -69,6 +70,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val source = FileSource.Uploaded(Sha256.of("근거".toByteArray()).hex)
         val saved = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             option = DecisionOption(
                 input = listOf(DecisionEvidence.Text("파손됐어요"), DecisionEvidence.Image(source)),
                 questions = listOf(
@@ -107,6 +109,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `판정은 Task 를 하나만 만든다`() {
         fun decisionJob(taskCount: Int) = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             option = DecisionOption(
                 input = listOf(DecisionEvidence.Text("환불하고 싶어요")),
                 questions = listOf(DecisionQuestion.Predicate("needs_review", "사람 확인이 필요한가?")),
@@ -123,6 +126,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `픽셀로 말한 크기도 원래 타입으로 읽힌다`() {
         val job = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             option = ImageOption("고양이", ImageSize.ByPixels(1920, 1080), Quality.AUTO),
             model = "gpt-image-2",
             taskCount = 1,
@@ -143,6 +147,7 @@ class GenerationJobPersistenceTest @Autowired constructor(
         val sourceSha256 = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val job = GenerationJob(
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             option = ImageOption(
                 prompt = "수채화로",
                 sources = listOf(FileSource.Generated(sourceSha256)),
@@ -172,8 +177,8 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `이미 저장된 이미지 변형 행도 읽을 수 있다`() {
         em.createNativeQuery(
             """
-            insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
-            values (gen_random_uuid(), gen_random_uuid(),
+            insert into generation_jobs (uuid, owner_user_uuid, workspace_uuid, option, model, task_count, status, created_at, updated_at)
+            values (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(),
                     '{"type":"image-generate","prompt":"과거 데이터",
                       "sources":[{"type":"generated","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"},"quality":"auto"}'::jsonb,
@@ -237,8 +242,8 @@ class GenerationJobPersistenceTest @Autowired constructor(
     fun `상한을 넘는 기존 행도 읽을 수 있다`() {
         em.createNativeQuery(
             """
-            insert into generation_jobs (uuid, owner_user_uuid, option, model, task_count, status, created_at, updated_at)
-            values (gen_random_uuid(), gen_random_uuid(),
+            insert into generation_jobs (uuid, owner_user_uuid, workspace_uuid, option, model, task_count, status, created_at, updated_at)
+            values (gen_random_uuid(), gen_random_uuid(), gen_random_uuid(),
                     '{"type":"image-generate","prompt":"과거 데이터",
                       "size":{"type":"ratio","ratio":"1:1","resolution":"1k"}}'::jsonb,
                     'gpt-image-2', 99,

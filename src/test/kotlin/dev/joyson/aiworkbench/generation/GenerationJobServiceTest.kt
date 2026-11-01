@@ -59,7 +59,7 @@ class GenerationJobServiceTest @Autowired constructor(
 
     @Test
     fun `다룰 수 있는 모델이면 접수하고 Task 까지 만든다`() {
-        val view = service.submit(ownerUuid = UUID.randomUUID(), command = command())
+        val view = service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = command())
 
         assertEquals(1, jobRepository.count())
         assertEquals(2, taskRepository.count())
@@ -73,7 +73,7 @@ class GenerationJobServiceTest @Autowired constructor(
     @Test
     fun `다룰 Provider 가 없는 모델은 접수되지 않는다`() {
         assertFailsWith<UnsupportedModelException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = command(model = "존재하지-않는-모델"))
+            service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = command(model = "존재하지-않는-모델"))
         }
 
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.
@@ -88,7 +88,7 @@ class GenerationJobServiceTest @Autowired constructor(
     @Test
     fun `고칠 이미지가 없으면 접수되지 않는다`() {
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand())
+            service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = editCommand())
         }
 
         // 검증이 기록보다 먼저라 흔적이 남지 않는다.
@@ -100,7 +100,7 @@ class GenerationJobServiceTest @Autowired constructor(
     fun `내가 만든 이미지를 가리키면 접수된다`() {
         val me = UUID.randomUUID()
 
-        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Generated(fileOwnedBy(me))))
+        val view = service.submit(ownerUuid = me, workspaceUuid = me, command = editCommand(FileSource.Generated(fileOwnedBy(me))))
 
         assertEquals(1, view.progress.total)
     }
@@ -111,7 +111,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val theirFile = fileOwnedBy(UUID.randomUUID())
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Generated(theirFile)))
+            service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = editCommand(FileSource.Generated(theirFile)))
         }
     }
 
@@ -120,10 +120,10 @@ class GenerationJobServiceTest @Autowired constructor(
         val me = UUID.randomUUID()
         val upload = uploadOwnedBy(me, content = png)
 
-        val view = service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
+        val view = service.submit(ownerUuid = me, workspaceUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
 
         assertEquals(1, view.progress.total)
-        assertEquals(UploadStatus.READY, uploadedFileRepository.findByOwnerUserUuidAndSha256(me, upload.sha256)?.status)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByWorkspaceUuidAndSha256(me, upload.sha256)?.status)
     }
 
     @Test
@@ -133,7 +133,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(me, content = byteArrayOf(0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0, 0, 0, 0, 0))
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
+            service.submit(ownerUuid = me, workspaceUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
         assertEquals(0, jobRepository.count())
     }
@@ -144,7 +144,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(me, content = null)
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
+            service.submit(ownerUuid = me, workspaceUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
     }
 
@@ -153,7 +153,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val upload = uploadOwnedBy(UUID.randomUUID(), content = png)
 
         assertFailsWith<UnknownFileSourceException> {
-            service.submit(ownerUuid = UUID.randomUUID(), command = editCommand(FileSource.Uploaded(upload.sha256)))
+            service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = editCommand(FileSource.Uploaded(upload.sha256)))
         }
     }
 
@@ -164,6 +164,7 @@ class GenerationJobServiceTest @Autowired constructor(
             UploadedFile(
                 sha256 = uuid,
                 ownerUserUuid = ownerUuid,
+                workspaceUuid = ownerUuid,
                 storageKey = "users/$ownerUuid/uploads/$uuid",
                 metadata = UploadedFileMetadata(mimeType = "image/png", fileSize = (content ?: png).size.toLong()),
             ),
@@ -177,6 +178,7 @@ class GenerationJobServiceTest @Autowired constructor(
         val job = jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = ownerUuid,
+                workspaceUuid = ownerUuid,
                 option = command().option,
                 model = MODEL,
                 taskCount = 1,
