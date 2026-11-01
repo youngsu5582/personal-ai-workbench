@@ -187,11 +187,11 @@ BASE_URL=http://localhost:8080 ./scripts/file.sh --job <job-uuid>
 
 ```
   파일 4e1d2d4e-…
-     앱 응답    302 → http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     앱 응답    302 → http://localhost:3900/workbench/workspaces/…/5c7d9395….png  [서명됨, 900초]
      내려받기   HTTP 200  2,277,138 bytes  image/png
      무결성     sha256 일치 (5c7d9395689f04a7…)
      토큰 없이  HTTP 401
-     previewUrl http://localhost:3900/workbench/users/…/5c7d9395….png  [서명됨, 900초]
+     previewUrl http://localhost:3900/workbench/workspaces/…/5c7d9395….png  [서명됨, 900초]
      헤더 없이  HTTP 200  2,277,138 bytes  image/png
 ```
 
@@ -205,7 +205,7 @@ Garage 에는 웹 콘솔이 없다. 객체는 `mc` 나 AWS CLI 로 본다.
 aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
 ```
 
-키 모양은 `users/{ownerUuid}/blobs/{ab}/{cd}/{sha256}.png` 다 — 자리를 내용이 정하므로 같은 바이트는 한 자리를 쓴다.
+새 키는 `workspaces/{workspaceUuid}/blobs/{ab}/{cd}/{sha256}.png` 다. 기존 파일의 저장 키는 그대로 보존한다.
 
 ### 5. 다운로드가 달라진다
 
@@ -219,7 +219,7 @@ aws --endpoint-url http://localhost:3900 s3 ls s3://workbench --recursive
 ```bash
 curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:8080/api/files/<sha256>
 # HTTP/1.1 302
-# Location: http://localhost:3900/workbench/users/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
+# Location: http://localhost:3900/workbench/workspaces/…/blobs/…png?X-Amz-Signature=…&X-Amz-Expires=300
 ```
 
 목록(`GET /api/jobs/{uuid}`)의 파일마다 `previewUrl` 도 함께 온다. 이건 **서명된 절대 주소**라 `<img src>` 에 그대로 넣으면 그려진다 — `url` 은 `Authorization` 헤더가 필요해서 `<img>` 로는 못 쓴다.
@@ -458,7 +458,7 @@ Content-Type: application/json
 {
   "sha256": "<파일 SHA-256 소문자 hex 64자>",
   "uploadRequired": true,
-  "url": "http://<storage>/<bucket>/users/<owner>/uploads/<fanout>/<hash>.png?<signature>",
+  "url": "http://<storage>/<bucket>/workspaces/<workspace>/uploads/<fanout>/<hash>.png?<signature>",
   "method": "PUT",
   "headers": {
     "Content-Type": "image/png",
@@ -573,6 +573,8 @@ sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 - `GET /api/services` · `GET /api/services/{uuid}` — 내 서비스 목록과 상세를 조회한다.
 - `PUT /api/services/{uuid}` — 이름을 바꾼다. 다른 사용자의 서비스는 조회하거나 수정할 수 없다.
 
+서비스 범위 요청은 `X-Workspace-Id` 헤더로 내 서비스 UUID를 고른다. 헤더를 생략하면 기본 서비스를 쓴다.
+작업·파일·업로드·사용량은 선택한 서비스 범위에서 조회한다. `GET /api/usage/total`은 로그인 사용자의 모든 서비스 사용량을 합친다.
 서비스 소유권과 격리의 설계 근거는 [ADR 0004](adr/0004-service-ownership.md)에 정리한다.
 
 ## 인증

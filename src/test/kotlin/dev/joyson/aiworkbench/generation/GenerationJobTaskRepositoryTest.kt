@@ -31,6 +31,7 @@ class GenerationJobTaskRepositoryTest @Autowired constructor(
         jobRepository.saveAndFlush(
             GenerationJob(
                 ownerUserUuid = UUID.randomUUID(),
+                workspaceUuid = UUID.randomUUID(),
                 option = ImageOption("고양이", ImageSize.ByRatio(AspectRatio.ONE_ONE, Resolution.ONE_K)),
                 model = "gpt-image-2",
                 taskCount = 3,

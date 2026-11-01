@@ -23,6 +23,7 @@ class CostPollerTest @Autowired constructor(
             taskUuid = UUID.randomUUID(),
             jobUuid = UUID.randomUUID(),
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             provider = "openai",
             model = "gpt-image-2",
             succeeded = false,

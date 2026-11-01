@@ -37,6 +37,7 @@ class UploadedFilesTest @Autowired constructor(
             UploadedFile(
                 sha256 = uuid,
                 ownerUserUuid = owner,
+                workspaceUuid = owner,
                 storageKey = "users/$owner/uploads/$uuid",
                 metadata = UploadedFileMetadata(mimeType = mimeType, fileSize = fileSize),
             ),
@@ -44,7 +45,7 @@ class UploadedFilesTest @Autowired constructor(
     }
 
     private fun statusOf(file: UploadedFile) =
-        uploadedFileRepository.findByOwnerUserUuidAndSha256(owner, file.sha256)?.status
+        uploadedFileRepository.findByWorkspaceUuidAndSha256(owner, file.sha256)?.status
 
     @Test
     fun `선언한 형식과 크기로 올라왔으면 READY 로 남기고 쓸 수 있다`() {

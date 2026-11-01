@@ -53,7 +53,7 @@ class GenerationJobService(
      * 여기에 걸면 그 왕복 동안 커넥션을 붙잡는다. 나중에 크레딧을 깎게 되면 차감도 기록과 같은
      * 트랜잭션에 들어가야 한다 — 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
      */
-    fun submit(ownerUuid: UUID, command: GenerationCommand): GenerationJobView {
+    fun submit(ownerUuid: UUID, workspaceUuid: UUID, command: GenerationCommand): GenerationJobView {
         // 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
         val supported = when (command.option) {
             is ImageOption -> providerRegistry.find(command.model) != null
@@ -62,9 +62,9 @@ class GenerationJobService(
         }
         if (!supported) throw UnsupportedModelException(command.model, providerRegistry.availableNames)
 
-        requireOwnedSources(ownerUuid, command.option)
+        requireOwnedSources(workspaceUuid, command.option)
 
-        return generationJobWriter.create(ownerUuid, command)
+        return generationJobWriter.create(ownerUuid, workspaceUuid, command)
     }
 
     /**
@@ -74,9 +74,9 @@ class GenerationJobService(
      * 찾지 못한 것을 예외가 아니라 `null` 로 돌려주는 이유는 호출 지점마다 처리가 갈리기 때문이다.
      */
     @Transactional(readOnly = true)
-    fun findOwned(uuid: UUID, ownerUuid: UUID): GenerationJobView? {
+    fun findOwned(uuid: UUID, workspaceUuid: UUID): GenerationJobView? {
         val job = generationJobRepository.findByUuid(uuid)
-            ?.takeIf { it.isOwnedBy(ownerUuid) }
+            ?.takeIf { it.isOwnedBy(workspaceUuid) }
             ?: return null
 
         // Task 는 Job 당 최대 MAX_TASK_COUNT 개라 그대로 가져와 센다.
@@ -114,7 +114,7 @@ class GenerationJobService(
      *
      * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
      */
-    private fun requireOwnedSources(ownerUuid: UUID, option: GenerationOption) {
+    private fun requireOwnedSources(workspaceUuid: UUID, option: GenerationOption) {
         val sources = when (option) {
             // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
             is ImageOption -> option.sources
@@ -122,7 +122,7 @@ class GenerationJobService(
             is DecisionOption -> option.sources
         }
 
-        sources.firstOrNull { !fileSourceResolver.isUsable(it, ownerUuid) }
+        sources.firstOrNull { !fileSourceResolver.isUsable(it, workspaceUuid) }
             ?.let { throw UnknownFileSourceException(it.sha256) }
     }
 }

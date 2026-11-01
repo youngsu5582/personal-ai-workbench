@@ -2,7 +2,7 @@ package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.FileDownload
 import dev.joyson.aiworkbench.generation.application.GeneratedFileService
-import dev.joyson.aiworkbench.ownership.OwnerContext
+import dev.joyson.aiworkbench.ownership.WorkspaceContext
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -32,8 +32,8 @@ class GeneratedFileController(
 ) {
 
     @GetMapping("/{sha256}")
-    fun download(owner: OwnerContext, @PathVariable @Pattern(regexp = "[0-9a-f]{64}") sha256: String): ResponseEntity<*> =
-        when (val download = generatedFileService.download(sha256, owner.uuid)) {
+    fun download(scope: WorkspaceContext, @PathVariable @Pattern(regexp = "[0-9a-f]{64}") sha256: String): ResponseEntity<*> =
+        when (val download = generatedFileService.download(sha256, scope.workspaceUuid)) {
             null -> ResponseEntity.notFound().build<Void>()
 
             // 302 다. 301 이면 브라우저가 캐시하는데, 그 주소는 곧 만료된다.

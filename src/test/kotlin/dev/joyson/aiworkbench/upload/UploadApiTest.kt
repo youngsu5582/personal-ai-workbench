@@ -15,6 +15,7 @@ import dev.joyson.aiworkbench.upload.domain.UploadStatus
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import jakarta.persistence.EntityManager
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
@@ -44,6 +45,7 @@ class UploadApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
+    private val workspaces: WorkspaceRegistry,
     private val jsonMapper: JsonMapper,
     private val uploadedFileRepository: UploadedFileRepository,
     private val em: EntityManager,
@@ -85,7 +87,7 @@ class UploadApiTest @Autowired constructor(
             }.andReturn().response
         val body = jsonMapper.readTree(response.contentAsString)
         val url = URI.create(body.get("url").asText())
-        val key = BlobKey.uploaded(user.uuid, digest, "image/png").value
+        val key = BlobKey.uploaded(requireNotNull(workspaces.findDefaultUuid(user.uuid)), digest, "image/png").value
         assertTrue(url.path.endsWith("/$key"))
 
         val uploaded = HttpClient.newHttpClient().send(
@@ -107,12 +109,12 @@ class UploadApiTest @Autowired constructor(
         val uuid = body.get("sha256").asText()
         em.flush()
         em.clear()
-        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
+        val file = assertNotNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), uuid))
         assertEquals(UploadStatus.PENDING, file.status)
         assertEquals(digest.hex, file.sha256)
-        assertEquals(BlobKey.uploaded(user.uuid, digest, "image/png").value, file.storageKey)
+        assertEquals(BlobKey.uploaded(requireNotNull(workspaces.findDefaultUuid(user.uuid)), digest, "image/png").value, file.storageKey)
         assertEquals(png.size.toLong(), file.metadata.fileSize)
-        assertNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(UUID.randomUUID(), uuid))
+        assertNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(UUID.randomUUID(), uuid))
     }
 
     @Test
@@ -127,7 +129,7 @@ class UploadApiTest @Autowired constructor(
     fun `이미 올라온 파일은 발급 시 검증하고 PUT 없이 재사용한다`() {
         val first = issue()
         val uuid = first.get("sha256").asText()
-        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
+        val file = assertNotNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), uuid))
         fileStorage.put(file.storageKey, png, "image/png")
 
         request().andExpect {
@@ -138,14 +140,14 @@ class UploadApiTest @Autowired constructor(
             jsonPath("$.method") { doesNotExist() }
             jsonPath("$.headers") { isEmpty() }
         }
-        assertEquals(UploadStatus.READY, uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
+        assertEquals(UploadStatus.READY, uploadedFileRepository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), uuid)?.status)
     }
 
     @Test
     fun `거절된 파일은 형식을 바꿔 선언해도 다시 열지 않고 사유를 알린다`() {
         val first = issue(payload(type = "image/jpeg"))
         val sha256 = first.get("sha256").asText()
-        val file = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, sha256))
+        val file = assertNotNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), sha256))
         fileStorage.put(file.storageKey, png, "image/jpeg")
 
         listOf("image/jpeg", "image/png").forEach { type ->
@@ -156,7 +158,7 @@ class UploadApiTest @Autowired constructor(
                 }
             }
         }
-        val rejected = assertNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(user.uuid, sha256))
+        val rejected = assertNotNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), sha256))
         assertEquals(UploadStatus.REJECTED, rejected.status)
         assertEquals("image/jpeg", rejected.metadata.mimeType)
         assertNull(fileStorage.read(file.storageKey))

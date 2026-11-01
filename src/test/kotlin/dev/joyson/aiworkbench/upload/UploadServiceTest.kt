@@ -44,8 +44,8 @@ class UploadServiceTest @Autowired constructor(
 
     @Test
     fun `다른 사용자는 같은 해시라도 같은 해시와 별도 객체를 가진다`() {
-        val first = assertNotNull(service.issue(UUID.randomUUID(), spec))
-        val second = assertNotNull(service.issue(UUID.randomUUID(), spec))
+        val first = assertNotNull(service.issue(UUID.randomUUID(), UUID.randomUUID(), spec))
+        val second = assertNotNull(service.issue(UUID.randomUUID(), UUID.randomUUID(), spec))
         assertEquals(first.sha256, second.sha256)
         assertNotEquals(first.url, second.url)
     }
@@ -53,8 +53,8 @@ class UploadServiceTest @Autowired constructor(
     @Test
     fun `READY 중복은 보관소를 읽거나 쓰기 주소를 발급하지 않는다`() {
         val owner = UUID.randomUUID()
-        val issued = assertNotNull(service.issue(owner, spec))
-        val file = assertNotNull(repository.findByOwnerUserUuidAndSha256(owner, issued.sha256))
+        val issued = assertNotNull(service.issue(owner, owner, spec))
+        val file = assertNotNull(repository.findByWorkspaceUuidAndSha256(owner, issued.sha256))
         storage.put(file.storageKey, png, "image/png")
         files.findUsable(file.sha256, owner)
 
@@ -63,7 +63,7 @@ class UploadServiceTest @Autowired constructor(
         }
         val noSign = PresignedUploadIssuer { _, _, _, _ -> error("READY 에 쓰기 권한을 발급했다") }
         val readyService = UploadService(noSign, repository, writer, DefaultUploadedFiles(repository, writer, noRead))
-        val reused = assertNotNull(readyService.issue(owner, spec))
+        val reused = assertNotNull(readyService.issue(owner, owner, spec))
         assertEquals(issued.sha256, reused.sha256)
         assertNull(reused.url)
     }
@@ -78,7 +78,7 @@ class UploadServiceTest @Autowired constructor(
             val futures = List(4) {
                 pool.submit<String> {
                     assertTrue(gate.await(10, TimeUnit.SECONDS))
-                    assertNotNull(service.issue(owner, spec)).sha256
+                    assertNotNull(service.issue(owner, owner, spec)).sha256
                 }
             }
             gate.countDown()

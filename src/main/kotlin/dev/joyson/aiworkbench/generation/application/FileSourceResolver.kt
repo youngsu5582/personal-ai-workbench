@@ -39,10 +39,10 @@ class FileSourceResolver(
      * 결과물은 메타 행만 본다. 올린 파일은 처음 참조될 때 보관소에서 앞부분을 읽어 검증한다 —
      * 그래서 이것을 부르는 접수는 트랜잭션 밖이다. 찾지 못한 것을 어떻게 할지는 부르는 쪽이 정한다.
      */
-    fun isUsable(source: FileSource, ownerUuid: UUID): Boolean = when (source) {
+    fun isUsable(source: FileSource, workspaceUuid: UUID): Boolean = when (source) {
         // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
-        is FileSource.Generated -> generatedFileFinder.findOwned(source.sha256, ownerUuid) != null
-        is FileSource.Uploaded -> uploadedFiles.findUsable(source.sha256, ownerUuid) != null
+        is FileSource.Generated -> generatedFileFinder.findOwned(source.sha256, workspaceUuid) != null
+        is FileSource.Uploaded -> uploadedFiles.findUsable(source.sha256, workspaceUuid) != null
     }
 
     /**
@@ -51,21 +51,21 @@ class FileSourceResolver(
      * [inline] 이면 주소를 발급할 수 있어도 바이트로 싣는다 — 받는 쪽이 주소를 받아가지 못했을 때 다시 보내는 길이다.
      * 참조가 없으면 빈 목록이다 — 읽을 것이 없지, 못 읽은 것이 아니다.
      */
-    fun resolve(ownerUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
-        is ImageOption -> option.sources.map { prepare(it, ownerUuid, inline) }
+    fun resolve(workspaceUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
+        is ImageOption -> option.sources.map { prepare(it, workspaceUuid, inline) }
         // 입력 파일을 받지 않는 종류다.
         is TextGenerateOption -> emptyList()
-        is DecisionOption -> option.sources.map { prepare(it, ownerUuid, inline) }
+        is DecisionOption -> option.sources.map { prepare(it, workspaceUuid, inline) }
     }
 
-    private fun prepare(source: FileSource, ownerUuid: UUID, inline: Boolean): ResolvedFile = when (source) {
-        is FileSource.Generated -> prepareGenerated(source, ownerUuid, inline)
-        is FileSource.Uploaded -> prepareUploaded(source, ownerUuid, inline)
+    private fun prepare(source: FileSource, workspaceUuid: UUID, inline: Boolean): ResolvedFile = when (source) {
+        is FileSource.Generated -> prepareGenerated(source, workspaceUuid, inline)
+        is FileSource.Uploaded -> prepareUploaded(source, workspaceUuid, inline)
     }
 
-    private fun prepareGenerated(source: FileSource.Generated, ownerUuid: UUID, inline: Boolean): ResolvedFile {
+    private fun prepareGenerated(source: FileSource.Generated, workspaceUuid: UUID, inline: Boolean): ResolvedFile {
         // 없는 것과 남의 것은 동일하게 처리한다.(외부 노출 방지) 주소를 발급하기 전에 확인해야 한다.
-        val location = generatedFileFinder.findOwned(source.sha256, ownerUuid) ?: throw notFound(source)
+        val location = generatedFileFinder.findOwned(source.sha256, workspaceUuid) ?: throw notFound(source)
 
         val filename = fileNameOf(source, location.mimeType)
         presignedUrlIssuer?.takeUnless { inline }?.let { issuer ->
@@ -92,18 +92,18 @@ class FileSourceResolver(
     }
 
     /** 올린 파일은 주소로 넘기고, [inline] 이면 바이트로 싣는다. 어느 쪽이든 upload 모듈에 부탁한다. */
-    private fun prepareUploaded(source: FileSource.Uploaded, ownerUuid: UUID, inline: Boolean): ResolvedFile {
+    private fun prepareUploaded(source: FileSource.Uploaded, workspaceUuid: UUID, inline: Boolean): ResolvedFile {
         // 접수에서 검증을 마쳤으므로 여기서는 검증하지 않는다.
-        val usable = uploadedFiles.findUsable(source.sha256, ownerUuid) ?: throw notFound(source)
+        val usable = uploadedFiles.findUsable(source.sha256, workspaceUuid) ?: throw notFound(source)
         val filename = fileNameOf(source, usable.mimeType)
 
         if (inline) {
-            val bytes = uploadedFiles.readContent(source.sha256, ownerUuid)
+            val bytes = uploadedFiles.readContent(source.sha256, workspaceUuid)
                 ?: throw FileSourceUnavailableException(false, "입력 이미지의 내용이 없다: ${source.sha256}")
             return ResolvedFile.Bytes(bytes, usable.mimeType, filename)
         }
 
-        val url = signing(source) { uploadedFiles.issueReadUrl(source.sha256, ownerUuid, filename) }
+        val url = signing(source) { uploadedFiles.issueReadUrl(source.sha256, workspaceUuid, filename) }
             ?: throw FileSourceUnavailableException(false, "입력 이미지 주소를 발급할 수 없다: ${source.sha256}")
         return ResolvedFile.Url(url, usable.mimeType, filename)
     }

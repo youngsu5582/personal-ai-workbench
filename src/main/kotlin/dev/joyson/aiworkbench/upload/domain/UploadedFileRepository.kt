@@ -12,7 +12,7 @@ interface UploadedFileRepository : Repository<UploadedFile, Long> {
 
     fun save(file: UploadedFile): UploadedFile
 
-    fun findByOwnerUserUuidAndSha256(ownerUserUuid: UUID, sha256: String): UploadedFile?
+    fun findByWorkspaceUuidAndSha256(workspaceUuid: UUID, sha256: String): UploadedFile?
 
     /**
      * [expected] 상태일 때만 [next] 로 옮긴다. 여러 요청이 같은 행을 동시에 옮겨도 한 번만 바뀐다.

@@ -2,6 +2,7 @@
 
 - 상태: 채택 (2026-10-18, #54 머지). 공개 식별자 절은 #55 에서 더했다
 - 범위: `upload` 모듈, `storage` 의 키 규칙과 서명, 업로드 클라이언트(`scripts/upload.sh` · 샘플 페이지), 공개 파일 식별자(#55)
+- 소유 범위 변경: [ADR 0004](0004-service-ownership.md) — 서비스별 격리
 - 실험 기록: `.claude/plans/2026-09-27-presigned-upload/INDEX.md` 의 F1–F7 · D7
 
 ## 결정

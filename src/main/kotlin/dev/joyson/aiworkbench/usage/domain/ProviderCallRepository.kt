@@ -56,7 +56,7 @@ interface ProviderCallRepository : Repository<ProviderCall, Long> {
                sum(k.usd) as costUsd
         from ProviderCall c
         left join ProviderCallCost k on k.call = c
-        where c.ownerUserUuid = :owner
+        where c.workspaceUuid = :workspace
           and c.calledAt >= :from
           and c.calledAt < :to
         group by c.provider, c.model
@@ -64,6 +64,29 @@ interface ProviderCallRepository : Repository<ProviderCall, Long> {
         """,
     )
     fun summarizeByModel(
+        @Param("workspace") workspace: UUID,
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): List<ModelUsageRow>
+
+    @Query(
+        """
+        select c.provider as provider,
+               c.model as model,
+               count(c) as calls,
+               count(case when c.succeeded = true then 1 else null end) as succeededCalls,
+               count(k.usd) as costKnownCalls,
+               sum(k.usd) as costUsd
+        from ProviderCall c
+        left join ProviderCallCost k on k.call = c
+        where c.ownerUserUuid = :owner
+          and c.calledAt >= :from
+          and c.calledAt < :to
+        group by c.provider, c.model
+        order by c.model asc
+        """,
+    )
+    fun summarizeByUser(
         @Param("owner") owner: UUID,
         @Param("from") from: Instant,
         @Param("to") to: Instant,

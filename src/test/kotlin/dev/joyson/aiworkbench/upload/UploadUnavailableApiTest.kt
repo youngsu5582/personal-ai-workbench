@@ -10,6 +10,7 @@ import dev.joyson.aiworkbench.upload.domain.UploadStatus
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
@@ -33,6 +34,7 @@ class UploadUnavailableApiTest @Autowired constructor(
     private val mvc: MockMvc,
     private val tokens: TokenService,
     private val users: UserRegistry,
+    private val workspaces: WorkspaceRegistry,
     private val mapper: JsonMapper,
     private val repository: UploadedFileRepository,
 ) : IntegrationTest() {
@@ -54,7 +56,7 @@ class UploadUnavailableApiTest @Autowired constructor(
         }
         val first = request().andExpect { status { isOk() } }.andReturn().response
         val uuid = mapper.readTree(first.contentAsString).get("sha256").asText()
-        val file = assertNotNull(repository.findByOwnerUserUuidAndSha256(user.uuid, uuid))
+        val file = assertNotNull(repository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), uuid))
         `when`(storage.readRange(file.storageKey, 0L until 12)).thenThrow(
             FileStorageException(retryable = true, message = "internal-storage-endpoint/${file.storageKey}"),
         )
@@ -66,7 +68,7 @@ class UploadUnavailableApiTest @Autowired constructor(
         }.andReturn().response
         assertFalse(response.contentAsString.contains(file.storageKey))
         assertFalse(response.contentAsString.contains("internal-storage-endpoint"))
-        assertEquals(UploadStatus.PENDING, repository.findByOwnerUserUuidAndSha256(user.uuid, uuid)?.status)
+        assertEquals(UploadStatus.PENDING, repository.findByWorkspaceUuidAndSha256(requireNotNull(workspaces.findDefaultUuid(user.uuid)), uuid)?.status)
     }
 
     @TestConfiguration(proxyBeanMethods = false)

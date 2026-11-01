@@ -5,7 +5,7 @@ import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
-import dev.joyson.aiworkbench.ownership.OwnerContext
+import dev.joyson.aiworkbench.ownership.WorkspaceContext
 import jakarta.validation.Valid
 import jakarta.validation.constraints.AssertTrue
 import jakarta.validation.constraints.Max
@@ -28,8 +28,8 @@ class GenerationJobController(
 ) {
 
     @PostMapping
-    fun generate(owner: OwnerContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
-        val job = generationJobService.submit(owner.uuid, request.toCommand())
+    fun generate(scope: WorkspaceContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
+        val job = generationJobService.submit(scope.owner.uuid, scope.workspaceUuid, request.toCommand())
         // 접수 확인이므로, 202 반환
         return ResponseEntity.accepted().body(GenerationResponse(job.uuid))
     }
@@ -40,8 +40,8 @@ class GenerationJobController(
      * 남의 Job 도 404 다 — 403 은 "그 uuid 는 존재한다" 를 알려준다.
      */
     @GetMapping("/{uuid}")
-    fun find(owner: OwnerContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
-        generationJobService.findOwned(uuid, owner.uuid)
+    fun find(scope: WorkspaceContext, @PathVariable uuid: UUID): ResponseEntity<GenerationJobDetailResponse> =
+        generationJobService.findOwned(uuid, scope.workspaceUuid)
             ?.let { ResponseEntity.ok(it.toResponse()) }
             ?: ResponseEntity.notFound().build()
 }
