@@ -12,4 +12,6 @@ interface WorkspaceRegistry {
 
     /** 사용자의 기본 서비스가 없으면 null을 돌려준다. */
     fun findDefaultUuid(ownerUuid: UUID): UUID?
+
+    fun isOwnedBy(workspaceUuid: UUID, ownerUuid: UUID): Boolean
 }
