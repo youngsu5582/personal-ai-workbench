@@ -573,7 +573,7 @@ sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 - `GET /api/services` · `GET /api/services/{uuid}` — 내 서비스 목록과 상세를 조회한다.
 - `PUT /api/services/{uuid}` — 이름을 바꾼다. 다른 사용자의 서비스는 조회하거나 수정할 수 없다.
 
-서비스 관리는 생성 작업이나 파일의 접근 범위를 바꾸지 않는다. 서비스별 데이터 격리와 API 키는 후속 작업이다.
+서비스 소유권과 격리의 설계 근거는 [ADR 0004](adr/0004-service-ownership.md)에 정리한다.
 
 ## 인증
 
