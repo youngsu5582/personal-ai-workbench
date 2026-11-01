@@ -6,6 +6,7 @@ import dev.joyson.aiworkbench.user.domain.User
 import dev.joyson.aiworkbench.user.domain.UserIdentity
 import dev.joyson.aiworkbench.user.domain.UserIdentityRepository
 import dev.joyson.aiworkbench.user.domain.UserRepository
+import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 class UserWriter(
     private val userRepository: UserRepository,
     private val userIdentityRepository: UserIdentityRepository,
+    private val workspaceRegistry: WorkspaceRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     
@@ -46,6 +48,7 @@ class UserWriter(
         val user = userRepository.save(User(displayName = command.displayName))
         // UNIQUE(issuer, subject) 위반은 attach 안에서 난다. 같은 트랜잭션이라 위의 User 삽입도 함께 롤백된다.
         val identity = attach(user, command)
+        workspaceRegistry.createDefault(user.uuid)
         log.info("새 사용자를 등록: uuid={} issuer={}", user.uuid, identity.issuer)
         return user.toView()
     }
