@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Login,
+  ServicePicker,
+  UsagePanel,
+  StudioPanel,
+  ServicesPanel,
+  KeysPanel,
+} from "./connected";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
   ArrowRight,
   BarChart3,
   Boxes,
-  ChevronDown,
   CircleHelp,
   FileImage,
   KeyRound,
@@ -21,13 +28,7 @@ import {
 import "./style.css";
 
 type Page =
-  | "home"
-  | "studio"
-  | "library"
-  | "usage"
-  | "services"
-  | "keys"
-  | "settings";
+  "home" | "studio" | "library" | "usage" | "services" | "keys" | "settings";
 const sections: { id: Page; title: string; icon: typeof Sparkles }[] = [
   { id: "home", title: "대시보드", icon: LayoutDashboard },
   { id: "studio", title: "작업실", icon: Sparkles },
@@ -43,8 +44,19 @@ function App() {
     () => localStorage.getItem("workbench-theme") === "dark",
   );
   const [menu, setMenu] = useState(false);
-  const [kind, setKind] = useState<"image" | "text">("image");
-  const [prompt, setPrompt] = useState("");
+  const [token, setToken] = useState("");
+  const [workspace, setWorkspace] = useState("");
+  const [serviceVersion, setServiceVersion] = useState(0);
+  const onToken = useCallback((value: string) => setToken(value), []);
+  const onSelect = useCallback((value: string) => setWorkspace(value), []);
+  useEffect(() => {
+    const logout = () => {
+      setToken("");
+      setWorkspace("");
+    };
+    window.addEventListener("workbench:unauthorized", logout);
+    return () => window.removeEventListener("workbench:unauthorized", logout);
+  }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     localStorage.setItem("workbench-theme", dark ? "dark" : "light");
@@ -54,6 +66,7 @@ function App() {
     setMenu(false);
     window.scrollTo(0, 0);
   };
+  if (!token) return <Login onToken={onToken} />;
   return (
     <div className="app">
       <aside className={menu ? "sidebar open" : "sidebar"}>
@@ -71,14 +84,12 @@ function App() {
           </button>
         </div>
         <div className="section-label">WORKSPACE</div>
-        <button className="workspace" disabled title="서비스 연결 준비 중">
-          <span className="workspace-icon">W</span>
-          <span>
-            <strong>내 서비스</strong>
-            <small>서비스 연결 준비 중</small>
-          </span>
-          <ChevronDown size={15} />
-        </button>
+        <ServicePicker
+          key={serviceVersion}
+          token={token}
+          selected={workspace}
+          onSelect={onSelect}
+        />
         <div className="section-label">둘러보기</div>
         <nav aria-label="주 메뉴">
           {sections.slice(0, 4).map(({ id, title, icon: Icon }) => (
@@ -177,8 +188,8 @@ function App() {
                 </div>
                 <div className="stat">
                   <span>이번 달 사용량</span>
-                  <strong>—</strong>
-                  <small>사용량 연결 준비 중</small>
+                  <button className="link" onClick={() => go("usage")}>사용량 보기</button>
+                  <small>선택한 서비스의 사용량</small>
                 </div>
                 <div className="stat">
                   <span>완료된 작업</span>
@@ -214,9 +225,7 @@ function App() {
                     action="자세히 보기"
                     onClick={() => go("usage")}
                   />
-                  <p className="subtle">
-                    서비스별 사용량을 연결하면 이곳에 표시돼요.
-                  </p>
+                  <UsagePanel token={token} workspace={workspace} />
                 </div>
               </div>
             </>
@@ -226,73 +235,17 @@ function App() {
               <PageHeading
                 eyebrow="PLAYGROUND"
                 title="작업실"
-                desc="아이디어를 입력하고 결과를 확인해 보세요."
+                desc="이미지와 텍스트를 생성해 보세요."
               />
-              <div className="studio-grid">
-                <section className="panel">
-                  <h2>무엇을 만들까요?</h2>
-                  <div className="tabs" role="tablist" aria-label="작업 유형">
-                    <button
-                      role="tab"
-                      aria-selected={kind === "image"}
-                      onClick={() => setKind("image")}
-                    >
-                      이미지
-                    </button>
-                    <button
-                      role="tab"
-                      aria-selected={kind === "text"}
-                      onClick={() => setKind("text")}
-                    >
-                      텍스트
-                    </button>
-                  </div>
-                  <label>
-                    모델
-                    <select disabled>
-                      <option>모델 연결 준비 중</option>
-                    </select>
-                  </label>
-                  <label>
-                    프롬프트
-                    <textarea
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      placeholder={
-                        kind === "image"
-                          ? "만들고 싶은 이미지를 자세히 설명해 주세요."
-                          : "어떤 글을 만들고 싶은지 적어 주세요."
-                      }
-                    />
-                  </label>
-                  {kind === "image" && (
-                    <label>
-                      참고 이미지
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        disabled
-                      />
-                      <small>이미지 업로드 연결 준비 중</small>
-                    </label>
-                  )}
-                  <button className="button primary" disabled>
-                    <Sparkles size={15} /> 작업 실행
-                  </button>
-                  <p className="hint">생성 API 연결 후 실행할 수 있어요.</p>
-                </section>
-                <section className="panel">
-                  <div className="panel-head">
-                    <h2>결과 미리보기</h2>
-                    <span className="status">대기 중</span>
-                  </div>
-                  <div className="preview">
-                    <Sparkles size={24} />
-                    <strong>아직 생성된 결과가 없어요</strong>
-                    <span>작업을 실행하면 이곳에서 확인할 수 있어요.</span>
-                  </div>
-                </section>
-              </div>
+              {workspace ? (
+                <StudioPanel
+                  key={workspace}
+                  token={token}
+                  workspace={workspace}
+                />
+              ) : (
+                <p>서비스를 불러오는 중이에요.</p>
+              )}
             </>
           )}
           {page === "library" && (
@@ -320,29 +273,7 @@ function App() {
                 title="사용량"
                 desc="서비스별 AI 사용량과 비용을 살펴보세요."
               />
-              <div className="stats">
-                <div className="stat">
-                  <span>총 비용</span>
-                  <strong>—</strong>
-                  <small>USD</small>
-                </div>
-                <div className="stat">
-                  <span>총 호출</span>
-                  <strong>—</strong>
-                  <small>사용량 연결 준비 중</small>
-                </div>
-                <div className="stat">
-                  <span>성공한 호출</span>
-                  <strong>—</strong>
-                  <small>사용량 연결 준비 중</small>
-                </div>
-              </div>
-              <section className="panel">
-                <h2>모델별 사용량</h2>
-                <p className="subtle">
-                  사용량 조회 기능을 연결하면 모델별 내역이 표시돼요.
-                </p>
-              </section>
+              {workspace && <UsagePanel token={token} workspace={workspace} />}
             </>
           )}
           {page === "services" && (
@@ -352,10 +283,9 @@ function App() {
                 title="서비스 관리"
                 desc="서비스마다 작업과 사용량을 분리해서 관리해요."
               />
-              <Empty
-                icon={<Boxes />}
-                title="서비스 연결 준비 중"
-                description="서비스를 불러오고 선택하는 기능이 연결될 예정이에요."
+              <ServicesPanel
+                token={token}
+                onChange={() => setServiceVersion((x) => x + 1)}
               />
             </>
           )}
@@ -366,11 +296,13 @@ function App() {
                 title="API 키"
                 desc="서비스에 연결할 API 키를 관리합니다."
               />
-              <Empty
-                icon={<KeyRound />}
-                title="API 키 관리 준비 중"
-                description="서비스 전용 키 발급과 관리 기능이 연결될 예정이에요."
-              />
+              {workspace && (
+                <KeysPanel
+                  key={workspace}
+                  token={token}
+                  workspace={workspace}
+                />
+              )}
             </>
           )}
           {page === "settings" && (
@@ -395,8 +327,9 @@ function App() {
               <section className="panel" style={{ marginTop: 16 }}>
                 <h2>연결 상태</h2>
                 <p className="subtle">
-                  <Activity size={15} /> 계정과 API 연결은 준비 중이에요.
+                  <Activity size={15} /> 현재 로그인은 새로고침하면 만료돼요.
                 </p>
+                <button className="button" onClick={() => { setToken(""); setWorkspace(""); }}>로그아웃</button>
               </section>
             </>
           )}
