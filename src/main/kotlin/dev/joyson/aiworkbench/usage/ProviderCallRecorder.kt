@@ -33,6 +33,7 @@ data class RecordProviderCallCommand(
     val taskUuid: UUID,
     val jobUuid: UUID,
     val ownerUserUuid: UUID,
+    val workspaceUuid: UUID,
 
     val provider: String,
     val model: String,

@@ -52,6 +52,7 @@ class DefaultProviderCallRecorder(
                 taskUuid = command.taskUuid,
                 jobUuid = command.jobUuid,
                 ownerUserUuid = command.ownerUserUuid,
+                workspaceUuid = command.workspaceUuid,
                 provider = command.provider.take(COLUMN_LENGTH),
                 model = command.model.take(COLUMN_LENGTH),
                 // JSON 이라 길이 제약이 없다 — 자를 이유가 없어졌다.

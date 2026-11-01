@@ -7,6 +7,7 @@ import dev.joyson.aiworkbench.usage.domain.ModelPriceBook
 import dev.joyson.aiworkbench.usage.domain.PriceRates
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
@@ -27,6 +28,7 @@ class UsageApiTest @Autowired constructor(
     private val mockMvc: MockMvc,
     private val tokenService: TokenService,
     private val userRegistry: UserRegistry,
+    private val workspaces: WorkspaceRegistry,
     private val recorder: ProviderCallRecorder,
     private val worker: ProviderCallPricingWorker,
     private val books: ModelPriceBookTestRepository,
@@ -61,6 +63,7 @@ class UsageApiTest @Autowired constructor(
             taskUuid = UUID.randomUUID(),
             jobUuid = UUID.randomUUID(),
             ownerUserUuid = ownerUuid,
+            workspaceUuid = requireNotNull(workspaces.findDefaultUuid(ownerUuid)),
             provider = "openai",
             model = model,
             succeeded = succeeded,

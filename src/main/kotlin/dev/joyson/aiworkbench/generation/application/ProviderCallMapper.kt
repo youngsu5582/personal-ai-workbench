@@ -119,6 +119,7 @@ object ProviderCallMapper {
         taskUuid = task.uuid,
         jobUuid = job.uuid,
         ownerUserUuid = job.ownerUserUuid,
+        workspaceUuid = job.workspaceUuid,
         provider = providerName,
         model = job.model,
         request = request,

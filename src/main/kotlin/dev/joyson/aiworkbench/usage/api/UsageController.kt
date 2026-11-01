@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.usage.api
 
+import dev.joyson.aiworkbench.ownership.WorkspaceContext
 import dev.joyson.aiworkbench.ownership.OwnerContext
 import dev.joyson.aiworkbench.usage.application.UsageService
 import dev.joyson.aiworkbench.usage.application.UsageSummaryView
@@ -18,7 +19,7 @@ import java.time.temporal.ChronoUnit
  * usage 모듈이 자기 API 를 직접 낸다. generation 을 거치면 생성 흐름이 자기 관심사도 아닌
  * 조회를 들고 있게 되고, 그러려고 usage 가 View 타입을 공개해야 한다.
  *
- * 남의 지출은 볼 수 없다 — 소유자는 요청에서 받지 않고 [OwnerContext] 에서만 나온다.
+ * 서비스 합계와 사용자 전체 합계 모두 인증된 범위에서만 조회한다.
  */
 @RestController
 class UsageController(
@@ -31,7 +32,7 @@ class UsageController(
      */
     @GetMapping("/api/usage")
     fun summary(
-        owner: OwnerContext,
+        scope: WorkspaceContext,
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
         from: Instant?,
@@ -46,7 +47,24 @@ class UsageController(
             return ResponseEntity.badRequest().build()
         }
 
-        return ResponseEntity.ok(usageService.summarize(owner.uuid, start, end).toResponse())
+        return ResponseEntity.ok(usageService.summarize(scope.workspaceUuid, start, end).toResponse())
+    }
+
+    /** 전체 서비스 합계는 서비스 선택이 아니라 인증된 사용자 범위로 구한다. */
+    @GetMapping("/api/usage/total")
+    fun total(
+        owner: OwnerContext,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        from: Instant?,
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        to: Instant?,
+    ): ResponseEntity<UsageSummaryResponse> {
+        val end = to ?: Instant.now()
+        val start = from ?: startOfMonth(end)
+        if (!start.isBefore(end)) return ResponseEntity.badRequest().build()
+        return ResponseEntity.ok(usageService.summarizeUser(owner.uuid, start, end).toResponse())
     }
 
     private fun startOfMonth(at: Instant): Instant =

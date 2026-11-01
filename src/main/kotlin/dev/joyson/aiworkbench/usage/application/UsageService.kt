@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.usage.application
 
 import dev.joyson.aiworkbench.usage.domain.ProviderCallRepository
+import dev.joyson.aiworkbench.usage.domain.ModelUsageRow
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -19,8 +20,15 @@ class UsageService(
 ) {
 
     @Transactional(readOnly = true)
-    fun summarize(ownerUuid: UUID, from: Instant, to: Instant): UsageSummaryView {
-        val rows = repository.summarizeByModel(ownerUuid, from, to).map {
+    fun summarize(workspaceUuid: UUID, from: Instant, to: Instant): UsageSummaryView =
+        summarizeRows(repository.summarizeByModel(workspaceUuid, from, to), from, to)
+
+    @Transactional(readOnly = true)
+    fun summarizeUser(ownerUuid: UUID, from: Instant, to: Instant): UsageSummaryView =
+        summarizeRows(repository.summarizeByUser(ownerUuid, from, to), from, to)
+
+    private fun summarizeRows(results: List<ModelUsageRow>, from: Instant, to: Instant): UsageSummaryView {
+        val rows = results.map {
             ModelUsageView(
                 provider = it.provider,
                 model = it.model,

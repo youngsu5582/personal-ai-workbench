@@ -70,6 +70,7 @@ class ProviderCallPricingWorkerTest @Autowired constructor(
             taskUuid = UUID.randomUUID(),
             jobUuid = UUID.randomUUID(),
             ownerUserUuid = UUID.randomUUID(),
+            workspaceUuid = UUID.randomUUID(),
             provider = "openai",
             model = model,
             request = ImageRequest(width = 2048, height = 1152, quality = "high"),
