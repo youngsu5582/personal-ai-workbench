@@ -8,7 +8,7 @@ Status: active
 - [x] 2단계 로컬 compose 에 Prometheus · Grafana — 대시보드와 PromQL 을 k3s 없이 먼저 만든다 (profile `observability`)
 - [ ] 2단계 후속 — Loki · Alloy. 1단계 후속의 MDC 가 들어간 뒤 붙인다 — 그래야 Task 하나로 로그를 모을 수 있다
 - [ ] k3s 학습 — #56 의 커밋을 하나씩 Rancher Desktop 에 올려 본다
-- [ ] 3단계 홈서버 클러스터에 monitoring 층 — Prometheus · Grafana · node-exporter 매니페스트
+- [ ] 3단계 홈서버 클러스터에 monitoring 층 — 매니페스트 작성, 실제 K3s 적용 · 수집 확인 필요
 
 ## 결정
 - 스택은 Prometheus + Grafana 를 매니페스트로 직접 둔다. kube-prometheus-stack 은 operator 라는 층이 하나 더라 k3s 와 같이 배우면 막힌 곳을 가르기 어렵다. 옮겨도 PromQL · 대시보드는 그대로 쓴다
@@ -39,6 +39,8 @@ Status: active
 - **토큰 · 비용** — 지표로 두지 않는다. 사용량은 Provider 마다 모양이 다른 원문(`ProviderUsage.raw`)이고 비용은 Provider 가 직접 답할 때만 있다. `provider_calls` 에 쌓이는 원문으로 단가표 작업 때 계산한다
 
 ## Resume Point
+홈서버 monitoring 매니페스트는 `deploy/monitoring/` 에 준비했다. 서버에 적용하기 전 읽기 전용 DB 계정과 Grafana Secret 을 준비하고, 적용 후 세 scrape target 과 두 대시보드를 확인한다. 실제 서버 검증은 아직 하지 않았다.
+
 1단계 후속 — #62. #60 이 머지돼 #62 는 main 위로 다시 쌓아야 한다(지금은 옛 #60 커밋 위라 충돌 상태). Task 하나가 어디서 시간을 썼는지 지표 · DB · 로그로 남긴다.
 1. Task 시도 기록 — 새 테이블 없이 Task 행 안에 둔다. 모양(진행 중인 시도의 `started_at` + 끝난 시도의 `attempts jsonb`)은 **아직 확정 전**이다. 스키마라 확정한 뒤에 시작한다
 2. 시도 Timer(outcome 별, 재시도율은 `retried` 개수) · 보관 Timer, 둘 다 설명을 붙인다

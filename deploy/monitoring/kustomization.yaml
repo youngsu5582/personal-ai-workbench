@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: workbench
+
+resources:
+  - prometheus.yaml
+  - grafana.yaml
+  - node-exporter.yaml
+
+configMapGenerator:
+  - name: monitoring-prometheus-config
+    files: [prometheus.yml]
+  - name: monitoring-grafana-datasources
+    files: [datasources.yaml]
+  - name: monitoring-grafana-providers
+    files: [providers.yaml]
+  - name: monitoring-grafana-dashboards
+    files: [workbench.json, home-server.json]

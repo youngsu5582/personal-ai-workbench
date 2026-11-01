@@ -7,8 +7,49 @@ Personal AI Workbench 를 단일 노드 홈서버의 K3s 에 올리는 매니페
 | `base/` | 앱 하나: Deployment · Service · ServiceAccount | overlay 가 가져다 쓴다 |
 | `overlays/home/` | 이 홈서버에만 있는 것: Namespace · PostgreSQL · Garage · 버킷 CORS · Ingress · cloudflared · 이미지 digest | `kubectl apply -k deploy/overlays/home` |
 | `cluster/` | K3s 가 함께 띄우는 Traefik 의 설정. `kube-system` 에 있어서 overlay 와 따로 적용한다 | `kubectl apply -k deploy/cluster` |
+| `monitoring/` | Prometheus · Grafana · node-exporter. 홈 overlay 를 적용한 뒤 별도로 적용한다 | `kubectl apply -k deploy/monitoring` |
 
 서버에서는 kubeconfig 가 root 전용이라 `sudo k3s kubectl` 로 부른다.
+
+## 모니터링
+
+`monitoring/` 은 앱의 `/actuator/prometheus`, node-exporter, Kubernetes API 서버를 경유한 kubelet cAdvisor 지표를 수집한다. Grafana 의 **홈서버 자원** 대시보드에서 서버 CPU · 메모리 · 루트 디스크와 Pod CPU · 메모리를, **Workbench** 대시보드에서 Provider 와 작업 지표를 본다. Pod 재시작 횟수와 알림은 이 구성에 포함하지 않는다.
+
+먼저 `workbench` namespace 와 앱 · PostgreSQL 을 준비하고, Grafana DB 데이터소스에 쓸 **읽기 전용 계정**을 만든다. 아래는 DB 소유자 `workbench` 로 PostgreSQL 에 접속한 뒤 실행하는 예다. 암호는 `psql` 의 `\password` 프롬프트에 입력한다.
+
+```sql
+CREATE ROLE grafana_reader LOGIN;
+GRANT CONNECT ON DATABASE personal_ai_workbench TO grafana_reader;
+GRANT USAGE ON SCHEMA public TO grafana_reader;
+GRANT SELECT ON generation_job_tasks, generation_jobs, provider_calls TO grafana_reader;
+\password grafana_reader
+```
+
+Grafana 관리자 암호와 위 DB 계정을 `monitoring-grafana-credentials` Secret 으로 만든다. 아래 세 파일은 Git 밖에 만들고 권한을 제한하며, 사용 후 삭제한다. `db-user` 에는 `grafana_reader` 를 쓴다.
+
+```bash
+sudo k3s kubectl -n workbench create secret generic monitoring-grafana-credentials \
+  --from-file=admin-password=/안전한경로/admin-password \
+  --from-file=db-user=/안전한경로/db-user \
+  --from-file=db-password=/안전한경로/db-password
+sudo k3s kubectl diff -k deploy/monitoring
+sudo k3s kubectl apply -k deploy/monitoring
+sudo k3s kubectl -n workbench rollout status deployment/monitoring-prometheus
+sudo k3s kubectl -n workbench rollout status deployment/monitoring-grafana
+sudo k3s kubectl -n workbench rollout status daemonset/monitoring-node-exporter
+```
+
+Grafana 는 ClusterIP 만 사용한다. 서버에 SSH 로 접속할 수 있다면 포트 포워딩을 하고 SSH 터널로 로컬 `3000` 에 연결한다. Grafana 로그인은 `admin` 과 위 관리자 암호다.
+
+```bash
+sudo k3s kubectl -n workbench port-forward svc/monitoring-grafana 3000:3000
+```
+
+Prometheus 의 Targets 화면에서 `workbench`, `node`, `cadvisor` 가 UP 인지 확인한다. Grafana 에서 두 대시보드와 DB 데이터소스 연결도 확인한다. cAdvisor 는 API 서버를 통해 kubelet 에 접근하므로 Prometheus ServiceAccount 에 `nodes/proxy` 읽기 권한을 준다. 이 권한은 지표 경로만으로 제한되지 않으니 ServiceAccount 를 다른 용도로 쓰지 않는다.
+
+Prometheus 는 15일 또는 8GB 중 먼저 도달한 기준으로 오래된 블록을 정리한다. WAL 등은 크기 제한에 포함되지 않으므로 10Gi PVC 의 실제 사용량도 확인해야 한다. Grafana 는 별도 2Gi PVC 를 쓴다. K3s 기본 local-path 볼륨은 노드 장애에 대한 백업이 아니다.
+
+`monitoring/workbench.json` 은 `docker/grafana/dashboards/workbench.json` 의 배포용 사본이다. 원본을 고치면 사본도 갱신하고 두 파일을 함께 커밋한다. Kustomize 의 ConfigMap 이름이 바뀌어 재적용 시 Grafana 가 새 대시보드를 읽는다.
 
 ## 요청이 들어오는 길
 

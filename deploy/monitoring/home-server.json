@@ -1,0 +1,45 @@
+{
+  "uid": "home-server",
+  "title": "홈서버 자원",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {
+      "id": 1, "title": "서버 CPU 사용률", "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "targets": [{"refId": "A", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[5m])))", "legendFormat": "CPU"}]
+    },
+    {
+      "id": 2, "title": "서버 메모리 사용률", "type": "timeseries",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "targets": [{"refId": "A", "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node\"} / node_memory_MemTotal_bytes{job=\"node\"})", "legendFormat": "메모리"}]
+    },
+    {
+      "id": 3, "title": "루트 파일 시스템 여유 공간", "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []},
+      "targets": [{"refId": "A", "expr": "node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\"}", "legendFormat": "남은 공간"}]
+    },
+    {
+      "id": 4, "title": "Pod CPU 사용량", "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "cores", "min": 0}, "overrides": []},
+      "targets": [{"refId": "A", "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\",container!=\"\",container!=\"POD\",pod!=\"\"}[5m]))", "legendFormat": "{{namespace}} / {{pod}}"}]
+    },
+    {
+      "id": 5, "title": "Pod 메모리 사용량", "type": "timeseries",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []},
+      "targets": [{"refId": "A", "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{job=\"cadvisor\",container!=\"\",container!=\"POD\",pod!=\"\"})", "legendFormat": "{{namespace}} / {{pod}}"}]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://monitoring-prometheus:9090
+    isDefault: true
+  - name: Workbench DB
+    uid: workbench-db
+    type: grafana-postgresql-datasource
+    url: postgresql.workbench.svc:5432
+    user: $WORKBENCH_DB_USER
+    jsonData:
+      database: personal_ai_workbench
+      sslmode: disable
+      postgresVersion: 1600
+    secureJsonData:
+      password: $WORKBENCH_DB_PASSWORD
