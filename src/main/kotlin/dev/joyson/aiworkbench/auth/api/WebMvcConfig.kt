@@ -7,8 +7,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 @Configuration
 class WebMvcConfig(
     private val ownerContextArgumentResolver: OwnerContextArgumentResolver,
+    private val workspaceContextArgumentResolver: WorkspaceContextArgumentResolver,
 ) : WebMvcConfigurer {
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
         resolvers.add(ownerContextArgumentResolver)
+        resolvers.add(workspaceContextArgumentResolver)
     }
 }

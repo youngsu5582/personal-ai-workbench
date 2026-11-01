@@ -19,6 +19,14 @@ class WorkspaceService(private val repository: WorkspaceRepository) : WorkspaceR
         repository.save(Workspace(ownerUserUuid = ownerUuid, name = "기본 서비스", isDefault = true))
     }
 
+    @Transactional(readOnly = true)
+    override fun findOwnedUuid(ownerUuid: UUID, workspaceUuid: UUID): UUID? =
+        repository.findByUuidAndOwnerUserUuid(workspaceUuid, ownerUuid)?.uuid
+
+    @Transactional(readOnly = true)
+    override fun findDefaultUuid(ownerUuid: UUID): UUID? =
+        repository.findByOwnerUserUuidAndIsDefaultTrue(ownerUuid)?.uuid
+
     @Transactional
     fun create(owner: UUID, name: String): Workspace =
         repository.save(Workspace(ownerUserUuid = owner, name = name))
