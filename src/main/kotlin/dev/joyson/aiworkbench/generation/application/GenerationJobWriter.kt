@@ -34,8 +34,8 @@ class GenerationJobWriter(
         )
         // id 를 함께 남긴다. 종료 로그는 조회 없이 쓸 수 있는 식별자가 id 뿐이라, 이 줄이 둘을 잇는 유일한 지점이다.
         log.info(
-            "job 을 접수했다. id={} uuid={} type={} model={} 작업={}건",
-            job.id, job.uuid, job.option.type, job.model, command.taskCount,
+            "job 을 접수했다. id={} uuid={} ownerUuid={} workspaceUuid={} type={} model={} 작업={}건",
+            job.id, job.uuid, job.ownerUserUuid, job.workspaceUuid, job.option.type, job.model, command.taskCount,
         )
         // `0..n` 은 끝을 포함해 n+1 개가 된다. Task 하나가 곧 Provider 호출 한 번이라 그 차이가 그대로 과금이 된다.
         val taskList = List(command.taskCount) { sequence ->

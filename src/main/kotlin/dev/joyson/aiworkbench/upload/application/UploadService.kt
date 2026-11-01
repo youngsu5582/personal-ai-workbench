@@ -43,15 +43,15 @@ class UploadService(
     }
 
     private fun reuse(file: UploadedFile): UploadUrl {
-        log.info("검증된 같은 파일을 재사용한다. sha256={} ownerUuid={}", file.sha256, file.ownerUserUuid)
+        log.info("검증된 같은 파일을 재사용한다. sha256={} ownerUuid={} workspaceUuid={}", file.sha256, file.ownerUserUuid, file.workspaceUuid)
         return UploadUrl(file.sha256, null)
     }
 
     /** 공식 클라이언트는 서버와 같은 규칙으로 형식을 선언해 여기 오지 않는다. 오면 규칙이 어긋났거나 다른 소비자다. */
     private fun reject(file: UploadedFile, spec: UploadSpec): Nothing {
         log.warn(
-            "거절된 파일을 다시 발급하려 했다. sha256={} ownerUuid={} rejected={} requested={}",
-            file.sha256, file.ownerUserUuid, file.metadata.mimeType, spec.contentType,
+            "거절된 파일을 다시 발급하려 했다. sha256={} ownerUuid={} workspaceUuid={} rejected={} requested={}",
+            file.sha256, file.ownerUserUuid, file.workspaceUuid, file.metadata.mimeType, spec.contentType,
         )
         throw InvalidUploadException(
             "내용이 선언한 형식과 달라 거절된 파일이다. 형식은 확장자가 아니라 파일 앞부분으로 정해야 하며, 같은 내용은 다시 올릴 수 없다",
@@ -77,8 +77,8 @@ class UploadService(
         }
         val url = issuer.issueUpload(file.storageKey, spec.contentType, spec.contentLength, spec.digest)
         log.info(
-            "업로드 주소를 발급했다. sha256={} ownerUuid={} type={} bytes={}",
-            file.sha256, file.ownerUserUuid, spec.contentType, spec.contentLength,
+            "업로드 주소를 발급했다. sha256={} ownerUuid={} workspaceUuid={} type={} bytes={}",
+            file.sha256, file.ownerUserUuid, file.workspaceUuid, spec.contentType, spec.contentLength,
         )
         return UploadUrl(file.sha256, url)
     }

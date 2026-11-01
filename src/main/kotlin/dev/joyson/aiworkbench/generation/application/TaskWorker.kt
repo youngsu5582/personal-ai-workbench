@@ -85,7 +85,7 @@ class TaskWorker(
             return
         }
 
-        log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
+        log.info("task 를 처리한다. uuid={} jobUuid={} workspaceUuid={} model={} 시도={}", task.uuid, job.uuid, job.workspaceUuid, job.model, task.attemptCount)
 
         val processMark = TimeSource.Monotonic.markNow()
 
@@ -120,7 +120,7 @@ class TaskWorker(
             return
         }
 
-        log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
+        log.info("task 를 처리한다. uuid={} jobUuid={} workspaceUuid={} model={} 시도={}", task.uuid, job.uuid, job.workspaceUuid, job.model, task.attemptCount)
 
         val processMark = TimeSource.Monotonic.markNow()
         val request = ProviderRequestMapper.from(option)
@@ -168,7 +168,7 @@ class TaskWorker(
             return
         }
 
-        log.info("task 를 처리한다. uuid={} model={} 시도={}", task.uuid, job.model, task.attemptCount)
+        log.info("task 를 처리한다. uuid={} jobUuid={} workspaceUuid={} model={} 시도={}", task.uuid, job.uuid, job.workspaceUuid, job.model, task.attemptCount)
 
         val processMark = TimeSource.Monotonic.markNow()
         val response = callWithInputs(taskId, task, job) { images -> callDecision(job, task, provider, option, images) } ?: return

@@ -68,13 +68,13 @@ class DefaultUploadedFiles(
         }
 
         log.info(
-            "업로드를 검증했다. sha256={} status={} declared={}/{} actual={}/{}",
-            file.sha256, next, file.metadata.mimeType, file.metadata.fileSize, detected, leading.totalSize,
+            "업로드를 검증했다. sha256={} workspaceUuid={} status={} declared={}/{} actual={}/{}",
+            file.sha256, file.workspaceUuid, next, file.metadata.mimeType, file.metadata.fileSize, detected, leading.totalSize,
         )
         if (next == UploadStatus.REJECTED) {
             // 옮기는 데 이긴 쪽만 지운다. 지우지 못해도 REJECTED 라 이 객체를 읽을 길이 없어, 검증을 실패로 돌리지 않는다.
             runCatching { fileStorage.delete(file.storageKey) }
-                .onFailure { log.warn("불합격한 업로드를 지우지 못했다. sha256={}", file.sha256, it) }
+                .onFailure { log.warn("불합격한 업로드를 지우지 못했다. sha256={} workspaceUuid={}", file.sha256, file.workspaceUuid, it) }
         }
         return next
     }
