@@ -25,8 +25,7 @@ class OpenAIDecisionProvider(
 
     override val name: String = OpenAIFailures.PROVIDER_NAME
 
-    /** 사실 질의다. 모르는 모델이면 예외가 아니라 false. */
-    override fun supports(model: String): Boolean = OpenAIDecisionModel.find(model) != null
+    override val models: Set<String> = OpenAIDecisionModel.entries.map { it.modelName }.toSet()
 
     override fun decide(
         model: String,

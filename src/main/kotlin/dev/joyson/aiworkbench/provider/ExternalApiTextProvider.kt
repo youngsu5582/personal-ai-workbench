@@ -17,7 +17,9 @@ interface ExternalApiTextProvider {
     val name: String
 
     /** 이 모델로 글을 만들 수 있는가. 사실 질의라 모르는 모델이면 예외가 아니라 false 다. */
-    fun supports(model: String): Boolean
+    val models: Set<String>
+
+    fun supports(model: String): Boolean = model in models
 
     /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.

@@ -328,6 +328,22 @@ S3 호환 보관소에서는 워커가 실행·재시도마다 새 presigned GET
 Provider로 직접 이동하며, URL은 Job 옵션에 저장하거나 로그에 출력하지 않는다.
 URL 발급자가 없는 로컬 저장소에서는 앱이 바이트를 읽어 기존 multipart 전송을 사용한다.
 
+## 모델 목록 조회
+
+생성 화면은 인증 후 작업 종류별 모델을 조회하고, 응답의 `id`를 생성 요청의 `model`에 넣는다.
+
+```http
+GET /api/models?type=image-generate
+Authorization: Bearer <token>
+```
+
+```json
+{"models":[{"id":"gpt-image-2","provider":"openai"}]}
+```
+
+`type`은 `image-generate`, `text-generate`, `decision` 중 하나이며 필수다. 등록된 어댑터가 없으면 빈 목록이다.
+이 목록은 서버 설정과 어댑터가 다루는 모델을 나타내며, 외부 계정 권한이나 실시간 호출 성공을 보장하지 않는다.
+
 ## 텍스트 생성
 
 글을 만든다. 요청 종류는 `"type": "text-generate"` 하나이고, `output` 을 빼면 형식 없는 글을,

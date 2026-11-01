@@ -31,7 +31,9 @@ interface ExternalApiProvider {
      * 요청은 "무엇을 만들까" 이고 모델은 "무엇으로 만들까" 다. 같은 요청을 다른 모델로
      * 다시 돌리는 일이 생기는데, 모델이 요청 안에 있으면 요청을 복제해야 한다.
      */
-    fun supports(model: String): Boolean
+    val models: Set<String>
+
+    fun supports(model: String): Boolean = model in models
 
     /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.
