@@ -21,10 +21,11 @@ class UploadedFileWriter(
 ) {
     /** 같은 소유자·해시가 이미 있으면 유니크 제약에 걸린다. */
     @Transactional
-    fun create(owner: UUID, key: String, spec: UploadSpec): UploadedFile =
+    fun create(owner: UUID, workspaceUuid: UUID, key: String, spec: UploadSpec): UploadedFile =
         uploadedFileRepository.save(
             UploadedFile(
                 ownerUserUuid = owner,
+                workspaceUuid = workspaceUuid,
                 sha256 = spec.digest.hex,
                 storageKey = key,
                 metadata = UploadedFileMetadata(mimeType = spec.contentType, fileSize = spec.contentLength),

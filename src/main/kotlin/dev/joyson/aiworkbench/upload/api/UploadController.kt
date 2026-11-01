@@ -1,6 +1,6 @@
 package dev.joyson.aiworkbench.upload.api
 
-import dev.joyson.aiworkbench.ownership.OwnerContext
+import dev.joyson.aiworkbench.ownership.WorkspaceContext
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.upload.application.UploadService
 import dev.joyson.aiworkbench.upload.domain.UploadSpec
@@ -25,9 +25,9 @@ class UploadController(
     private val uploadService: UploadService,
 ) {
     @PostMapping
-    fun issue(owner: OwnerContext, @Valid @RequestBody request: UploadRequest): ResponseEntity<*> {
+    fun issue(scope: WorkspaceContext, @Valid @RequestBody request: UploadRequest): ResponseEntity<*> {
         val spec = request.toSpec()
-        val upload = uploadService.issue(owner.uuid, spec)
+        val upload = uploadService.issue(scope.owner.uuid, scope.workspaceUuid, spec)
             ?: return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(
                 ProblemDetail.forStatusAndDetail(HttpStatus.NOT_IMPLEMENTED, "현재 보관소는 직접 업로드를 지원하지 않는다"),
             )

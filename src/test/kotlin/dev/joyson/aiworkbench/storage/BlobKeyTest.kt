@@ -17,7 +17,7 @@ class BlobKeyTest {
     @Test
     fun `소유자로 가르고 내용으로 자리를 정한다`() {
         assertEquals(
-            "users/$owner/blobs/ba/78/" +
+            "workspaces/$owner/blobs/ba/78/" +
                 "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.png",
             BlobKey.of(owner, digest, "image/png").value,
         )

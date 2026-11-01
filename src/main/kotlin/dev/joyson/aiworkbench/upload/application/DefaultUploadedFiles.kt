@@ -28,23 +28,23 @@ class DefaultUploadedFiles(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload? {
-        val file = uploadedFileRepository.findByOwnerUserUuidAndSha256(ownerUuid, sha256) ?: return null
+    override fun findUsable(sha256: String, workspaceUuid: UUID): UsableUpload? {
+        val file = uploadedFileRepository.findByWorkspaceUuidAndSha256(workspaceUuid, sha256) ?: return null
         return if (verify(file) == UploadStatus.READY) file.toUsable() else null
     }
 
-    override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI? {
+    override fun issueReadUrl(sha256: String, workspaceUuid: UUID, fileName: String): URI? {
         val issuer = presignedUrlIssuer ?: return null
-        val file = findReady(sha256, ownerUuid) ?: return null
+        val file = findReady(sha256, workspaceUuid) ?: return null
         return issuer.issue(file.storageKey, fileName)
     }
 
-    override fun readContent(sha256: String, ownerUuid: UUID): ByteArray? =
-        findReady(sha256, ownerUuid)?.let { fileStorage.read(it.storageKey) }
+    override fun readContent(sha256: String, workspaceUuid: UUID): ByteArray? =
+        findReady(sha256, workspaceUuid)?.let { fileStorage.read(it.storageKey) }
 
     /** 검증을 통과한 것만 내준다. 검증 전 객체에는 어떤 경로로도 닿지 않게 한다. */
-    private fun findReady(sha256: String, ownerUuid: UUID): UploadedFile? =
-        uploadedFileRepository.findByOwnerUserUuidAndSha256(ownerUuid, sha256)
+    private fun findReady(sha256: String, workspaceUuid: UUID): UploadedFile? =
+        uploadedFileRepository.findByWorkspaceUuidAndSha256(workspaceUuid, sha256)
             ?.takeIf { it.status == UploadStatus.READY }
 
     /**
@@ -64,7 +64,7 @@ class DefaultUploadedFiles(
 
         if (!uploadedFileWriter.settle(requireNotNull(file.id), next)) {
             // 다른 요청이 먼저 정했다. 그쪽 검증을 따른다.
-            return requireNotNull(uploadedFileRepository.findByOwnerUserUuidAndSha256(file.ownerUserUuid, file.sha256)).status
+            return requireNotNull(uploadedFileRepository.findByWorkspaceUuidAndSha256(file.workspaceUuid, file.sha256)).status
         }
 
         log.info(
