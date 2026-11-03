@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
+import dev.joyson.aiworkbench.generation.application.InvalidTemplateVariablesException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
 import dev.joyson.aiworkbench.storage.FileStorageException
 import org.slf4j.LoggerFactory
@@ -18,10 +19,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
  * 전역이 아니라 **이 컨트롤러에만** 건다. 전역으로 두면 다른 모듈의 예외까지 말없이 가로채,
  * 모듈 경계를 세워둔 의미가 응답 처리에서 무너진다.
  */
-@RestControllerAdvice(assignableTypes = [GenerationJobController::class])
+@RestControllerAdvice(assignableTypes = [GenerationJobController::class, GenerationTemplateController::class])
 class GenerationApiExceptionHandler {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @ExceptionHandler(InvalidTemplateVariablesException::class)
+    fun handleInvalidVariables(e: InvalidTemplateVariablesException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.message)
 
     /** 다시 보낸다고 달라지지 않으므로 4xx 다. */
     @ExceptionHandler(UnsupportedModelException::class)
