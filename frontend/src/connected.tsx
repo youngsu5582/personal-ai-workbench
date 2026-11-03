@@ -107,15 +107,28 @@ export function UsagePanel({
 }) {
   const [total, setTotal] = useState(false);
   const { value, error } = useLoad(
-    () => request<Usage>(token, total ? "/api/usage/total" : "/api/usage", total ? undefined : workspace),
+    () =>
+      request<Usage>(
+        token,
+        total ? "/api/usage/total" : "/api/usage",
+        total ? undefined : workspace,
+      ),
     [token, workspace, total],
   );
   return (
     <section className="panel">
       <h2>이번 달 사용량</h2>
       <div className="tabs" role="tablist" aria-label="사용량 범위">
-        <button role="tab" aria-selected={!total} onClick={() => setTotal(false)}>현재 서비스</button>
-        <button role="tab" aria-selected={total} onClick={() => setTotal(true)}>전체 서비스</button>
+        <button
+          role="tab"
+          aria-selected={!total}
+          onClick={() => setTotal(false)}
+        >
+          현재 서비스
+        </button>
+        <button role="tab" aria-selected={total} onClick={() => setTotal(true)}>
+          전체 서비스
+        </button>
       </div>
       {error ? (
         <p role="alert">{error}</p>
@@ -308,9 +321,19 @@ export function StudioPanel({ token, workspace }: Context) {
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("gpt-image-2");
   const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState("");
   const [busy, setBusy] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [fail, setFail] = useState("");
+  useEffect(() => {
+    if (!file) {
+      setFilePreview("");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   useEffect(() => {
     setJob(null);
     setFile(null);
@@ -424,6 +447,20 @@ export function StudioPanel({ token, workspace }: Context) {
               accept="image/png,image/jpeg,image/webp"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
+            {filePreview && (
+              <img
+                src={filePreview}
+                alt="선택한 참고 이미지 미리보기"
+                style={{
+                  display: "block",
+                  maxWidth: "100%",
+                  maxHeight: 240,
+                  objectFit: "contain",
+                  borderRadius: 8,
+                  marginTop: 12,
+                }}
+              />
+            )}
           </label>
         )}
         <button className="button primary" disabled={busy}>
@@ -461,6 +498,12 @@ export function StudioPanel({ token, workspace }: Context) {
                     token={token}
                     workspace={workspace}
                     url={f.url}
+                    previewUrl={f.previewUrl}
+                    onRefresh={() =>
+                      request<Job>(token, `/api/jobs/${job.uuid}`, workspace)
+                        .then(setJob)
+                        .catch((e) => setFail(errorText(e)))
+                    }
                   />
                 ))}
               </div>
@@ -475,10 +518,19 @@ function AuthenticatedImage({
   token,
   workspace,
   url,
-}: Context & { url: string }) {
+  previewUrl,
+  onRefresh,
+}: Context & {
+  url: string;
+  previewUrl: string | null;
+  onRefresh: () => void;
+}) {
   const [src, setSrc] = useState("");
   const [fail, setFail] = useState("");
   useEffect(() => {
+    setFail("");
+    setSrc("");
+    if (previewUrl) return;
     let live = true;
     let objectUrl = "";
     fetch(url, {
@@ -504,9 +556,28 @@ function AuthenticatedImage({
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [token, workspace, url]);
+  }, [token, workspace, url, previewUrl]);
   return fail ? (
-    <p role="alert">{fail}</p>
+    <div>
+      <p role="alert">{fail}</p>
+      <button
+        type="button"
+        className="button"
+        onClick={() => {
+          setFail("");
+          onRefresh();
+        }}
+      >
+        다시 조회
+      </button>
+    </div>
+  ) : previewUrl ? (
+    <img
+      src={previewUrl}
+      alt="생성된 이미지"
+      style={{ maxWidth: "100%" }}
+      onError={() => setFail("이미지를 불러오지 못했어요. 다시 조회해 주세요.")}
+    />
   ) : src ? (
     <img src={src} alt="생성된 이미지" style={{ maxWidth: "100%" }} />
   ) : (
