@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import "./style.css";
+import "./console-panels.css";
 
 type Page =
   "home" | "studio" | "library" | "usage" | "services" | "keys" | "settings";
@@ -188,7 +189,9 @@ function App() {
                 </div>
                 <div className="stat">
                   <span>이번 달 사용량</span>
-                  <button className="link" onClick={() => go("usage")}>사용량 보기</button>
+                  <button className="link" onClick={() => go("usage")}>
+                    사용량 보기
+                  </button>
                   <small>선택한 서비스의 사용량</small>
                 </div>
                 <div className="stat">
@@ -225,7 +228,7 @@ function App() {
                     action="자세히 보기"
                     onClick={() => go("usage")}
                   />
-                  <UsagePanel token={token} workspace={workspace} />
+                  <UsagePanel key={workspace} token={token} workspace={workspace} />
                 </div>
               </div>
             </>
@@ -273,7 +276,7 @@ function App() {
                 title="사용량"
                 desc="서비스별 AI 사용량과 비용을 살펴보세요."
               />
-              {workspace && <UsagePanel token={token} workspace={workspace} />}
+              {workspace && <UsagePanel key={workspace} token={token} workspace={workspace} />}
             </>
           )}
           {page === "services" && (
@@ -285,6 +288,8 @@ function App() {
               />
               <ServicesPanel
                 token={token}
+                selected={workspace}
+                onSelect={onSelect}
                 onChange={() => setServiceVersion((x) => x + 1)}
               />
             </>
@@ -329,7 +334,15 @@ function App() {
                 <p className="subtle">
                   <Activity size={15} /> 현재 로그인은 새로고침하면 만료돼요.
                 </p>
-                <button className="button" onClick={() => { setToken(""); setWorkspace(""); }}>로그아웃</button>
+                <button
+                  className="button"
+                  onClick={() => {
+                    setToken("");
+                    setWorkspace("");
+                  }}
+                >
+                  로그아웃
+                </button>
               </section>
             </>
           )}
