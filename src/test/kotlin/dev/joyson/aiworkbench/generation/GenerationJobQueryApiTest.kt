@@ -253,6 +253,51 @@ class GenerationJobQueryApiTest @Autowired constructor(
         }
     }
 
+    @Test
+    fun `목록 항목은 요청과 결과물을 상세와 같은 모양으로 담는다`() {
+        val token = tokenOf("list-joined-owner")
+        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
+
+        mockMvc.get("/api/jobs") { header("Authorization", "Bearer $token") }.andExpect {
+            status { isOk() }
+            jsonPath("$.items[0].uuid") { value(jobUuid) }
+            jsonPath("$.items[0].type") { value("image-generate") }
+            jsonPath("$.items[0].taskCount") { value(2) }
+            jsonPath("$.items[0].option.prompt") { value("고양이") }
+            jsonPath("$.items[0].progress.succeeded") { value(1) }
+            jsonPath("$.items[0].progress.failed") { value(1) }
+            jsonPath("$.items[0].tasks[0].files[0].url") { exists() }
+            jsonPath("$.items[0].tasks[1].failureReason") { value("rate limit") }
+            // 참조 없이 글만으로 만든 요청이다. null 이 아니라 빈 목록이다.
+            jsonPath("$.items[0].inputs.length()") { value(0) }
+        }
+    }
+
+    @Test
+    fun `결과물을 참조한 요청은 입력 파일을 해시 조회 주소와 함께 준다`() {
+        val token = tokenOf("inputs-owner")
+        val (sourceJob, _) = jobWithOneSuccessAndOneFailure(token)
+        val sha256 = fileUrlOf(sourceJob, token).substringAfterLast('/')
+        val option = """{"type":"image-generate","prompt":"배경만 바꿔","size":{"type":"ratio","ratio":"1:1","resolution":"1k"},""" +
+            """"sources":[{"type":"generated","sha256":"$sha256"}]}"""
+        val jobUuid = submit(token, taskCount = 1, option = option)
+
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.inputs.length()") { value(1) }
+            jsonPath("$.inputs[0].source.type") { value("generated") }
+            jsonPath("$.inputs[0].source.sha256") { value(sha256) }
+            jsonPath("$.inputs[0].url") { value("/api/files/$sha256") }
+            // 테스트 보관소는 서명할 수 없다. 받는 쪽은 url 로 그린다.
+            jsonPath("$.inputs[0].previewUrl") { doesNotExist() }
+        }
+        mockMvc.get("/api/jobs") { header("Authorization", "Bearer $token") }.andExpect {
+            jsonPath("$.items[0].uuid") { value(jobUuid) }
+            jsonPath("$.items[0].inputs[0].source.sha256") { value(sha256) }
+            jsonPath("$.items[1].inputs.length()") { value(0) }
+        }
+    }
+
     /** 워커가 꺼져 있어 성공을 직접 옮기고 글을 넣는다. 워커가 쓰는 것과 같은 모양이다. */
     private fun textJobAnswered(token: String, option: String, content: String): String {
         val jobUuid = submit(token, taskCount = 1, option = option, model = FAKE_TEXT_MODEL)

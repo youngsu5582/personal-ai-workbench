@@ -2,11 +2,10 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
 import dev.joyson.aiworkbench.generation.domain.MimeTypes
-import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
-import dev.joyson.aiworkbench.generation.domain.option.ImageOption
-import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.generation.domain.option.fileSources
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
@@ -51,11 +50,36 @@ class FileSourceResolver(
      * [inline] 이면 주소를 발급할 수 있어도 바이트로 싣는다 — 받는 쪽이 주소를 받아가지 못했을 때 다시 보내는 길이다.
      * 참조가 없으면 빈 목록이다 — 읽을 것이 없지, 못 읽은 것이 아니다.
      */
-    fun resolve(workspaceUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> = when (option) {
-        is ImageOption -> option.sources.map { prepare(it, workspaceUuid, inline) }
-        // 입력 파일을 받지 않는 종류다.
-        is TextGenerateOption -> emptyList()
-        is DecisionOption -> option.sources.map { prepare(it, workspaceUuid, inline) }
+    fun resolve(workspaceUuid: UUID, option: GenerationOption, inline: Boolean = false): List<ResolvedFile> =
+        option.fileSources().map { prepare(it, workspaceUuid, inline) }
+
+    /**
+     * 조회 화면에 입력 파일을 그릴 읽기 주소. 서명할 수 없거나 찾지 못한 참조는 담기지 않는다.
+     *
+     * 종류마다 한 번씩만 묻는다 — 목록 한 페이지의 참조를 모아 넘기면 장수가 늘어도 쿼리는 늘지 않는다.
+     * 보관소를 읽지 않으므로 트랜잭션 안에서 불러도 된다.
+     */
+    fun issuePreviewUrls(sources: Collection<FileSource>, workspaceUuid: UUID): Map<FileSource, URI> {
+        val distinct = sources.toSet()
+        val generated = generatedPreviewUrls(distinct.filterIsInstance<FileSource.Generated>(), workspaceUuid)
+        val uploaded = uploadedFiles.issueReadUrls(
+            distinct.filterIsInstance<FileSource.Uploaded>().map { it.sha256 },
+            workspaceUuid,
+        )
+        return distinct.mapNotNull { source ->
+            // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
+            val url = when (source) {
+                is FileSource.Generated -> generated[source.sha256]
+                is FileSource.Uploaded -> uploaded[source.sha256]
+            }
+            url?.let { source to it }
+        }.toMap()
+    }
+
+    private fun generatedPreviewUrls(sources: List<FileSource.Generated>, workspaceUuid: UUID): Map<String, URI> {
+        val issuer = presignedUrlIssuer ?: return emptyMap()
+        return generatedFileFinder.findOwned(sources.map { it.sha256 }, workspaceUuid)
+            .mapValues { (sha256, location) -> issuer.issue(location.storageKey, downloadFileNameOf(sha256, location.mimeType)) }
     }
 
     private fun prepare(source: FileSource, workspaceUuid: UUID, inline: Boolean): ResolvedFile = when (source) {

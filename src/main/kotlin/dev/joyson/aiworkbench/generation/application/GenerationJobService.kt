@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
@@ -10,6 +11,7 @@ import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.generation.domain.option.fileSources
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -41,14 +43,14 @@ class GenerationJobService(
     private val presignedUrlIssuer: PresignedUrlIssuer?,
 ) {
 
-    /** 선택한 서비스의 작업을 최신 접수순으로 조회한다. */
+    /**
+     * 선택한 서비스의 작업을 최신 접수순으로 조회한다. 항목은 [findOwned] 와 같은 모양이다 —
+     * 요청 · 입력 파일 · 결과물을 함께 담아, 받는 쪽이 항목마다 상세를 다시 묻지 않는다.
+     */
     @Transactional(readOnly = true)
     fun listOwned(workspaceUuid: UUID, page: Int, size: Int): JobListView {
         val jobs = generationJobRepository.findByWorkspaceUuidOrderByIdDesc(workspaceUuid, PageRequest.of(page, size))
-        return JobListView(
-            items = jobs.content.map { JobSummaryView(it.uuid, it.status, it.model, it.option.type, it.createdAt, it.taskCount) },
-            hasNext = jobs.hasNext(),
-        )
+        return JobListView(items = assemble(jobs.content, workspaceUuid), hasNext = jobs.hasNext())
     }
 
     /**
@@ -90,28 +92,45 @@ class GenerationJobService(
             ?.takeIf { it.isOwnedBy(workspaceUuid) }
             ?: return null
 
-        // Task 는 Job 당 최대 MAX_TASK_COUNT 개라 그대로 가져와 센다.
-        // 집계 쿼리를 따로 두면 쿼리는 하나 줄지만, 같은 결과에서 파일 목록을 만들 수 없다.
-        val tasks = generationJobTaskRepository.findAllByJobIdOrderBySequence(requireNotNull(job.id))
+        return assemble(listOf(job), workspaceUuid).single()
+    }
 
-        // Task 마다 한 번씩 묻지 않는다. Task 가 넷이면 쿼리도 넷이 된다.
+    /**
+     * Job 들에 Task · 결과물 · 입력 파일을 붙인다. 모두 **종류마다 한 번씩** 묻는다 —
+     * Job 이나 Task 마다 묻으면 목록 한 페이지에 쿼리가 수십 개가 된다.
+     *
+     * Task 는 Job 당 최대 MAX_TASK_COUNT 개라 그대로 가져와 센다.
+     * 집계 쿼리를 따로 두면 쿼리는 하나 줄지만, 같은 결과에서 파일 목록을 만들 수 없다.
+     */
+    private fun assemble(jobs: List<GenerationJob>, workspaceUuid: UUID): List<GenerationJobView> {
+        if (jobs.isEmpty()) return emptyList()
+
+        val tasks = generationJobTaskRepository.findAllByJobIdInOrderBySequence(jobs.mapNotNull { it.id })
+        val tasksByJobId = tasks.groupBy { it.jobId }
+
         val taskIds = tasks.mapNotNull { it.id }
         val filesByTaskId = generatedFileRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
         // 종류로 가려 한쪽만 묻지 않는다. 쿼리 하나를 아끼려고 종류마다 분기를 두면, 종류가 늘 때 고칠 곳이 하나 더 생긴다.
         val textsByTaskId = generatedTextRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
         val decisionsByTaskId = generatedDecisionRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
 
-        return job.toView(
-            progress = GenerationJobProgress.of(job.taskCount, tasks),
-            tasks = tasks.map {
-                it.toView(
-                    filesByTaskId[it.id].orEmpty(),
-                    presignedUrlIssuer,
-                    textsByTaskId[it.id].orEmpty(),
-                    decisionsByTaskId[it.id].orEmpty(),
-                )
-            },
-        )
+        val previewUrls = fileSourceResolver.issuePreviewUrls(jobs.flatMap { it.option.fileSources() }, workspaceUuid)
+
+        return jobs.map { job ->
+            val jobTasks = tasksByJobId[job.id].orEmpty()
+            job.toView(
+                progress = GenerationJobProgress.of(job.taskCount, jobTasks),
+                tasks = jobTasks.map {
+                    it.toView(
+                        filesByTaskId[it.id].orEmpty(),
+                        presignedUrlIssuer,
+                        textsByTaskId[it.id].orEmpty(),
+                        decisionsByTaskId[it.id].orEmpty(),
+                    )
+                },
+                inputs = job.option.fileSources().map { InputFileView(it, previewUrls[it]?.toString()) },
+            )
+        }
     }
 
     /**
@@ -126,14 +145,7 @@ class GenerationJobService(
      * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
      */
     private fun requireOwnedSources(workspaceUuid: UUID, option: GenerationOption) {
-        val sources = when (option) {
-            // 종류가 늘면 이 when 이 컴파일 에러로 알려준다.
-            is ImageOption -> option.sources
-            is TextGenerateOption -> return
-            is DecisionOption -> option.sources
-        }
-
-        sources.firstOrNull { !fileSourceResolver.isUsable(it, workspaceUuid) }
+        option.fileSources().firstOrNull { !fileSourceResolver.isUsable(it, workspaceUuid) }
             ?.let { throw UnknownFileSourceException(it.sha256) }
     }
 }

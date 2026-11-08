@@ -9,24 +9,15 @@ import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
-import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
+import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import java.time.Instant
 import java.util.*
 
-data class JobListView(val items: List<JobSummaryView>, val hasNext: Boolean)
-
-data class JobSummaryView(
-    val uuid: UUID,
-    val status: JobLifecycle,
-    val model: String,
-    val type: GenerationJobType,
-    val createdAt: Instant,
-    val taskCount: Int,
-)
+data class JobListView(val items: List<GenerationJobView>, val hasNext: Boolean)
 
 data class GenerationJobView(
     val uuid: UUID,
@@ -34,6 +25,7 @@ data class GenerationJobView(
     val model: String,
     val option: GenerationOption,
     val createdAt: Instant,
+    val taskCount: Int,
     val progress: GenerationJobProgress,
     /**
      * 결과물을 **자리째** 보여준다.
@@ -42,6 +34,20 @@ data class GenerationJobView(
      * 받는 쪽이 알 수 없다. 집계([progress])는 "끝났나" 를, 이 목록은 "무엇이 나왔나" 를 답한다.
      */
     val tasks: List<GenerationJobTaskView>,
+    /** 요청이 참조한 파일. [option] 에 적힌 순서 그대로고, 참조가 없는 종류면 빈 목록이다. */
+    val inputs: List<InputFileView> = emptyList(),
+)
+
+/**
+ * 요청이 참조한 파일 하나. 참조([source])는 저장된 그대로고, 그릴 주소만 조회할 때 붙인다.
+ *
+ * 주소를 요청에 저장하지 않는 이유: 서명 주소는 곧 만료되고 그 자체가 읽기 권한이다.
+ * 보관소 키는 그 파일을 가진 모듈의 사정이라, 저장하면 키 규칙이 바뀔 때 고칠 수 없는 사본이 남는다.
+ */
+data class InputFileView(
+    val source: FileSource,
+    /** 바로 그릴 주소. 서명할 수 없거나 찾지 못하면 `null`. 수명이 짧다. */
+    val previewUrl: String?,
 )
 
 /**
@@ -135,12 +141,15 @@ internal fun GenerationJobTask.toView(
 internal fun GenerationJob.toView(
     progress: GenerationJobProgress,
     tasks: List<GenerationJobTaskView> = emptyList(),
+    inputs: List<InputFileView> = emptyList(),
 ): GenerationJobView = GenerationJobView(
     uuid = uuid,
     status = status,
     model = model,
     option = option,
     createdAt = createdAt,
+    taskCount = taskCount,
     progress = progress,
     tasks = tasks,
+    inputs = inputs,
 )
