@@ -32,7 +32,8 @@ test("서비스별로 템플릿을 만들고 실행 결과를 확인한다", asy
   await page.getByRole("button", { name: "새로고침" }).click();
   await expect(page.getByText("테스트 생성 결과")).toBeVisible();
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
-  await page.getByLabel("서비스 선택").selectOption(process.env.WB_E2E_OTHER_WORKSPACE!);
+  await page.getByRole("combobox", { name: "서비스 선택" }).click();
+  await page.getByRole("option", { name: /^다른 서비스/ }).click();
   await expect(page.getByText("아직 템플릿이 없어요")).toBeVisible();
   const otherService = await context.request.get(`/api/templates/${template.uuid}`, { headers: {
     Authorization: `Bearer ${token}`, "X-Workspace-Id": process.env.WB_E2E_OTHER_WORKSPACE!,

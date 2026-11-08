@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
+/** 사이드바의 서비스 전환(목록 선택)에서 이름으로 고른다. */
+async function pickService(page: import("@playwright/test").Page, name: RegExp) {
+  await page.getByRole("combobox", { name: "서비스 선택" }).click();
+  await page.getByRole("option", { name }).click();
+}
+
 const services = [
   { uuid: "workspace-a", name: "첫 서비스", isDefault: true },
   { uuid: "workspace-b", name: "둘째 서비스", isDefault: false },
@@ -34,7 +40,7 @@ test("최근 작업 상세를 보고 서비스를 전환하면 이전 결과가 
   await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
   await expect(page.getByText("첫 서비스의 결과")).toBeVisible();
   await expect(page.getByText("예시 요청", { exact: true })).toBeVisible();
-  await page.getByLabel("서비스 선택").selectOption("workspace-b");
+  await pickService(page, /^둘째 서비스/);
   await expect(page.getByText("작업 내역이 없어요")).toBeVisible();
   await expect(page.getByText("첫 서비스의 결과")).toHaveCount(0);
 });

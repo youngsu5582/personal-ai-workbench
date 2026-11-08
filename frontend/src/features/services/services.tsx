@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowLeft, ArrowRight, Box, ChevronDown, Layers3, Plus } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, Box, Layers3, Plus } from "lucide-react";
 import { request, type Service } from "../../api";
-import { errorText, serviceTone, useLoad } from "../../shared/console-utils";
+import { errorText, useLoad } from "../../shared/console-utils";
+import { Avatar } from "../../shared/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../shared/ui/select";
 import { UsagePanel } from "../usage/usage";
 
 function ServiceAvatar({
@@ -11,16 +13,10 @@ function ServiceAvatar({
   service?: Service;
   size?: "normal" | "large";
 }) {
-  const name = service?.name?.trim() || "서비스";
-  return (
-    <span
-      aria-hidden="true"
-      className={`service-avatar tone-${serviceTone(service?.uuid || "default")} ${size === "large" ? "large" : ""}`}
-    >
-      {Array.from(name)[0].toUpperCase()}
-    </span>
-  );
+  return <Avatar label={service?.name?.trim() || "서비스"} seed={service?.uuid || "default"} size={size === "large" ? "lg" : "md"} />;
 }
+
+/** 사이드바의 서비스 전환. 고른 서비스가 목록에 없으면(삭제 · 첫 진입) 기본 서비스로 옮긴다. */
 export function ServicePicker({
   token,
   selected,
@@ -41,27 +37,25 @@ export function ServicePicker({
   const current = value?.find((s) => s.uuid === selected);
   return (
     <>
-      <label className="workspace-picker">
-        <ServiceAvatar service={current} />
-        <span className="workspace-picker-content">
-          <span className="workspace-picker-label">현재 서비스</span>
-          <select
-            aria-label="서비스 선택"
-            value={selected}
-            onChange={(e) => onSelect(e.target.value)}
-          >
-            <option value="">서비스 선택</option>
-            {value?.map((s) => (
-              <option key={s.uuid} value={s.uuid}>
-                {s.name}
-                {s.isDefault ? " (기본)" : ""}
-              </option>
-            ))}
-          </select>
-        </span>
-        <ChevronDown aria-hidden="true" size={16} />
-      </label>
-      {error && <p role="alert">{error}</p>}
+      <Select value={selected} onValueChange={onSelect} disabled={!value?.length}>
+        <SelectTrigger aria-label="서비스 선택" className="h-auto gap-2.5 rounded-lg p-2 hover:bg-muted">
+          <ServiceAvatar service={current} />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[11px] text-subtle-foreground">현재 서비스</span>
+            <SelectValue placeholder={value ? "서비스 선택" : "불러오는 중"}>
+              <span className="truncate text-[13px] font-medium text-foreground">{current?.name}{current?.isDefault ? " (기본)" : ""}</span>
+            </SelectValue>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {value?.map((s) => (
+            <SelectItem key={s.uuid} value={s.uuid} className="h-9">
+              <span className="flex items-center gap-2"><Avatar label={s.name} seed={s.uuid} size="sm" />{s.name}{s.isDefault ? " (기본)" : ""}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {error && <p role="alert" className="m-0 mt-1 text-xs text-danger">{error}</p>}
     </>
   );
 }
