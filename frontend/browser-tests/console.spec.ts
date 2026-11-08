@@ -32,6 +32,7 @@ async function prepare(page: Page) {
       ? { items: [summary], hasNext: false } : { items: [], hasNext: false },
   }));
   await page.route("**/api/jobs/job-a", route => route.fulfill({ json: job }));
+  await page.route("**/api/models?**", route => route.fulfill({ json: { models: [{ id: "example-model", provider: "example" }] } }));
   await page.goto("/?login=success");
 }
 
@@ -80,7 +81,7 @@ test("진행 중 작업 조회가 일시적으로 실패해도 결과 조회를 
     return route.fulfill({ json: job });
   });
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
-  await page.getByRole("tab", { name: "텍스트" }).click();
+  await page.getByRole("radio", { name: "텍스트" }).click();
   await page.getByLabel("프롬프트").fill("예시 요청");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByText("첫 서비스의 결과")).toBeVisible({ timeout: 12_000 });
