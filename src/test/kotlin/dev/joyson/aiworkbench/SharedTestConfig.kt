@@ -9,6 +9,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PartialContent
@@ -47,6 +48,9 @@ class SharedTestConfig {
     fun fakeTextProvider(): ExternalApiTextProvider = object : ExternalApiTextProvider {
         override val name = FAKE_PROVIDER
         override val models = setOf(FAKE_TEXT_MODEL)
+
+        /** 하나를 빼 둔다. 표현하지 못하는 effort 를 접수가 거르는지 보려면 빠진 값이 있어야 한다. */
+        override val efforts = ReasoningEffort.entries.toSet() - UNEXPRESSIBLE_EFFORT
         override fun generateText(model: String, request: ExternalApiTextRequest) =
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }
@@ -87,6 +91,9 @@ class SharedTestConfig {
         const val FAKE_PROVIDER = "fake"
         const val FAKE_MODEL = "fake-model"
         const val FAKE_TEXT_MODEL = "fake-text-model"
+
+        /** [fakeTextProvider] 가 표현하지 못하는 effort. */
+        val UNEXPRESSIBLE_EFFORT = ReasoningEffort.MAX
         const val FAKE_DECISION_MODEL = "fake-decision-model"
     }
 }

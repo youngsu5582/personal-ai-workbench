@@ -27,6 +27,9 @@ class OpenAITextProvider(
 
     override val models: Set<String> = OpenAITextModel.entries.map { it.modelName }.toSet()
 
+    /** `reasoning.effort` 는 눈금의 모든 값을 표현한다. 어느 값을 받는지는 모델마다 달라 저쪽 거절로 안다. */
+    override val efforts: Set<ReasoningEffort> = ReasoningEffort.entries.toSet()
+
     override fun generateText(
         model: String,
         request: ExternalApiTextRequest,
@@ -108,9 +111,10 @@ class OpenAITextProvider(
         }
     }
 
-    /** 지금은 값이 1:1 로 대응한다. `minimal` 은 우리 모델 중 받는 것이 없어 눈금에 두지 않았다. */
+    /** 값이 1:1 로 대응한다. */
     private fun effortOf(effort: ReasoningEffort): String = when (effort) {
         ReasoningEffort.NONE -> "none"
+        ReasoningEffort.MINIMAL -> "minimal"
         ReasoningEffort.LOW -> "low"
         ReasoningEffort.MEDIUM -> "medium"
         ReasoningEffort.HIGH -> "high"

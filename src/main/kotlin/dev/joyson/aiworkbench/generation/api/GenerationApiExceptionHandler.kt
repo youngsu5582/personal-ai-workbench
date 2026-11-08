@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
 import dev.joyson.aiworkbench.generation.application.InvalidTemplateException
+import dev.joyson.aiworkbench.generation.application.UnsupportedEffortException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
 import dev.joyson.aiworkbench.storage.FileStorageException
 import org.slf4j.LoggerFactory
@@ -35,6 +36,16 @@ class GenerationApiExceptionHandler {
             title = "다룰 수 없는 모델"
             setProperty("model", e.model)
             setProperty("availableProviders", e.available)
+        }
+
+    /** 같은 모델로는 다시 보내도 같으므로 4xx 다. */
+    @ExceptionHandler(UnsupportedEffortException::class)
+    fun handleUnsupportedEffort(e: UnsupportedEffortException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.message).apply {
+            title = "표현할 수 없는 effort"
+            setProperty("model", e.model)
+            setProperty("effort", e.effort)
+            setProperty("availableEfforts", e.available)
         }
 
     /**

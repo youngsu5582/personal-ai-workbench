@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.SharedTestConfig
 import dev.joyson.aiworkbench.IntegrationTest
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
+import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
@@ -203,8 +204,26 @@ class GenerationJobApiTest @Autowired constructor(
 
     @Test
     fun `눈금에 없는 effort 는 400 이다`() {
-        val option = """{"type":"text-generate","prompt":"요약해","effort":"minimal"}"""
+        val option = """{"type":"text-generate","prompt":"요약해","effort":"ultra"}"""
         request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    /**
+     * 눈금에는 있지만 이 모델의 Provider 가 저쪽에 표현할 말이 없다.
+     * 접수하면 Task 마다 부르기도 전에 같은 이유로 실패하므로, 무엇을 보내면 되는지와 함께 바로 돌려준다.
+     */
+    @Test
+    fun `Provider 가 표현하지 못하는 effort 는 400 이고 받는 값을 알려준다`() {
+        val unexpressible = SharedTestConfig.UNEXPRESSIBLE_EFFORT.name.lowercase()
+        val option = """{"type":"text-generate","prompt":"요약해","effort":"$unexpressible"}"""
+
+        request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect {
+            status { isBadRequest() }
+            jsonPath("$.effort") { value(unexpressible) }
+            jsonPath("$.availableEfforts.length()") { value(Effort.entries.size - 1) }
+        }
+        request(body(1, """{"type":"text-generate","prompt":"요약해","effort":"minimal"}""", model = FAKE_TEXT_MODEL))
+            .andExpect { status { isAccepted() } }
     }
 
     @Test

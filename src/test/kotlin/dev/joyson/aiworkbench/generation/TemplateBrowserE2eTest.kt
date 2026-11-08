@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
@@ -76,6 +77,7 @@ class TemplateBrowserE2eProvider {
     fun browserE2eTextProvider(): ExternalApiTextProvider = object : ExternalApiTextProvider {
         override val name = "browser-e2e"
         override val models = setOf("browser-e2e-text")
+        override val efforts = ReasoningEffort.entries.toSet()
         override fun generateText(model: String, request: ExternalApiTextRequest): ExternalApiTextResponse {
             check(request.instructions == "당신은 편집자입니다. 친근한 말투로 답하세요.")
             check(request.prompt == "핵심을 알려줘")

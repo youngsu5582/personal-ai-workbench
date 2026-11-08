@@ -23,6 +23,14 @@ interface ExternalApiTextProvider {
     fun supports(model: String): Boolean = model in models
 
     /**
+     * 저쪽 API 가 **표현할 수 있는** effort. 여기 없는 값은 보낼 말이 없어 부르지 않고 거절한다.
+     *
+     * API 의 어휘지 모델의 허용표가 아니다 — 표현할 수 있어도 모델이 거절할 수 있고, 그건 저쪽 응답으로 안다.
+     * 기본값을 두지 않는 이유는 어댑터를 더할 때마다 이 질문에 답하게 하려는 것이다.
+     */
+    val efforts: Set<ReasoningEffort>
+
+    /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.
      *
      * 실패는 [ExternalApiException] 으로 알린다. 응답을 받았으면 — 모델이 거절했든 잘렸든 — 실패가 아니다.

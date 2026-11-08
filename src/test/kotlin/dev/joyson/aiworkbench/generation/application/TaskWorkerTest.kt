@@ -36,6 +36,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
+import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
@@ -885,6 +886,7 @@ class TaskWorkerTest @Autowired constructor(
     private fun textProvider(behavior: (ExternalApiTextRequest) -> ExternalApiTextResponse) = object : ExternalApiTextProvider {
         override val name = PROVIDER
         override val models = setOf(TEXT_MODEL)
+        override val efforts = ReasoningEffort.entries.toSet()
         override fun generateText(model: String, request: ExternalApiTextRequest) = behavior(request)
     }
 

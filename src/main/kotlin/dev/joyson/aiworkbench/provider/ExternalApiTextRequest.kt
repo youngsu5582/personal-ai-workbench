@@ -30,11 +30,13 @@ data class ExternalApiTextRequest(
 /**
  * 포트가 표현하는 추론 노력 눈금. 제품 눈금과 따로 두는 이유는 `ImageQuality` 와 같다.
  *
- * 어느 값을 받는지는 **모델마다 다르다** — 어떤 모델은 [NONE] 을 400 으로 거절한다.
+ * 저쪽 API 가 이 중 무엇을 **표현할 수 있는지**는 어댑터가 밝힌다([ExternalApiTextProvider.efforts]).
+ * 그 안에서 어느 값을 받는지는 **모델마다 다르다** — 어떤 모델은 [NONE] 을 400 으로 거절한다.
  * 그 사실은 어댑터도 모델 목록으로 들고 있지 않는다. 보내고, 거절되면 그 사유가 실패로 남는다.
  */
 enum class ReasoningEffort {
     NONE,
+    MINIMAL,
     LOW,
     MEDIUM,
     HIGH,
