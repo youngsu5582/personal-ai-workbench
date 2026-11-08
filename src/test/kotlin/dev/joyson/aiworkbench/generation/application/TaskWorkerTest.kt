@@ -763,6 +763,8 @@ class TaskWorkerTest @Autowired constructor(
                 return URI.create("https://storage.test/upload?X-Amz-Signature=upload")
             }
 
+            override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 한 장씩 묻는다")
+
             override fun readContent(sha256: String, ownerUuid: UUID) = error("주소로 넘길 수 있으면 바이트를 읽지 않는다")
         }
         var sent: URI? = null
@@ -789,6 +791,7 @@ class TaskWorkerTest @Autowired constructor(
         val uploads = object : UploadedFiles {
             override fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload? = null
             override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String) = error("주소를 받으면 안 된다")
+            override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("주소를 받으면 안 된다")
             override fun readContent(sha256: String, ownerUuid: UUID) = error("바이트를 읽으면 안 된다")
         }
         val (_, task) = newTask(option = editOption(FileSource.Uploaded(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)))
@@ -842,6 +845,8 @@ class TaskWorkerTest @Autowired constructor(
 
             override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String): URI =
                 URI.create("https://storage.test/upload?X-Amz-Signature=upload")
+
+            override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 한 장씩 묻는다")
 
             override fun readContent(sha256: String, ownerUuid: UUID) = image.takeIf { sha256 == uploadUuid && ownerUuid == owner }
         }

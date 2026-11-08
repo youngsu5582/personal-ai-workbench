@@ -39,6 +39,14 @@ class DefaultUploadedFiles(
         return issuer.issue(file.storageKey, fileName)
     }
 
+    override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, URI> {
+        val issuer = presignedUrlIssuer ?: return emptyMap()
+        if (sha256s.isEmpty()) return emptyMap()
+        return uploadedFileRepository.findAllByWorkspaceUuidAndSha256In(workspaceUuid, sha256s)
+            .filter { it.status == UploadStatus.READY }
+            .associate { it.sha256 to issuer.issue(it.storageKey, it.downloadFileName()) }
+    }
+
     override fun readContent(sha256: String, workspaceUuid: UUID): ByteArray? =
         findReady(sha256, workspaceUuid)?.let { fileStorage.read(it.storageKey) }
 
@@ -80,4 +88,7 @@ class DefaultUploadedFiles(
     }
 
     private fun UploadedFile.toUsable() = UsableUpload(mimeType = metadata.mimeType)
+
+    /** 형식은 PNG·JPEG·WebP 뿐이라 하위 타입이 곧 확장자다. */
+    private fun UploadedFile.downloadFileName() = "$sha256.${metadata.mimeType.substringAfterLast('/')}"
 }

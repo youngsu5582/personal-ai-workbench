@@ -14,6 +14,9 @@ interface UploadedFileRepository : Repository<UploadedFile, Long> {
 
     fun findByWorkspaceUuidAndSha256(workspaceUuid: UUID, sha256: String): UploadedFile?
 
+    /** 여러 장을 그릴 때 장마다 묻지 않으려고 한 번에 가져온다. */
+    fun findAllByWorkspaceUuidAndSha256In(workspaceUuid: UUID, sha256s: Collection<String>): List<UploadedFile>
+
     /**
      * [expected] 상태일 때만 [next] 로 옮긴다. 여러 요청이 같은 행을 동시에 옮겨도 한 번만 바뀐다.
      *
