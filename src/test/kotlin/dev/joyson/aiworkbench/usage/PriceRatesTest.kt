@@ -81,6 +81,46 @@ class PriceRatesTest {
         assertFailsWith<IllegalArgumentException> { PriceRates(mapOf("output_tokens" to BigDecimal("-30"))) }
     }
 
+    /** Gemini 의 표와 같은 모양이다. 생각하지 않은 호출엔 thinking 칸이, 막힌 호출엔 답 칸이 없다. */
+    private val omitting = PriceRates(
+        usdPerMillion = mapOf(
+            "promptTokenCount" to BigDecimal("1"),
+            "candidatesTokenCount" to BigDecimal("10"),
+            "thoughtsTokenCount" to BigDecimal("10"),
+        ),
+        zeroIfAbsent = setOf("candidatesTokenCount", "thoughtsTokenCount"),
+    )
+
+    @Test
+    fun `0 이면 빠지는 경로는 없을 때 0 으로 센다`() {
+        // 100 × 1 + 20 × 10 = 300
+        val price = omitting.price(mapOf("promptTokenCount" to 100, "candidatesTokenCount" to 20))
+
+        assertEquals(0, BigDecimal("0.0003").compareTo(price))
+    }
+
+    @Test
+    fun `0 으로 볼 경로가 아니면 없을 때 여전히 모른다`() {
+        assertNull(omitting.price(mapOf("candidatesTokenCount" to 20, "thoughtsTokenCount" to 5)))
+    }
+
+    /** 칸은 있는데 숫자가 아니면 빠진 것이 아니라 모양이 바뀐 것이다. 0 으로 세면 바뀐 줄 모르고 싸게 적힌다. */
+    @Test
+    fun `0 으로 볼 경로라도 숫자가 아닌 값이 오면 모른다`() {
+        assertNull(omitting.price(mapOf("promptTokenCount" to 100, "thoughtsTokenCount" to mapOf("text" to 5))))
+    }
+
+    @Test
+    fun `단가가 없는 경로를 0 으로 보거나 모든 경로를 0 으로 보는 표는 만들 수 없다`() {
+        assertFailsWith<IllegalArgumentException> {
+            PriceRates(mapOf("promptTokenCount" to BigDecimal("1")), zeroIfAbsent = setOf("thoughtsTokenCount"))
+        }
+        // 빈 사용량에도 0 달러를 답하게 된다.
+        assertFailsWith<IllegalArgumentException> {
+            PriceRates(mapOf("thoughtsTokenCount" to BigDecimal("1")), zeroIfAbsent = setOf("thoughtsTokenCount"))
+        }
+    }
+
     /**
      * 호출 단위에서 반올림하면 안 되는 이유.
      *
