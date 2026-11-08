@@ -20,6 +20,17 @@ const example = (key: string) => key === "role" ? "예: 브랜드 콘텐츠 기�
   : key === "request" ? "예: 친환경 브랜드를 소개하는 문구를 작성해 주세요."
     : key === "content" ? "예: 블로그 글 본문이나 요약" : key === "style" ? "예: 따뜻한 수채화" : "예: 이 변수에 넣을 값";
 
+/** 고른 파일을 올리기 전에 보여 준다. 화면을 떠나면 브라우저 메모리의 주소를 돌려준다. */
+function Thumbnail({ file }: { file: File }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return src ? <img src={src} alt="고른 입력 이미지" className="h-14 w-20 shrink-0 rounded-md border border-border object-cover" /> : null;
+}
+
 /** 템플릿 종류에 맞는 모델과 변수 · 입력 이미지를 받아 작업을 접수한다. */
 export function TemplateRunner({ token, workspace, template, values, onValues, onJob }: Props) {
   const mounted = useRef(false);
@@ -62,7 +73,13 @@ export function TemplateRunner({ token, workspace, template, values, onValues, o
         <FileDrop id={`run-image-${i}`} label={`입력 이미지${images.length > 1 ? ` ${i + 1}` : ""}`} accept="image/png,image/jpeg,image/webp"
           hint="이 템플릿은 실행할 때 이미지를 받아요"
           onFile={next => setImages(old => old.map((f, j) => j === i ? next : f))}>
-          {file && <span className="text-[13px] text-foreground">{file.name}<span className="ml-2 text-xs text-muted-foreground">실행할 때 올려요 · 바꾸려면 누르세요</span></span>}
+          {file && <span className="flex w-full items-center gap-3 text-left">
+            <Thumbnail file={file} />
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-[13px] text-foreground">{file.name}</span>
+              <span className="text-xs text-muted-foreground">실행할 때 올려요 · 바꾸려면 누르세요</span>
+            </span>
+          </span>}
         </FileDrop>
       </Field>)}
       {error && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{error}</p>}
