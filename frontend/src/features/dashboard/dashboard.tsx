@@ -1,7 +1,7 @@
 import { ArrowRight, BarChart3, Boxes, FileImage, FileText, KeyRound, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { UsagePanel } from "./connected";
-import { request, type JobList } from "./api";
+import { UsagePanel } from "../usage/usage";
+import { request, type JobList } from "../../api";
 import "./dashboard.css";
 
 type Destination = "studio" | "jobs" | "usage" | "services" | "keys";

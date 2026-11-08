@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, FileImage, FileText, ListChecks } from "lucide-react";
-import { request, type Job, type JobList } from "./api";
-import { AuthenticatedImage } from "./connected";
+import { request, type Job, type JobList } from "../../api";
+import { AuthenticatedImage } from "../../shared/authenticated-image";
 import "./jobs.css";
 
 type Props = { token: string; workspace: string };

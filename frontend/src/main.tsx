@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Dashboard } from "./dashboard";
-import { JobsPanel } from "./jobs";
-import {
-  Login,
-  ServicePicker,
-  UsagePanel,
-  StudioPanel,
-  ServicesPanel,
-  KeysPanel,
-} from "./connected";
+import { Dashboard } from "./features/dashboard/dashboard";
+import { JobsPanel } from "./features/jobs/jobs";
+import { Login } from "./features/auth/login";
+import { ServicePicker, ServicesPanel } from "./features/services/services";
+import { UsagePanel } from "./features/usage/usage";
+import { StudioPanel } from "./features/studio/studio";
+import { KeysPanel } from "./features/api-keys/keys";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
