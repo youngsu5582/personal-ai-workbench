@@ -1,6 +1,8 @@
 package dev.joyson.aiworkbench.generation.domain
 
 import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Slice
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.Repository
 import org.springframework.data.repository.query.Param
@@ -14,6 +16,8 @@ interface GenerationJobRepository : Repository<GenerationJob, Long> {
     fun findById(id: Long): GenerationJob?
 
     fun findByUuid(uuid: UUID): GenerationJob?
+
+    fun findByWorkspaceUuidOrderByIdDesc(workspaceUuid: UUID, pageable: Pageable): Slice<GenerationJob>
 
     /**
      * 남은 Task 가 없으면 Job 을 닫는다. 이미 닫혔거나 남은 Task 가 있으면 아무것도 하지 않는다.

@@ -9,12 +9,24 @@ import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import java.time.Instant
 import java.util.*
+
+data class JobListView(val items: List<JobSummaryView>, val hasNext: Boolean)
+
+data class JobSummaryView(
+    val uuid: UUID,
+    val status: JobLifecycle,
+    val model: String,
+    val type: GenerationJobType,
+    val createdAt: Instant,
+    val taskCount: Int,
+)
 
 data class GenerationJobView(
     val uuid: UUID,
