@@ -33,6 +33,14 @@ interface UploadedFiles {
     fun issueReadUrl(sha256: String, workspaceUuid: UUID, fileName: String): URI?
 
     /**
+     * [issueReadUrl] 의 여러 장 판. 검증을 통과한 업로드만 키로 담긴다.
+     *
+     * 한 화면에 여러 장을 그릴 때 장마다 묻지 않으려고 둔다. 받는 쪽이 저장할 이름은 `{sha256}.{확장자}` 다.
+     * 보관소가 서명할 수 없으면 빈 맵이다.
+     */
+    fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, URI>
+
+    /**
      * 입력으로 쓸 수 있다고 검증된 업로드의 바이트. 검증 전이거나 불합격이면, 또는 객체가 없으면 `null` 이다.
      *
      * 받는 쪽이 [issueReadUrl] 의 주소를 받아가지 못할 때 대신 싣는다. 보관소를 읽으므로 트랜잭션 밖에서 부른다.
