@@ -1,5 +1,5 @@
 import { Badge, Card, CardTitle } from "../../shared/ui/surface";
-import { qualityLabel, segments, sizeLabel, type JobType, type TemplateOption } from "./template-model";
+import { qualityLabel, segments, sizeLabel, valueOf, type JobType, type TemplateOption } from "./template-model";
 
 /** 미리보기에 필요한 것만. 저장된 템플릿과 편집 중인 초안이 같은 모양으로 넘긴다. */
 export type PreviewSource = {
@@ -15,8 +15,8 @@ function Filled({ text, values }: { text: string; values: Record<string, string>
   return <p className="m-0 rounded-md bg-background px-3 py-2.5 text-[13px] leading-[1.7] whitespace-pre-wrap text-foreground [overflow-wrap:anywhere]">
     {segments(text).map((part, i) => !part.variable
       ? <span key={i}>{part.text}</span>
-      : values[part.variable]
-        ? <mark key={i} data-variable-state="filled" title={`{{${part.variable}}}`} className="rounded-[3px] border-b-2 border-success bg-success-soft px-0.5 text-foreground">{values[part.variable]}</mark>
+      : valueOf(values, part.variable)
+        ? <mark key={i} data-variable-state="filled" title={`{{${part.variable}}}`} className="rounded-[3px] border-b-2 border-success bg-success-soft px-0.5 text-foreground">{valueOf(values, part.variable)}</mark>
         : <mark key={i} data-variable-state="empty" className="rounded-sm border border-dashed border-accent bg-transparent px-1 font-mono text-xs text-accent">{part.text}</mark>)}
   </p>;
 }
@@ -24,7 +24,7 @@ function Filled({ text, values }: { text: string; values: Record<string, string>
 /** 지금 입력 중인 값으로 실제로 보낼 요청을 미리 보여 준다. */
 export function TemplatePreview({ source, values, note }: { source: PreviewSource; values: Record<string, string>; note: string }) {
   const { option } = source;
-  const filled = source.variables.filter(v => values[v]).length;
+  const filled = source.variables.filter(v => valueOf(values, v)).length;
   return <Card className="flex flex-col gap-3">
     <CardTitle aside={source.variables.length > 0 && <Badge shape="pill" tone={filled === source.variables.length ? "success" : "neutral"}>변수 {filled}/{source.variables.length}</Badge>}>프롬프트 미리보기</CardTitle>
     <p className="m-0 text-xs leading-normal text-muted-foreground">{note}</p>

@@ -5,7 +5,7 @@ import { Button } from "../../shared/ui/button";
 import { Field, Textarea } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { Card, CardTitle } from "../../shared/ui/surface";
-import type { Template } from "./template-model";
+import { valueOf, type Template } from "./template-model";
 
 type Props = {
   token: string;
@@ -41,7 +41,7 @@ export function TemplateRunner({ token, workspace, template, values, onValues, o
       for (const file of images) uploaded.push({ type: "uploaded", sha256: await upload(token, workspace, file!) });
       const result = await request<{ uuid: string }>(token, `/api/templates/${template.uuid}/jobs`, workspace, {
         method: "POST", body: JSON.stringify({ model: model.trim(), taskCount: 1,
-          variables: Object.fromEntries(template.variables.map(key => [key, values[key] ?? ""])),
+          variables: Object.fromEntries(template.variables.map(key => [key, valueOf(values, key)])),
           ...(uploaded.length ? { images: uploaded } : {}) }),
       });
       // 접수 중에 서비스를 바꾸면 이 화면이 사라진다. 그때는 이전 서비스의 작업으로 이동하지 않는다.
@@ -55,7 +55,7 @@ export function TemplateRunner({ token, workspace, template, values, onValues, o
         hint={template.model ? `템플릿 기본 모델은 ${template.model} 이에요. 다른 모델로 바꿔 비교할 수 있어요.` : undefined} />
       {template.variables.map(key => <Field key={key} htmlFor={`var-${key}`}
         label={<><span className="sr-only">변수 </span><span className="font-mono text-accent">{key}</span></>}>
-        <Textarea id={`var-${key}`} value={values[key] ?? ""} placeholder={example(key)} className="min-h-16"
+        <Textarea id={`var-${key}`} value={valueOf(values, key)} placeholder={example(key)} className="min-h-16"
           onChange={e => onValues({ ...values, [key]: e.target.value })} />
       </Field>)}
       {images.map((file, i) => <Field key={i} label={`입력 이미지${images.length > 1 ? ` ${i + 1}` : ""}`}>

@@ -47,6 +47,12 @@ export const MAX_IMAGES = 1;
 const VARIABLE = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)}}/g;
 export const isVariableName = (name: string) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
 
+/**
+ * 입력한 변수 값. 비어 있으면 빈 문자열이다.
+ * 변수 이름이 `__proto__` · `constructor` 일 수 있어, 객체가 물려받은 속성은 읽지 않고 직접 넣은 값만 본다.
+ */
+export const valueOf = (values: Record<string, string>, key: string) => Object.hasOwn(values, key) ? values[key] : "";
+
 export type Segment = { text: string; variable?: string };
 /** 글을 일반 글과 `{{변수}}` 조각으로 나눈다. 강조 표시와 미리보기가 같은 규칙을 쓴다. */
 export function segments(text: string): Segment[] {

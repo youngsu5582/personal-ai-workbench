@@ -277,3 +277,18 @@ test("글 템플릿을 고쳐도 화면에 없는 출력 형식과 effort 는 �
   expect(sink.saved?.option).toEqual({ type: "text-generate", prompt: "{{request}}", output, effort: "low" });
 });
 
+test("변수 이름이 객체 속성 이름과 같아도 미리보기와 실행이 깨지지 않는다", async ({ page }) => {
+  const sink: { submitted?: Record<string, unknown> } = {};
+  await single(page, { uuid: "t2", serviceUuid: "a", name: "속성 이름 변수", type: "text-generate",
+    option: { type: "text-generate", prompt: "{{constructor}} / {{__proto__}} / {{toString}}" }, variables: ["constructor", "__proto__", "toString"],
+    inputImageCount: 0, model: "model-a", createdAt: "2026-11-01T00:00:00Z" }, sink);
+  await page.getByRole("button", { name: /속성 이름 변수/ }).click();
+  await expect(page.locator("[data-variable-state=empty]")).toHaveCount(3);
+  await page.getByLabel("변수 constructor").fill("가");
+  await page.getByLabel("변수 __proto__").fill("나");
+  await expect(page.locator("[data-variable-state=filled]")).toHaveCount(2);
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
+  // `{ __proto__: … }` 객체 글자는 프로토타입을 바꾸므로 항목으로 비교한다.
+  expect(Object.entries(sink.submitted?.variables as object).sort()).toEqual([["__proto__", "나"], ["constructor", "가"], ["toString", ""]]);
+});
