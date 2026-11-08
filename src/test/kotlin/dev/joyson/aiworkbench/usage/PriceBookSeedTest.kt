@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.usage
 
 import dev.joyson.aiworkbench.TestcontainersConfiguration
+import dev.joyson.aiworkbench.provider.gemini.GeminiTextModel
 import dev.joyson.aiworkbench.provider.openai.OpenAIImageModel
 import dev.joyson.aiworkbench.provider.openai.OpenAITextModel
 import dev.joyson.aiworkbench.usage.domain.ModelPriceBook
@@ -101,6 +102,56 @@ class PriceBookSeedTest @Autowired constructor(
         val models = OpenAIImageModel.entries.map { it.modelName } + OpenAITextModel.entries.map { it.modelName }
 
         val missing = models.filter { repository.findEffective("openai", it, afterSeed).isEmpty() }
+
+        assertTrue(missing.isEmpty(), "단가표가 없는 모델: $missing")
+    }
+
+    /** generateContent 응답의 usageMetadata 모양이다. 답과 생각은 따로 센다. */
+    private val geminiUsage = mapOf(
+        "promptTokenCount" to 2000,
+        "candidatesTokenCount" to 600,
+        "thoughtsTokenCount" to 400,
+        "totalTokenCount" to 3000,
+        "promptTokensDetails" to listOf(mapOf("modality" to "TEXT", "tokenCount" to 2000)),
+    )
+
+    private val afterGeminiSeed = Instant.parse("2026-11-10T00:00:00Z")
+
+    private fun geminiPriceOf(model: String, at: Instant = afterGeminiSeed, usage: Map<String, Any?> = geminiUsage): BigDecimal? =
+        repository.findEffective("gemini", model, at).single().price(usage)
+
+    @Test
+    fun `Gemini 는 답과 생각에 같은 출력 단가를 매긴다`() {
+        // 2000 × 0.75 + (600 + 400) × 3.75 = 5,250
+        assertEquals(0, BigDecimal("0.00525").compareTo(geminiPriceOf("gemini-3.6-flash")))
+        // 2000 × 0.30 + (600 + 400) × 2.50 = 3,100
+        assertEquals(0, BigDecimal("0.0031").compareTo(geminiPriceOf("gemini-3.5-flash-lite")))
+    }
+
+    /** 발표된 인상을 미리 넣어 두었다. 비용은 호출 시각으로 표를 고르므로 그날 할 일이 없다. */
+    @Test
+    fun `Gemini Flash 는 2027년부터 단가가 두 배다`() {
+        val lastCall = Instant.parse("2026-12-31T23:59:59Z")
+        val firstCall = Instant.parse("2027-01-01T00:00:00Z")
+
+        assertEquals(0, BigDecimal("0.00525").compareTo(geminiPriceOf("gemini-3.6-flash", at = lastCall)))
+        // 2000 × 1.50 + 1000 × 7.50 = 10,500
+        assertEquals(0, BigDecimal("0.0105").compareTo(geminiPriceOf("gemini-3.6-flash", at = firstCall)))
+    }
+
+    /** 0 인 칸은 저쪽이 빼고 보낸다. 표가 그 칸을 0 으로 보지 않으면 생각하지 않은 호출의 비용을 모르게 된다. */
+    @Test
+    fun `생각하지 않은 Gemini 호출은 thinking 칸이 없어도 비용을 안다`() {
+        val noThinking = mapOf("promptTokenCount" to 2000, "candidatesTokenCount" to 600, "totalTokenCount" to 2600)
+
+        // 2000 × 0.30 + 600 × 2.50 = 2,100
+        assertEquals(0, BigDecimal("0.0021").compareTo(geminiPriceOf("gemini-3.5-flash-lite", usage = noThinking)))
+    }
+
+    @Test
+    fun `어댑터가 다루는 Gemini 모델은 모두 단가표가 있다`() {
+        val missing = GeminiTextModel.entries.map { it.modelName }
+            .filter { repository.findEffective("gemini", it, afterGeminiSeed).isEmpty() }
 
         assertTrue(missing.isEmpty(), "단가표가 없는 모델: $missing")
     }
