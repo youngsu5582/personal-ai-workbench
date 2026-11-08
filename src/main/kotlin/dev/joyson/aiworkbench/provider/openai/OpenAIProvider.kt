@@ -35,8 +35,7 @@ class OpenAIProvider(
 
     override val name: String = OpenAIFailures.PROVIDER_NAME
 
-    /** 사실 질의다. 모르는 모델이면 예외가 아니라 false. */
-    override fun supports(model: String): Boolean = OpenAIImageModel.find(model) != null
+    override val models: Set<String> = OpenAIImageModel.entries.map { it.modelName }.toSet()
 
     override fun generate(
         model: String,

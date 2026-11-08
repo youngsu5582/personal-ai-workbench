@@ -25,8 +25,7 @@ class OpenAITextProvider(
 
     override val name: String = OpenAIFailures.PROVIDER_NAME
 
-    /** 사실 질의다. 모르는 모델이면 예외가 아니라 false. */
-    override fun supports(model: String): Boolean = OpenAITextModel.find(model) != null
+    override val models: Set<String> = OpenAITextModel.entries.map { it.modelName }.toSet()
 
     override fun generateText(
         model: String,

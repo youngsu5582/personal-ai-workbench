@@ -37,7 +37,7 @@ class SharedTestConfig {
     @Bean
     fun fakeProvider(): ExternalApiProvider = object : ExternalApiProvider {
         override val name = FAKE_PROVIDER
-        override fun supports(model: String) = model == FAKE_MODEL
+        override val models = setOf(FAKE_MODEL)
         override fun generate(model: String, request: ExternalApiGenerateRequest) =
             ExternalApiGenerateResponse(result = emptyList())
     }
@@ -46,7 +46,7 @@ class SharedTestConfig {
     @Bean
     fun fakeTextProvider(): ExternalApiTextProvider = object : ExternalApiTextProvider {
         override val name = FAKE_PROVIDER
-        override fun supports(model: String) = model == FAKE_TEXT_MODEL
+        override val models = setOf(FAKE_TEXT_MODEL)
         override fun generateText(model: String, request: ExternalApiTextRequest) =
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }
@@ -55,7 +55,7 @@ class SharedTestConfig {
     @Bean
     fun fakeDecisionProvider(): ExternalApiDecisionProvider = object : ExternalApiDecisionProvider {
         override val name = FAKE_PROVIDER
-        override fun supports(model: String) = model == FAKE_DECISION_MODEL
+        override val models = setOf(FAKE_DECISION_MODEL)
         override fun decide(model: String, request: ExternalApiDecisionRequest) =
             ExternalApiDecisionResponse(answers = emptyList())
     }

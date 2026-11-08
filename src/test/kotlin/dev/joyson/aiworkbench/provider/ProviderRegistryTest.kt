@@ -9,27 +9,24 @@ class ProviderRegistryTest {
 
     private class FakeProvider(
         override val name: String,
-        private val models: Set<String>,
+        override val models: Set<String>,
     ) : ExternalApiProvider {
-        override fun supports(model: String) = model in models
         override fun generate(model: String, request: ExternalApiGenerateRequest) =
             ExternalApiGenerateResponse(result = emptyList())
     }
 
     private class FakeTextProvider(
         override val name: String,
-        private val models: Set<String>,
+        override val models: Set<String>,
     ) : ExternalApiTextProvider {
-        override fun supports(model: String) = model in models
         override fun generateText(model: String, request: ExternalApiTextRequest) =
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }
 
     private class FakeDecisionProvider(
         override val name: String,
-        private val models: Set<String>,
+        override val models: Set<String>,
     ) : ExternalApiDecisionProvider {
-        override fun supports(model: String) = model in models
         override fun decide(model: String, request: ExternalApiDecisionRequest) =
             ExternalApiDecisionResponse(answers = emptyList())
     }
@@ -61,6 +58,20 @@ class ProviderRegistryTest {
 
         assertNull(registry.find("gpt-image-2"))
         assertEquals(emptyList(), registry.availableNames)
+        assertEquals(emptyList(), registry.imageModels)
+        assertEquals(emptyList(), registry.textModels)
+        assertEquals(emptyList(), registry.decisionModels)
+    }
+
+    @Test
+    fun `종류별 모델 목록은 실제 선택되는 Provider 를 반환한다`() {
+        val duplicate = FakeProvider("other", setOf("gpt-image-2"))
+        val decision = FakeDecisionProvider("openai", setOf("gpt-6-luna"))
+        val registry = ProviderRegistry(listOf(openai, duplicate), listOf(openaiText), listOf(decision))
+
+        assertEquals(listOf(ProviderModel("gpt-image-2", "openai")), registry.imageModels)
+        assertEquals(listOf(ProviderModel("gpt-6-luna", "openai")), registry.textModels)
+        assertEquals(listOf(ProviderModel("gpt-6-luna", "openai")), registry.decisionModels)
     }
 
     @Test

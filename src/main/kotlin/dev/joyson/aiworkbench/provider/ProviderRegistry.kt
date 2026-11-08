@@ -39,6 +39,16 @@ class ProviderRegistry(
     /** 이 모델로 판정할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
     fun findDecision(model: String): ExternalApiDecisionProvider? = decisionProviders.firstOrNull { it.supports(model) }
 
+    /** 모델 이름이 겹치면 실제 호출과 같이 첫 번째 어댑터만 반환한다. */
+    val imageModels: List<ProviderModel>
+        get() = providers.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
+
+    val textModels: List<ProviderModel>
+        get() = textProviders.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
+
+    val decisionModels: List<ProviderModel>
+        get() = decisionProviders.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
+
     /**
      * 지금 쓸 수 있는 어댑터 이름들. 진단·로그용이다.
      *
@@ -47,3 +57,5 @@ class ProviderRegistry(
     val availableNames: List<String>
         get() = (providers.map { it.name } + textProviders.map { it.name } + decisionProviders.map { it.name }).distinct()
 }
+
+data class ProviderModel(val id: String, val provider: String)

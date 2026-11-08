@@ -20,6 +20,9 @@ interface ExternalApiProvider {
      */
     val name: String
 
+    /** 이 어댑터가 다루는 모델 이름. 모델 목록 조회와 [supports] 가 같은 집합을 본다. */
+    val models: Set<String>
+
     /**
      * 이 모델을 다룰 수 있는가.
      *
@@ -31,7 +34,7 @@ interface ExternalApiProvider {
      * 요청은 "무엇을 만들까" 이고 모델은 "무엇으로 만들까" 다. 같은 요청을 다른 모델로
      * 다시 돌리는 일이 생기는데, 모델이 요청 안에 있으면 요청을 복제해야 한다.
      */
-    fun supports(model: String): Boolean
+    fun supports(model: String): Boolean = model in models
 
     /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.

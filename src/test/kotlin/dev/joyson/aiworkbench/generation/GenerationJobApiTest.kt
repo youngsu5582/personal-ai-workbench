@@ -19,6 +19,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import java.util.UUID
 import kotlin.test.Test
@@ -59,6 +60,34 @@ class GenerationJobApiTest @Autowired constructor(
             contentType = MediaType.APPLICATION_JSON
             content = payload
         }
+
+    @Test
+    fun `작업 종류에 맞는 모델을 인증된 사용자에게 반환한다`() {
+        listOf("image-generate" to FAKE_MODEL, "text-generate" to FAKE_TEXT_MODEL, "decision" to FAKE_DECISION_MODEL)
+            .forEach { (type, model) ->
+                mockMvc.get("/api/models") {
+                    header("Authorization", "Bearer $token")
+                    param("type", type)
+                }.andExpect {
+                    status { isOk() }
+                    jsonPath("$.models.length()") { value(1) }
+                    jsonPath("$.models[0].id") { value(model) }
+                    jsonPath("$.models[0].provider") { value(SharedTestConfig.FAKE_PROVIDER) }
+                }
+            }
+    }
+
+    @Test
+    fun `모델 조회는 인증과 유효한 작업 종류가 필요하다`() {
+        mockMvc.get("/api/models") { param("type", "image-generate") }
+            .andExpect { status { isUnauthorized() } }
+        mockMvc.get("/api/models") { header("Authorization", "Bearer $token") }
+            .andExpect { status { isBadRequest() } }
+        mockMvc.get("/api/models") {
+            header("Authorization", "Bearer $token")
+            param("type", "unknown")
+        }.andExpect { status { isBadRequest() } }
+    }
 
     @Test
     fun `유효한 요청은 202 와 식별자를 돌려준다`() {
