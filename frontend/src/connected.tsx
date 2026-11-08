@@ -751,7 +751,7 @@ export function StudioPanel({ token, workspace }: Context) {
     </div>
   );
 }
-function AuthenticatedImage({
+export function AuthenticatedImage({
   token,
   workspace,
   url,

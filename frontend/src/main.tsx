@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Dashboard } from "./dashboard";
+import { JobsPanel } from "./jobs";
 import {
   Login,
   ServicePicker,
@@ -10,16 +12,15 @@ import {
 import { createRoot } from "react-dom/client";
 import {
   Activity,
-  ArrowRight,
   BarChart3,
   Boxes,
   CircleHelp,
   FileImage,
   KeyRound,
   LayoutDashboard,
+  ListChecks,
   Menu,
   Moon,
-  Plus,
   Settings,
   Sparkles,
   Sun,
@@ -29,10 +30,11 @@ import "./style.css";
 import "./console-panels.css";
 
 type Page =
-  "home" | "studio" | "library" | "usage" | "services" | "keys" | "settings";
+  "home" | "studio" | "jobs" | "library" | "usage" | "services" | "keys" | "settings";
 const sections: { id: Page; title: string; icon: typeof Sparkles }[] = [
   { id: "home", title: "대시보드", icon: LayoutDashboard },
   { id: "studio", title: "작업실", icon: Sparkles },
+  { id: "jobs", title: "작업 내역", icon: ListChecks },
   { id: "library", title: "라이브러리", icon: FileImage },
   { id: "usage", title: "사용량", icon: BarChart3 },
   { id: "services", title: "서비스 관리", icon: Boxes },
@@ -47,9 +49,14 @@ function App() {
   const [menu, setMenu] = useState(false);
   const [token, setToken] = useState("");
   const [workspace, setWorkspace] = useState("");
+  const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [jobsNavigationVersion, setJobsNavigationVersion] = useState(0);
   const [serviceVersion, setServiceVersion] = useState(0);
   const onToken = useCallback((value: string) => setToken(value), []);
-  const onSelect = useCallback((value: string) => setWorkspace(value), []);
+  const onSelect = useCallback((value: string) => {
+    setWorkspace(value);
+    setSelectedJob(null);
+  }, []);
   useEffect(() => {
     const logout = () => {
       setToken("");
@@ -62,7 +69,9 @@ function App() {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     localStorage.setItem("workbench-theme", dark ? "dark" : "light");
   }, [dark]);
-  const go = (next: Page) => {
+  const go = (next: Page, jobId?: string) => {
+    setSelectedJob(next === "jobs" ? jobId ?? null : null);
+    if (next === "jobs") setJobsNavigationVersion(value => value + 1);
     setPage(next);
     setMenu(false);
     window.scrollTo(0, 0);
@@ -93,7 +102,7 @@ function App() {
         />
         <div className="section-label">둘러보기</div>
         <nav aria-label="주 메뉴">
-          {sections.slice(0, 4).map(({ id, title, icon: Icon }) => (
+          {sections.slice(0, 5).map(({ id, title, icon: Icon }) => (
             <button
               key={id}
               className={"nav-item " + (page === id ? "active" : "")}
@@ -105,7 +114,7 @@ function App() {
             </button>
           ))}
           <div className="section-label manage">관리</div>
-          {sections.slice(4).map(({ id, title, icon: Icon }) => (
+          {sections.slice(5).map(({ id, title, icon: Icon }) => (
             <button
               key={id}
               className={"nav-item " + (page === id ? "active" : "")}
@@ -165,74 +174,11 @@ function App() {
         </header>
         <div className="content">
           {page === "home" && (
-            <>
-              <div className="heading">
-                <div>
-                  <div className="eyebrow">YOUR CREATIVE WORKSPACE</div>
-                  <h1>나만의 AI 작업 공간</h1>
-                  <p>아이디어를 만들고, 결과와 사용량을 한곳에서 살펴보세요.</p>
-                </div>
-                <button className="button primary" onClick={() => go("studio")}>
-                  <Plus size={16} /> 새 작업 만들기
-                </button>
-              </div>
-              <section className="overview">
-                <div className="welcome">
-                  <div className="eyebrow">A SPACE TO CREATE</div>
-                  <h2>아이디어를 결과물로.</h2>
-                  <p>이미지와 텍스트를 위한 나만의 작업대를 준비하고 있어요.</p>
-                  <Sparkles
-                    className="hero-sparkle"
-                    size={120}
-                    strokeWidth={0.7}
-                  />
-                </div>
-                <div className="stat">
-                  <span>이번 달 사용량</span>
-                  <button className="link" onClick={() => go("usage")}>
-                    사용량 보기
-                  </button>
-                  <small>선택한 서비스의 사용량</small>
-                </div>
-                <div className="stat">
-                  <span>완료된 작업</span>
-                  <strong>—</strong>
-                  <small>작업 기록 연결 준비 중</small>
-                </div>
-              </section>
-              <SectionTitle
-                title="최근 생성 이미지"
-                desc="이 서비스에서 만든 결과물을 모아볼 수 있어요."
-                action="라이브러리 보기"
-                onClick={() => go("library")}
-              />
-              <Empty
-                icon={<FileImage />}
-                title="아직 표시할 이미지가 없어요"
-                description="생성 결과가 연결되면 이곳에서 최근 이미지를 확인할 수 있어요."
-              />
-              <div className="columns">
-                <div className="panel">
-                  <SectionTitle
-                    title="최근 작업"
-                    action="작업실 열기"
-                    onClick={() => go("studio")}
-                  />
-                  <p className="subtle">
-                    작업 내역을 불러오는 기능은 준비 중이에요.
-                  </p>
-                </div>
-                <div className="panel">
-                  <SectionTitle
-                    title="서비스 사용량"
-                    action="자세히 보기"
-                    onClick={() => go("usage")}
-                  />
-                  <UsagePanel key={workspace} token={token} workspace={workspace} />
-                </div>
-              </div>
-            </>
+            <Dashboard token={token} workspace={workspace} go={go} />
           )}
+          {page === "jobs" && (workspace
+            ? <JobsPanel key={workspace + (selectedJob ?? "") + jobsNavigationVersion} token={token} workspace={workspace} initialSelected={selectedJob} />
+            : <p>서비스를 불러오는 중이에요.</p>)}
           {page === "studio" && (
             <>
               <PageHeading
@@ -367,30 +313,6 @@ function PageHeading({
         <h1>{title}</h1>
         <p>{desc}</p>
       </div>
-    </div>
-  );
-}
-function SectionTitle({
-  title,
-  desc,
-  action,
-  onClick,
-}: {
-  title: string;
-  desc?: string;
-  action: string;
-  onClick: () => void;
-}) {
-  return (
-    <div className="section-heading">
-      <div>
-        <h2>{title}</h2>
-        {desc && <p>{desc}</p>}
-      </div>
-      <button className="link" onClick={onClick}>
-        {action}
-        <ArrowRight size={14} />
-      </button>
     </div>
   );
 }

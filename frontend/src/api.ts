@@ -23,14 +23,27 @@ export type Usage = {
 export type Job = {
   uuid: string;
   status: string;
+  model: string;
+  createdAt: string;
+  option: { type: string; prompt?: string };
   progress: { total: number };
   tasks: {
     status: string;
     failureReason: string | null;
     files: { url: string; previewUrl: string | null; sha256: string }[];
     texts: { content: unknown }[];
+    decisions: { answers: unknown[] }[];
   }[];
 };
+export type JobSummary = {
+  uuid: string;
+  status: string;
+  model: string;
+  type: string;
+  createdAt: string;
+  taskCount: number;
+};
+export type JobList = { items: JobSummary[]; hasNext: boolean };
 export class ApiError extends Error {
   constructor(
     public status: number,
