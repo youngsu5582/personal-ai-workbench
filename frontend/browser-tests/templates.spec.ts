@@ -246,3 +246,34 @@ test("기본 모델을 저장하면 실행 화면에서 미리 선택되고 바�
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
   expect(submitted).toEqual({ model: "model-b", taskCount: 1, variables: { request: "요약해 줘" } });
 });
+
+/** 템플릿 하나만 있는 서비스. 저장 · 실행 요청을 잡아 둔다. */
+async function single(page: import("@playwright/test").Page, template: Record<string, unknown>, sink: { saved?: Record<string, unknown>; submitted?: Record<string, unknown> }) {
+  await page.route("**/auth/handoff", r => r.fulfill({ json: { accessToken: "test-token" } }));
+  await page.route("**/api/services", r => r.fulfill({ json: [{ uuid: "a", name: "서비스 A", isDefault: true }] }));
+  await page.route("**/api/usage**", r => r.fulfill({ json: { calls: 0, succeededCalls: 0, failedCalls: 0, costUsd: null, costComplete: true, byModel: [] } }));
+  await page.route("**/api/jobs?**", r => r.fulfill({ json: { items: [], hasNext: false } }));
+  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-a", createdAt: "2026-11-01T00:00:00Z", option: { type: "text-generate" }, progress: { total: 1 }, tasks: [] } }));
+  await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "model-a", provider: "Example" }] } }));
+  await page.route("**/api/templates**", r => {
+    if (r.request().url().endsWith("/jobs")) { sink.submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: { uuid: "job-1" } }); }
+    if (r.request().method() === "PUT") { sink.saved = r.request().postDataJSON(); return r.fulfill({ json: { ...template, name: sink.saved!.name, option: sink.saved!.option } }); }
+    return r.fulfill({ json: [template] });
+  });
+  await page.goto("/?login=success");
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
+}
+
+test("글 템플릿을 고쳐도 화면에 없는 출력 형식과 effort 는 그대로 둔다", async ({ page }) => {
+  const output = { type: "json-schema", name: "answer", schema: { type: "object", properties: { title: { type: "string" } } } };
+  const sink: { saved?: Record<string, unknown> } = {};
+  await single(page, { uuid: "t1", serviceUuid: "a", name: "구조화 답", type: "text-generate",
+    option: { type: "text-generate", prompt: "{{request}}", output, effort: "low" }, variables: ["request"], inputImageCount: 0, model: null, createdAt: "2026-11-01T00:00:00Z" }, sink);
+  await page.getByRole("button", { name: /구조화 답/ }).click();
+  await page.getByRole("button", { name: "수정", exact: true }).click();
+  await page.getByLabel("템플릿 이름").fill("구조화 답 v2");
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "구조화 답 v2" })).toBeVisible();
+  expect(sink.saved?.option).toEqual({ type: "text-generate", prompt: "{{request}}", output, effort: "low" });
+});
+

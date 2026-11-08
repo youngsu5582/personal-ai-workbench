@@ -45,10 +45,15 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   // 고정 참조와 실행 입력을 합쳐 상한을 넘지 않게 한다. 서버도 같은 규칙으로 거절한다.
   const inputLimit = Math.max(0, MAX_IMAGES - sources.length);
-  // 지시문을 비우면 필드를 뺀다. 서버는 빈 지시문과 "주지 않음" 을 같은 뜻으로 받지 않는다.
-  const option: TemplateOption = type === "text-generate"
-    ? { type, prompt, ...(instructions.trim() ? { instructions } : {}) }
-    : { type, prompt, size, quality, ...(sources.length ? { sources } : {}) };
+  // 화면에 칸이 없는 값(글의 output · effort 등)은 원래 옵션에서 그대로 가져온다.
+  // 옵션을 처음부터 다시 만들면 API 로 정한 값이 저장할 때마다 지워진다 — 서버는 명세를 통째로 교체한다.
+  const kept: Record<string, unknown> = template?.type === type ? { ...template.option } : {};
+  // 화면이 다루는 칸은 화면 값으로 덮는다. 비운 지시문 · 참조는 필드를 뺀다 — 서버는 빈 값과 "주지 않음" 을 같은 뜻으로 받지 않는다.
+  delete kept.instructions;
+  delete kept.sources;
+  const option = (type === "text-generate"
+    ? { ...kept, type, prompt, ...(instructions.trim() ? { instructions } : {}) }
+    : { ...kept, type, prompt, size, quality, ...(sources.length ? { sources } : {}) }) as TemplateOption;
   const variables = type === "text-generate" ? variableNames(instructions, prompt) : variableNames(prompt);
   const count = type === "text-generate" ? 0 : inputImageCount;
 
