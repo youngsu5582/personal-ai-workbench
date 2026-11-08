@@ -3,8 +3,9 @@
 #
 #   ./scripts/text.sh "이 글을 세 줄로 요약해: ..."
 #   ./scripts/text.sh "태그 다섯 개" 1 gpt-6.1-sol             # 모델 지정
+#   ./scripts/text.sh "태그 다섯 개" 1 gemini-3.5-flash-lite   # Gemini 는 키가 있어야 나타난다
 #   INSTRUCTIONS="너는 기술 블로그 편집자다" ./scripts/text.sh "제목을 지어줘"
-#   EFFORT=low ./scripts/text.sh "태그 다섯 개"                # none · low · medium · high · xhigh · max
+#   EFFORT=low ./scripts/text.sh "태그 다섯 개"                # none · minimal · low · medium · high · xhigh · max
 #   SCHEMA='{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}},"required":["tags"],"additionalProperties":false}' \
 #     ./scripts/text.sh "이 글의 태그를 골라: ..."
 #   BASE_URL=http://localhost:8099 ./scripts/text.sh "안녕"

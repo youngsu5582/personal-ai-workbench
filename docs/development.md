@@ -351,12 +351,13 @@ Authorization: Bearer <token>
 글을 만든다. 요청 종류는 `"type": "text-generate"` 하나이고, `output` 을 빼면 형식 없는 글을,
 `{"type": "json-schema", "schema": {...}}` 를 주면 그 스키마를 따르는 JSON 객체를 받는다.
 `instructions` 는 모델에게 주는 역할·규칙(system 프롬프트)이고 선택이다.
-`effort` 는 답하기 전에 얼마나 생각할지(`none` · `low` · `medium` · `high` · `xhigh` · `max`)이고, 빼면 모델 기본값(대개 `medium`)이다.
+`effort` 는 답하기 전에 얼마나 생각할지(`none` · `minimal` · `low` · `medium` · `high` · `xhigh` · `max`)이고, 빼면 모델 기본값이다. 기본값은 모델마다 다르다.
 생각한 만큼이 출력 토큰으로 과금되므로 간단한 일에는 낮춘다.
 
 ```bash
 ./scripts/text.sh "이 글을 세 줄로 요약해: ..."
 ./scripts/text.sh "제목을 지어줘" 2 gpt-6.1-sol
+./scripts/text.sh "제목을 지어줘" 1 gemini-3.5-flash-lite
 INSTRUCTIONS="너는 기술 블로그 편집자다" ./scripts/text.sh "제목을 지어줘"
 EFFORT=low ./scripts/text.sh "이 글의 태그 다섯 개"
 SCHEMA='{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}},"required":["tags"],"additionalProperties":false}' \
@@ -399,7 +400,13 @@ Content-Type: application/json
   어기면 접수는 되지만 Task 가 저쪽의 400 사유와 함께 실패한다.
 - 모델이 거절하거나 출력 한도에 걸려 잘리면 Task 를 재시도 없이 실패로 닫는다. 그 호출도 과금됐으므로 지출은 사용량과 함께 성공 호출로 적힌다.
 - 이미지 모델로 글을, 텍스트 모델로 이미지를 요청하면 접수에서 400 이다.
-- effort 는 모델마다 받는 값이 다르다. `gpt-6-astra` 는 `none` 을, `gpt-6.1-sol` 은 `none` 을 받지 않는다. 접수는 되고 Task 가 저쪽 400 사유로 실패한다.
+- effort 는 Provider 가 표현할 수 있는 값만 접수한다. Gemini 는 `minimal` · `low` · `medium` · `high` 뿐이라 다른 값은 400 이고,
+  응답의 `availableEfforts` 에 받는 값이 실린다.
+- 그 안에서도 모델마다 받는 값이 다르다. `gpt-6-astra` 는 `none` 을, `gpt-6.1-sol` 은 `none` 을 받지 않는다. 접수는 되고 Task 가 저쪽 400 사유로 실패한다.
+
+Gemini 모델은 `.env` 의 `WORKBENCH_PROVIDER_GEMINI_API_KEY` 가 있어야 나타난다. 공용 이름 `GEMINI_API_KEY` 는 읽지 않는다.
+키를 만든 프로젝트에 결제가 연결돼 있지 않으면 Free Tier 로 불리는데, 그때 입력과 출력은 Google 제품 개선에 쓰인다.
+비용은 Free Tier 여도 유료 단가로 잡힌다 — 이 서비스 관점에선 토큰을 쓴 것이 맞다(`V19__gemini_text_prices.sql`).
 
 URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. 로컬 Garage의 `localhost:3900`은
 외부 OpenAI에서 접근할 수 없다. 실제 URL 입력을 사용하려면 앱과 Provider 모두 접근 가능한
