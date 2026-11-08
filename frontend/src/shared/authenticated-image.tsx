@@ -8,10 +8,12 @@ export function AuthenticatedImage({
   url,
   previewUrl,
   onRefresh,
+  alt = "생성된 이미지",
 }: Context & {
   url: string;
   previewUrl: string | null;
   onRefresh: () => void;
+  alt?: string;
 }) {
   const [src, setSrc] = useState("");
   const [fail, setFail] = useState("");
@@ -64,12 +66,12 @@ export function AuthenticatedImage({
   ) : previewUrl ? (
     <img
       src={previewUrl}
-      alt="생성된 이미지"
+      alt={alt}
       style={{ maxWidth: "100%" }}
       onError={() => setFail("이미지를 불러오지 못했어요. 다시 조회해 주세요.")}
     />
   ) : src ? (
-    <img src={src} alt="생성된 이미지" style={{ maxWidth: "100%" }} />
+    <img src={src} alt={alt} style={{ maxWidth: "100%" }} />
   ) : (
     <p>이미지를 불러오는 중…</p>
   );

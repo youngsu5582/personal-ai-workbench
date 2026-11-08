@@ -20,13 +20,27 @@ export type Usage = {
     costUsd: string | null;
   }[];
 };
+export type FileSource = { type: "generated" | "uploaded"; sha256: string };
+export type DecisionEvidence =
+  | { type: "text"; text: string }
+  | { type: "image"; source: FileSource };
 export type Job = {
   uuid: string;
   status: string;
+  type: string;
   model: string;
   createdAt: string;
-  option: { type: string; prompt?: string };
-  progress: { total: number };
+  taskCount: number;
+  option: {
+    type: string;
+    prompt?: string;
+    instructions?: string;
+    input?: DecisionEvidence[];
+    questions?: { name: string; instructions: string }[];
+  };
+  /** 요청이 참조한 파일. 올린 파일은 url 이 없고, 서명할 수 없으면 previewUrl 이 없다. */
+  inputs: { source: FileSource; url: string | null; previewUrl: string | null }[];
+  progress: { total: number; succeeded: number; failed: number; remaining: number };
   tasks: {
     status: string;
     failureReason: string | null;
@@ -35,15 +49,7 @@ export type Job = {
     decisions: { answers: unknown[] }[];
   }[];
 };
-export type JobSummary = {
-  uuid: string;
-  status: string;
-  model: string;
-  type: string;
-  createdAt: string;
-  taskCount: number;
-};
-export type JobList = { items: JobSummary[]; hasNext: boolean };
+export type JobList = { items: Job[]; hasNext: boolean };
 export class ApiError extends Error {
   constructor(
     public status: number,
