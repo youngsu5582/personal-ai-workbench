@@ -55,6 +55,11 @@ jobs:
 
       - run: ./gradlew build --no-daemon
 
+      - name: 실제 서버와 테스트 DB를 이용한 콘솔 E2E
+        run: .claude/scripts/test.sh '*TemplateBrowserE2eTest*'
+        env:
+          WB_TEMPLATE_E2E: 'true'
+
       # 실패했을 때 어느 테스트가 왜 깨졌는지 보려면 리포트가 필요하다.
       - if: failure()
         uses: actions/upload-artifact@v4

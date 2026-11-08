@@ -9,6 +9,7 @@
     "check:architecture": "depcruise --config .dependency-cruiser.cjs src",
     "test:architecture": "node --test architecture-tests/*.test.mjs",
     "test:browser": "playwright test",
+    "test:live": "playwright test --config playwright.live.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {

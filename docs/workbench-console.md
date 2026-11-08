@@ -36,6 +36,17 @@ npm run test:browser
 
 [브라우저 테스트](../frontend/browser-tests/console.spec.ts)는 Playwright로 화면을 열고 API 응답을 모의한다. 작업 상세에서 서비스를 전환할 때 이전 서비스 결과가 사라지는지, 조회 오류 뒤 재시도되는지, 모바일 다크 모드에서 작업 내역을 볼 수 있는지 확인한다.
 
-이 검사는 브라우저의 표시와 요청 흐름을 검증한다. 실제 서버 권한이나 DB 격리를 증명하지는 않는다. 서비스별 접근 범위는 서버 통합 테스트에서 별도로 확인한다. 브라우저에서 실제 서버와 DB까지 연결하는 E2E는 아직 없다. 외부 모델 유료 호출은 이 브라우저 테스트에 포함하지 않는다.
+이 검사는 브라우저의 표시와 요청 흐름을 검증한다. 실제 서버 권한이나 DB 격리를 증명하지는 않는다. 서비스별 접근 범위는 서버 통합 테스트에서 별도로 확인한다. 외부 모델 유료 호출은 이 브라우저 테스트에 포함하지 않는다.
+
+템플릿의 실제 연결 E2E는 테스트용 Spring 서버와 PostgreSQL 컨테이너를 띄워 브라우저에서 생성·실행·서비스 격리를 확인한다. 모델은 테스트 대역이며 실제 Provider를 호출하지 않는다. 프론트 의존성과 Chromium을 설치한 뒤 저장소 루트에서 실행한다.
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium
+npm run build
+cd ..
+WB_TEMPLATE_E2E=true .claude/scripts/test.sh '*TemplateBrowserE2eTest*'
+```
 
 PR의 CI에서도 빌드, 구조 검사와 규칙 테스트, 브라우저 검사를 실행한다. 규칙을 바꾸면 설정과 위반 예제를 함께 살펴보고 필요한 화면 흐름을 테스트에 추가한다.
