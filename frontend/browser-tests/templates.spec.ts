@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+/** 목록 선택(Radix Select)에서 항목을 고른다. 운영체제 기본 선택 상자가 아니라 selectOption 을 쓰지 못한다. */
+async function choose(page: import("@playwright/test").Page, label: string | RegExp, option: string) {
+  await page.getByRole("combobox", { name: label }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 /** 서버처럼 글 필드에서 변수 이름을 처음 나온 순서로 모은다. */
 const names = (...texts: (string | undefined)[]) =>
   [...new Set(texts.flatMap(text => Array.from((text ?? "").matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)}}/g), m => m[1])))];
@@ -38,14 +44,14 @@ test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async
   await page.getByLabel("템플릿 이름").fill("편집자");
   await page.getByLabel("시스템 지시문").fill("당신은 {{role}}입니다. {{tone}} 말투로 답하세요.");
   await expect(page.getByRole("textbox", { name: "프롬프트", exact: true })).toHaveValue("{{request}}");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   expect(saved).toEqual({ name: "편집자", inputImageCount: 0,
     option: { type: "text-generate", instructions: "당신은 {{role}}입니다. {{tone}} 말투로 답하세요.", prompt: "{{request}}" } });
   await page.getByRole("button", { name: "수정", exact: true }).click();
   await page.getByLabel("템플릿 이름").fill("수정한 편집자");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "수정한 편집자" })).toBeVisible();
-  await page.getByLabel("모델").selectOption("model-a");
+  await choose(page, /^모델$/, "model-a");
   await page.getByLabel("변수 role").fill("작가");
   await page.getByLabel("변수 tone").fill("친근한");
   await page.getByLabel("변수 request").fill("글을 써줘");
@@ -86,7 +92,7 @@ test("실행 접수 중 서비스를 바꾸면 이전 서비스의 작업으로 
   await page.goto("/?login=success");
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
   await page.getByRole("button", { name: /기존 템플릿/ }).click();
-  await page.getByLabel("모델").selectOption("model-a");
+  await choose(page, /^모델$/, "model-a");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await arrived;
   await page.getByLabel("서비스 선택").selectOption("b");
@@ -130,7 +136,7 @@ test("모델 목록 조회가 실패하면 실행을 막고 다시 조회한다"
   await page.getByRole("button", { name: /템플릿 A/ }).click();
   await expect(page.getByRole("button", { name: "작업 실행" })).toBeDisabled();
   await page.getByRole("button", { name: "모델 다시 불러오기" }).click();
-  await page.getByLabel("모델").selectOption("model-a");
+  await choose(page, /^모델$/, "model-a");
   await expect(page.getByRole("button", { name: "작업 실행" })).toBeEnabled();
 });
 
@@ -162,7 +168,7 @@ test("이미지 템플릿을 종류와 변수 칩으로 만든다", async ({ pag
   await page.goto("/?login=success");
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
   await page.getByRole("button", { name: "템플릿 만들기" }).click();
-  await page.getByText("이미지", { exact: true }).click();
+  await page.getByRole("radio", { name: /^이미지/ }).click();
   await expect(page.getByLabel("시스템 지시문")).toHaveCount(0);
   await page.getByLabel("템플릿 이름").fill("썸네일 스타일 수정");
   const prompt = page.getByRole("textbox", { name: "프롬프트", exact: true });
@@ -170,10 +176,10 @@ test("이미지 템플릿을 종류와 변수 칩으로 만든다", async ({ pag
   await page.getByLabel("새 변수 이름").fill("style");
   await page.getByRole("button", { name: "변수 넣기" }).click();
   await expect(prompt).toHaveValue("입력한 이미지의 스타일을 바꿔 줘. {{style}}");
-  await expect(page.locator("mark.prompt-var")).toHaveText("{{style}}");
-  await page.getByLabel("비율").selectOption("16:9");
-  await page.getByLabel("1장 받아요").check();
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.locator("[data-variable-token=style]")).toHaveText("{{style}}");
+  await page.getByRole("radio", { name: "16:9" }).click();
+  await page.getByRole("radio", { name: "1장 받음" }).click();
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "썸네일 스타일 수정" })).toBeVisible();
   expect(saved).toEqual({ name: "썸네일 스타일 수정", inputImageCount: 1, option: { type: "image-generate", prompt: "입력한 이미지의 스타일을 바꿔 줘. {{style}}",
     size: { type: "ratio", ratio: "16:9", resolution: "1k" }, quality: "auto" } });
@@ -194,12 +200,12 @@ test("이미지 템플릿은 미리보기에 입력값을 채우고 입력 이�
   await page.goto("/?login=success");
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
   await page.getByRole("button", { name: /썸네일 스타일 수정/ }).click();
-  await expect(page.locator("mark.var-empty")).toHaveText("{{style}}");
-  await page.getByLabel("모델").selectOption("image-a");
+  await expect(page.locator("[data-variable-state=empty]")).toHaveText("{{style}}");
+  await choose(page, /^모델$/, "image-a");
   expect(modelType).toBe("image-generate");
   await page.getByLabel("변수 style").fill("따뜻한 수채화");
-  await expect(page.locator("mark.var-filled")).toHaveText("따뜻한 수채화");
-  await expect(page.getByText("변수 1/1 입력")).toBeVisible();
+  await expect(page.locator("[data-variable-state=filled]")).toHaveText("따뜻한 수채화");
+  await expect(page.getByText("변수 1/1")).toBeVisible();
   await expect(page.getByRole("button", { name: "작업 실행" })).toBeDisabled();
   await page.getByLabel("입력 이미지").setInputFiles(png);
   await page.getByRole("button", { name: "작업 실행" }).click();
@@ -230,11 +236,11 @@ test("기본 모델을 저장하면 실행 화면에서 미리 선택되고 바�
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
   await page.getByRole("button", { name: "템플릿 만들기" }).click();
   await page.getByLabel("템플릿 이름").fill("요약");
-  await page.getByLabel("기본 모델").selectOption("model-b");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await choose(page, /기본 모델/, "model-b");
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   expect(saved?.model).toBe("model-b");
   await expect(page.getByText("템플릿 기본 모델은 model-b 이에요.")).toBeVisible();
-  await expect(page.getByLabel("모델")).toHaveValue("model-b");
+  await expect(page.getByRole("combobox", { name: /^모델$/ })).toHaveText(/model-b/);
   await page.getByLabel("변수 request").fill("요약해 줘");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();

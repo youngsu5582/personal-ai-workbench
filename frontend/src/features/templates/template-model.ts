@@ -26,8 +26,14 @@ export type Template = {
 };
 
 export const TYPE_LABEL: Record<JobType, string> = { "text-generate": "글", "image-generate": "이미지", decision: "판정" };
-/** 디자인 방향의 유형별 보조 색. 텍스트는 인디고, 이미지는 코랄이다. */
-export const TYPE_TONE: Record<JobType, string> = { "text-generate": "indigo", "image-generate": "coral", decision: "violet" };
+/** 디자인 방향의 유형별 보조 색. 텍스트는 인디고, 이미지는 코랄, 판정은 보라다. 값은 `Badge` 의 tone 이름이다. */
+export const TYPE_TONE = { "text-generate": "text", "image-generate": "image", decision: "decision" } as const satisfies Record<JobType, string>;
+/** 유형 아이콘 칸의 배경 · 글자색. */
+export const TYPE_TILE: Record<JobType, string> = {
+  "text-generate": "bg-tone-text-soft text-tone-text",
+  "image-generate": "bg-tone-image-soft text-tone-image",
+  decision: "bg-tone-decision-soft text-tone-decision",
+};
 
 export const RATIOS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"];
 export const RESOLUTIONS = ["1k", "2k", "4k"];

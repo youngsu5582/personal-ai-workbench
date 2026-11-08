@@ -9,12 +9,13 @@ test("서비스별로 템플릿을 만들고 실행 결과를 확인한다", asy
   await page.getByLabel("템플릿 이름").fill("테스트 편집자");
   await page.getByLabel("시스템 지시문").fill("당신은 {{role}}입니다. {{tone}} 말투로 답하세요.");
   const created = page.waitForResponse(r => r.url().endsWith("/api/templates") && r.request().method() === "POST");
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   const createdResponse = await created;
   expect(createdResponse.status()).toBe(201);
   const template = await createdResponse.json();
   await expect(page.getByRole("heading", { name: "테스트 편집자" })).toBeVisible();
-  await page.getByLabel("모델").selectOption("browser-e2e-text");
+  await page.getByRole("combobox", { name: /^모델$/ }).click();
+  await page.getByRole("option", { name: "browser-e2e-text", exact: true }).click();
   await page.getByLabel("변수 role").fill("편집자");
   await page.getByLabel("변수 tone").fill("친근한");
   await page.getByLabel("변수 request").fill("핵심을 알려줘");
