@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowLeft, ArrowRight, Box, Layers3, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Box, Check, Layers3, Plus } from "lucide-react";
 import { request, type Service } from "../../api";
 import { errorText, useLoad } from "../../shared/console-utils";
 import { Avatar } from "../../shared/ui/avatar";
+import { Button } from "../../shared/ui/button";
+import { cn } from "../../shared/ui/cn";
+import { EmptyState } from "../../shared/ui/empty-state";
+import { Input, Label } from "../../shared/ui/field";
+import { Badge, Card } from "../../shared/ui/surface";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../shared/ui/select";
 import { UsagePanel } from "../usage/usage";
 
@@ -112,119 +117,78 @@ export function ServicesPanel({
   };
   const current = value?.find((s) => s.uuid === detail);
   return (
-    <div className="services-view">
+    <div className="flex flex-col gap-6">
       {current ? (
         <>
-          <button className="back-link" onClick={() => setDetail(null)}>
-            <ArrowLeft size={15} /> 모든 서비스
-          </button>
-          <section className="service-detail">
+          <Button variant="ghost" size="sm" className="-ml-2.5 self-start text-muted-foreground" onClick={() => setDetail(null)}>
+            <ArrowLeft aria-hidden="true" /> 모든 서비스
+          </Button>
+          <Card className="flex flex-wrap items-center gap-4 p-6">
             <ServiceAvatar service={current} size="large" />
-            <div className="service-detail-text">
-              <div className="eyebrow">SERVICE OVERVIEW</div>
-              <h2>{current.name}</h2>
-              <p>
-                {current.isDefault ? "기본 서비스" : "서비스 작업 공간"} · ID{" "}
-                {current.uuid.slice(0, 8)}
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">Service overview</span>
+              <h2 className="m-0 truncate text-lg font-semibold tracking-[-0.01em] text-foreground">{current.name}</h2>
+              <p className="m-0 text-[13px] text-muted-foreground">
+                {current.isDefault ? "기본 서비스" : "서비스 작업 공간"} · ID <span className="font-mono text-xs">{current.uuid.slice(0, 8)}</span>
               </p>
             </div>
-            <div className="service-actions">
-              <button className="button" onClick={() => rename(current)}>
-                이름 변경
-              </button>
-              {selected === current.uuid ? (
-                <span className="selected-badge">선택된 서비스</span>
-              ) : (
-                <button
-                  className="button primary"
-                  onClick={() => onSelect(current.uuid)}
-                >
-                  이 서비스 선택
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => rename(current)}>이름 변경</Button>
+              {selected === current.uuid
+                ? <Badge tone="success" shape="pill" className="h-7 px-3 text-xs"><Check className="size-3.5" aria-hidden="true" />선택된 서비스</Badge>
+                : <Button variant="primary" onClick={() => onSelect(current.uuid)}>이 서비스 선택</Button>}
             </div>
-          </section>
+          </Card>
           <UsagePanel key={current.uuid} token={token} workspace={current.uuid} />
         </>
       ) : (
         <>
-          <div className="services-intro">
-            <div>
-              <div className="eyebrow">YOUR WORKSPACES</div>
-              <h2>나의 서비스</h2>
-              <p>각 서비스의 작업과 사용량을 분리해 관리하세요.</p>
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-0.5">
+              <h2 className="m-0 text-[15px] font-semibold tracking-normal text-foreground">나의 서비스</h2>
+              <p className="m-0 text-[13px] text-muted-foreground">각 서비스의 작업과 사용량을 분리해 관리하세요.</p>
             </div>
-            <span className="count-badge">
-              <Layers3 size={15} /> {value?.length ?? "—"}개 서비스
-            </span>
+            <Badge shape="pill" className="gap-1.5 py-0.5"><Layers3 className="size-3" aria-hidden="true" />{value?.length ?? "—"}개 서비스</Badge>
           </div>
-          <div className="service-grid">
-            {value?.map((s) => (
-              <button
-                type="button"
-                className="service-card"
-                key={s.uuid}
-                onClick={() => {
-                  setDetail(s.uuid);
-                  onSelect(s.uuid);
-                }}
-              >
-                <div className="service-card-top">
-                  <ServiceAvatar service={s} />
-                  <ArrowDownRight size={17} />
-                </div>
-                <div className="service-card-name">{s.name}</div>
-                <div className="service-card-caption">
-                  {s.isDefault ? "기본 서비스" : "서비스 작업 공간"}
-                </div>
-                <div className="service-card-foot">
-                  <span>{s.uuid.slice(0, 8)}</span>
-                  <span>
-                    {selected === s.uuid ? "선택됨" : "자세히 보기"}{" "}
-                    <ArrowRight size={13} />
+          {value?.length === 0 ? (
+            <EmptyState icon={<Box />} title="아직 생성된 서비스가 없어요" description="아래에서 첫 서비스를 만들어 보세요." />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {value?.map((s) => (
+                <button type="button" key={s.uuid} onClick={() => { setDetail(s.uuid); onSelect(s.uuid); }}
+                  className={cn("group m-0 flex min-w-0 flex-col gap-3 rounded-xl border bg-surface p-5 text-left text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring",
+                    selected === s.uuid ? "border-accent" : "border-border")}>
+                  <span className="flex w-full items-center justify-between">
+                    <ServiceAvatar service={s} />
+                    <ArrowRight className="size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                   </span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {value?.length === 0 && (
-            <div className="list-empty">
-              <Box size={20} />
-              <p>아직 생성된 서비스가 없어요.</p>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <strong className="truncate text-sm font-semibold">{s.name}</strong>
+                    <span className="text-xs text-muted-foreground">{s.isDefault ? "기본 서비스" : "서비스 작업 공간"}</span>
+                  </span>
+                  <span className="flex w-full items-center justify-between border-t border-border pt-3 text-xs text-subtle-foreground">
+                    <span className="font-mono">{s.uuid.slice(0, 8)}</span>
+                    {selected === s.uuid ? <Badge tone="accent" shape="pill">선택됨</Badge> : <span>자세히 보기</span>}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
-          <section className="create-service">
-            <div className="create-icon">
-              <Plus size={19} />
+          <Card className="flex flex-wrap items-center gap-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Plus className="size-4" aria-hidden="true" /></span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <h3 className="m-0 text-sm font-semibold text-foreground">새 서비스 만들기</h3>
+              <p className="m-0 text-xs text-muted-foreground">새로운 프로젝트를 위한 독립된 작업 공간을 추가해요.</p>
             </div>
-            <div>
-              <h3>새 서비스 만들기</h3>
-              <p>새로운 프로젝트를 위한 독립된 작업 공간을 추가해요.</p>
-            </div>
-            <form onSubmit={create}>
-              <label className="visually-hidden" htmlFor="new-service-name">
-                서비스 이름
-              </label>
-              <input
-                id="new-service-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={255}
-                placeholder="서비스 이름"
-                required
-              />
-              <button className="button primary">
-                <Plus size={15} /> 만들기
-              </button>
+            <form onSubmit={create} className="flex w-full gap-2 sm:w-auto">
+              <Label htmlFor="new-service-name" className="sr-only">서비스 이름</Label>
+              <Input id="new-service-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={255} placeholder="서비스 이름" required className="sm:w-56" />
+              <Button type="submit" variant="primary"><Plus aria-hidden="true" />만들기</Button>
             </form>
-          </section>
+          </Card>
         </>
       )}
-      {(error || fail) && (
-        <p role="alert" className="inline-error">
-          {error || fail}
-        </p>
-      )}
+      {(error || fail) && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{error || fail}</p>}
     </div>
   );
 }
