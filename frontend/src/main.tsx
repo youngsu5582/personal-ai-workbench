@@ -6,6 +6,7 @@ import { ServicePicker, ServicesPanel } from "./features/services/services";
 import { UsagePanel } from "./features/usage/usage";
 import { StudioPanel } from "./features/studio/studio";
 import { KeysPanel } from "./features/api-keys/keys";
+import { TemplatesPanel } from "./features/templates/templates";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -13,6 +14,7 @@ import {
   Boxes,
   CircleHelp,
   FileImage,
+  FileText,
   KeyRound,
   LayoutDashboard,
   ListChecks,
@@ -27,11 +29,12 @@ import "./style.css";
 import "./console-panels.css";
 
 type Page =
-  "home" | "studio" | "jobs" | "library" | "usage" | "services" | "keys" | "settings";
+  "home" | "studio" | "jobs" | "templates" | "library" | "usage" | "services" | "keys" | "settings";
 const sections: { id: Page; title: string; icon: typeof Sparkles }[] = [
   { id: "home", title: "대시보드", icon: LayoutDashboard },
   { id: "studio", title: "작업실", icon: Sparkles },
   { id: "jobs", title: "작업 내역", icon: ListChecks },
+  { id: "templates", title: "템플릿", icon: FileText },
   { id: "library", title: "라이브러리", icon: FileImage },
   { id: "usage", title: "사용량", icon: BarChart3 },
   { id: "services", title: "서비스 관리", icon: Boxes },
@@ -99,7 +102,7 @@ function App() {
         />
         <div className="section-label">둘러보기</div>
         <nav aria-label="주 메뉴">
-          {sections.slice(0, 5).map(({ id, title, icon: Icon }) => (
+          {sections.slice(0, 6).map(({ id, title, icon: Icon }) => (
             <button
               key={id}
               className={"nav-item " + (page === id ? "active" : "")}
@@ -111,7 +114,7 @@ function App() {
             </button>
           ))}
           <div className="section-label manage">관리</div>
-          {sections.slice(5).map(({ id, title, icon: Icon }) => (
+          {sections.slice(6).map(({ id, title, icon: Icon }) => (
             <button
               key={id}
               className={"nav-item " + (page === id ? "active" : "")}
@@ -175,6 +178,9 @@ function App() {
           )}
           {page === "jobs" && (workspace
             ? <JobsPanel key={workspace + (selectedJob ?? "") + jobsNavigationVersion} token={token} workspace={workspace} initialSelected={selectedJob} />
+            : <p>서비스를 불러오는 중이에요.</p>)}
+          {page === "templates" && (workspace
+            ? <TemplatesPanel key={workspace} token={token} workspace={workspace} onJob={uuid => go("jobs", uuid)} />
             : <p>서비스를 불러오는 중이에요.</p>)}
           {page === "studio" && (
             <>

@@ -1,0 +1,88 @@
+/* 목록 */
+.template-back{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--muted);padding:0;margin-bottom:20px}
+.template-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.template-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;text-align:left;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:15px;padding:20px;min-width:0}
+.template-card:hover{border-color:var(--accent)}
+.template-card-icon,.type-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;border-width:1px;border-style:solid;flex:none}
+.template-card strong{font-size:15px;overflow-wrap:anywhere}
+.template-card-prompt{color:var(--muted);font-size:13px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line}
+.template-card-foot{border-top:1px solid var(--line);padding-top:12px;width:100%;display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-top:auto}
+
+/* 유형 색: 텍스트는 인디고(console-panels.css), 이미지는 코랄 */
+.tone-coral{color:#c4573f;background:#fdece7;border-color:#f8d9d0}
+html[data-theme=dark] .tone-coral{color:#ffb9a6;background:#4a2d27;border-color:#6a3d33}
+.type-badge{display:inline-block;border-width:1px;border-style:solid;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;margin:0 6px 0 0}
+p.type-badge{align-self:flex-start;margin-bottom:4px}
+
+/* 상세 */
+.template-detail-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr);gap:16px;align-items:start}
+.template-prompt{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;background:var(--bg);border-radius:10px;line-height:1.7;font-size:13px}
+.template-prompt.muted{color:var(--muted)}
+.template-actions{display:flex;gap:8px}
+.preview-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.preview-count{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.template-preview h3{font-size:12px;color:var(--muted);margin:16px 0 6px}
+.template-meta{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin-top:16px;font-size:12px}
+.template-meta dt{color:var(--muted)}
+mark.var-filled{background:#e3f4ec;color:inherit;border-bottom:2px solid #4f9d7f;border-radius:3px;padding:0 2px}
+mark.var-empty{background:transparent;color:var(--accent);border:1px dashed var(--accent);border-radius:4px;padding:0 3px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+html[data-theme=dark] mark.var-filled{background:#24473b;border-bottom-color:#7cc7a8}
+
+/* 폼 */
+.template-form{display:flex;flex-direction:column;gap:14px}
+.template-form label{display:flex;flex-direction:column;gap:7px;font-weight:600}
+.template-form textarea{min-height:140px}
+.template-form input,.template-form textarea{width:100%}
+.template-form textarea.template-variable{min-height:64px;height:84px;resize:vertical}
+.template-form .button{align-self:flex-start}
+
+/* 종류 고르기 */
+.type-picker{border:0;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.type-picker legend{font-size:12px;font-weight:650;margin-bottom:9px}
+.template-form .type-option{position:relative;display:flex;flex-direction:row;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:14px;margin:0;background:var(--surface);cursor:pointer;font-weight:600}
+.template-form .type-option.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.template-form .type-option.disabled{opacity:.55;cursor:not-allowed}
+.template-form .type-option input{position:absolute;opacity:0;width:1px;height:1px;margin:0;padding:0}
+.template-form .type-option:has(input:focus-visible){outline:3px solid #8aa4f2;outline-offset:2px}
+.type-option strong{display:block;font-size:13px}
+.type-option small{display:block;margin-top:3px;font-size:11px;font-weight:500;color:var(--muted)}
+
+/* 변수를 강조하는 입력란: 뒤 레이어와 textarea 의 글꼴 · 여백 · 줄바꿈이 같아야 겹친다 */
+.prompt-field{display:flex;flex-direction:column}
+.prompt-label{display:block;font-size:12px;font-weight:650;margin:0 0 4px}
+.prompt-hint{font-size:11.5px;color:var(--muted);margin:2px 0 8px;line-height:1.5}
+.prompt-editor{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.prompt-editor:focus-within{outline:3px solid #8aa4f2;outline-offset:2px}
+.prompt-backdrop,.template-form .prompt-editor textarea{font:inherit;font-size:13px;line-height:1.65;letter-spacing:normal;padding:12px;margin:0;border:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;box-sizing:border-box;width:100%;tab-size:4}
+.prompt-backdrop{position:absolute;inset:0;color:var(--text);pointer-events:none;overflow:hidden}
+.template-form .prompt-editor textarea{position:relative;z-index:1;display:block;min-height:120px;background:transparent;color:transparent;caret-color:var(--text);resize:none;overflow:hidden}
+.template-form .prompt-editor textarea::placeholder{color:var(--muted)}
+.template-form .prompt-editor textarea:focus-visible{outline:none}
+mark.prompt-var{background:#dfe6ff;color:#3149a8;border-radius:3px}
+html[data-theme=dark] mark.prompt-var{background:#34446b;color:#c9d5ff}
+.prompt-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.prompt-tools-label{font-size:11px;font-weight:650;color:var(--muted)}
+.var-chip{border:1px solid #cdd8fb;background:#edf1ff;color:#3149a8;border-radius:999px;padding:3px 10px;font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.var-chip::before{content:"{{";opacity:.55}
+.var-chip::after{content:"}}";opacity:.55}
+.var-chip.static{display:inline-block;margin-left:4px;cursor:default}
+html[data-theme=dark] .var-chip{background:#293952;border-color:#3e5275;color:#c9d5ff}
+.prompt-tools .var-add{display:inline-flex;align-items:center;gap:6px;margin-left:auto}
+.template-form .prompt-tools .var-add input{width:140px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:12px}
+.prompt-tools .var-add .button{padding:6px 10px}
+
+/* 이미지 설정 */
+.image-settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.image-settings label{margin-bottom:0}
+.image-inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.reference-slot{display:flex;align-items:center;gap:10px}
+.reference-slot img{max-height:120px;max-width:160px;border-radius:8px;object-fit:cover;border:1px solid var(--line)}
+.reference-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+.input-count{border:0;padding:0;margin:0}
+.input-count legend{font-size:12px;font-weight:650;margin-bottom:6px}
+.template-form .input-count label{flex-direction:row;align-items:center;gap:8px;margin:0 0 6px;font-weight:500}
+.template-form .input-count input{width:auto;margin:0;padding:0}
+
+@media(max-width:900px){.template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.template-detail-grid,.image-inputs,.type-picker{grid-template-columns:1fr}.image-settings{grid-template-columns:1fr 1fr}.prompt-tools .var-add{margin-left:0;width:100%}.template-form .prompt-tools .var-add input{flex:1;width:auto}}
+@media(max-width:450px){.template-grid{grid-template-columns:1fr}}
