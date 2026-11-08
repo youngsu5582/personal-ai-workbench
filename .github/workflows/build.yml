@@ -44,6 +44,14 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      - run: npm run check:architecture
+        working-directory: frontend
+      - run: npm run test:architecture
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:browser
+        working-directory: frontend
 
       - run: ./gradlew build --no-daemon
 
