@@ -16,9 +16,10 @@ interface ExternalApiTextProvider {
     /** 어느 외부 API 였는지 로그·메트릭에서 구분하기 위한 이름. 고르는 기준은 [supports] 다. */
     val name: String
 
-    /** 이 모델로 글을 만들 수 있는가. 사실 질의라 모르는 모델이면 예외가 아니라 false 다. */
+    /** 이 어댑터가 다루는 모델 이름. 모델 목록 조회와 [supports] 가 같은 집합을 본다. */
     val models: Set<String>
 
+    /** 이 모델로 글을 만들 수 있는가. 사실 질의라 모르는 모델이면 예외가 아니라 false 다. */
     fun supports(model: String): Boolean = model in models
 
     /**
