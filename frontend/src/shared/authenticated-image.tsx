@@ -15,6 +15,7 @@ export function AuthenticatedImage({
 }) {
   const [src, setSrc] = useState("");
   const [fail, setFail] = useState("");
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     setFail("");
     setSrc("");
@@ -44,7 +45,7 @@ export function AuthenticatedImage({
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [token, workspace, url, previewUrl]);
+  }, [token, workspace, url, previewUrl, retry]);
   return fail ? (
     <div>
       <p role="alert">{fail}</p>
@@ -53,6 +54,7 @@ export function AuthenticatedImage({
         className="button"
         onClick={() => {
           setFail("");
+          setRetry((value) => value + 1);
           onRefresh();
         }}
       >

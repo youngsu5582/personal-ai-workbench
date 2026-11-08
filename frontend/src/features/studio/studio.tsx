@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request, upload, type Job } from "../../api";
+import { ApiError, request, upload, type Job } from "../../api";
 import { errorText, type Context } from "../../shared/console-utils";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
 
@@ -29,17 +29,24 @@ export function StudioPanel({ token, workspace }: Context) {
   useEffect(() => {
     if (!job || job.status.toUpperCase() === "CLOSED") return;
     let live = true;
-    const timer = window.setTimeout(
-      () =>
+    let timer: number;
+    const poll = () => {
+      timer = window.setTimeout(() => {
         request<Job>(token, `/api/jobs/${job.uuid}`, workspace)
           .then((x) => {
-            if (live) setJob(x);
+            if (live) {
+              setFail("");
+              setJob(x);
+            }
           })
           .catch((e) => {
-            if (live) setFail(errorText(e));
-          }),
-      2500,
-    );
+            if (!live) return;
+            setFail(errorText(e));
+            if (!(e instanceof ApiError) || e.status >= 500 || e.status === 429) poll();
+          });
+      }, 2500);
+    };
+    poll();
     return () => {
       live = false;
       clearTimeout(timer);
