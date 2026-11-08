@@ -343,6 +343,8 @@ Authorization: Bearer <token>
 
 `type`은 `image-generate`, `text-generate`, `decision` 중 하나이며 필수다. 등록된 어댑터가 없으면 빈 목록이다.
 이 목록은 서버 설정과 어댑터가 다루는 모델을 나타내며, 외부 계정 권한이나 실시간 호출 성공을 보장하지 않는다.
+로컬 서버에서는 `./scripts/models.sh text-generate`처럼 확인할 수 있다. `BASE_URL`로 서버 주소를 바꾸고,
+인증 토큰은 생성 스크립트들과 같이 `dev-token.sh`에서 가져온다.
 
 ## 텍스트 생성
 
