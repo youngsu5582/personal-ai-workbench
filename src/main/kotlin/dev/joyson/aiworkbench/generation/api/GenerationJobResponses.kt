@@ -3,11 +3,13 @@ package dev.joyson.aiworkbench.generation.api
 import dev.joyson.aiworkbench.generation.application.GeneratedFileView
 import dev.joyson.aiworkbench.generation.application.GenerationJobTaskView
 import dev.joyson.aiworkbench.generation.application.GenerationJobView
+import dev.joyson.aiworkbench.generation.application.InputFileView
 import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
+import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
@@ -17,16 +19,8 @@ import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
 import java.util.UUID
 
-data class GenerationJobListResponse(val items: List<GenerationJobSummaryResponse>, val hasNext: Boolean)
-
-data class GenerationJobSummaryResponse(
-    val uuid: UUID,
-    val status: JobLifecycle,
-    val model: String,
-    val type: GenerationJobType,
-    val createdAt: Instant,
-    val taskCount: Int,
-)
+/** 항목은 상세 조회와 같은 모양이다. 받는 쪽이 항목마다 상세를 다시 묻지 않는다. */
+data class GenerationJobListResponse(val items: List<GenerationJobDetailResponse>, val hasNext: Boolean)
 
 /**
  * 조회 응답.
@@ -39,11 +33,29 @@ data class GenerationJobSummaryResponse(
 data class GenerationJobDetailResponse(
     val uuid: UUID,
     val status: JobLifecycle,
+    /** [option] 의 `type` 과 같다. 목록에서 종류만 보고 고를 때 option 을 열지 않게 둔다. */
+    val type: GenerationJobType,
     val model: String,
     val option: GenerationOption,
+    /** 요청이 참조한 파일. 참조가 없는 종류면 빈 목록이다. */
+    val inputs: List<InputFileResponse>,
     val createdAt: Instant,
+    /** [GenerationJobProgress.total] 과 같다. 목록을 읽는 쪽이 이 칸을 쓰므로 지우지 않는다. */
+    val taskCount: Int,
     val progress: GenerationJobProgress,
     val tasks: List<TaskResponse>,
+)
+
+/** 요청이 참조한 파일 하나. [source] 는 `option` 에 적힌 참조와 같은 값이고, 그릴 주소만 여기서 붙는다. */
+data class InputFileResponse(
+    val source: FileSource,
+    /**
+     * **오래 사는** 주소. 결과물을 참조했으면 [FileResponse.url] 과 같은 경로다.
+     * 올린 파일은 우리가 내려보내는 경로가 없어 `null` 이다.
+     */
+    val url: String?,
+    /** **바로 그릴** 주소. 서명할 수 없거나 찾지 못하면 `null`. 수명이 짧다. */
+    val previewUrl: String?,
 )
 
 data class TaskResponse(
@@ -106,13 +118,25 @@ fun GenerationJobView.toResponse(): GenerationJobDetailResponse {
     return GenerationJobDetailResponse(
         uuid = uuid,
         status = status,
+        type = option.type,
         model = model,
         option = option,
+        inputs = inputs.map { it.toResponse() },
         createdAt = createdAt,
+        taskCount = taskCount,
         progress = progress,
         tasks = tasks.map { it.toResponse(textFormat) },
     )
 }
+
+private fun InputFileView.toResponse(): InputFileResponse = InputFileResponse(
+    source = source,
+    url = when (source) {
+        is FileSource.Generated -> GeneratedFileController.pathOf(source.sha256)
+        is FileSource.Uploaded -> null
+    },
+    previewUrl = previewUrl,
+)
 
 private fun GenerationJobTaskView.toResponse(textFormat: TextFormat): TaskResponse = TaskResponse(
     sequence = sequence,

@@ -17,7 +17,8 @@ interface GenerationJobTaskRepository : Repository<GenerationJobTask, Long> {
 
     fun findById(id: Long): GenerationJobTask?
 
-    fun findAllByJobIdOrderBySequence(jobId: Long): List<GenerationJobTask>
+    /** 목록 한 페이지의 Task 를 한 번에 가져온다. Job 마다 묻지 않는다. */
+    fun findAllByJobIdInOrderBySequence(jobIds: Collection<Long>): List<GenerationJobTask>
 
     /** 오래 기다린 것부터 집도록 id 순으로 [limit] 개를 준다. 개수는 부르는 쪽이 정한다. */
     fun findOldestByStatus(status: TaskStatus, limit: Int): List<GenerationJobTask> =
