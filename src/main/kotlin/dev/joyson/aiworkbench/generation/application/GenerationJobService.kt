@@ -13,6 +13,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
+import org.springframework.data.domain.PageRequest
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
@@ -39,6 +40,16 @@ class GenerationJobService(
      */
     private val presignedUrlIssuer: PresignedUrlIssuer?,
 ) {
+
+    /** 선택한 서비스의 작업을 최신 접수순으로 조회한다. */
+    @Transactional(readOnly = true)
+    fun listOwned(workspaceUuid: UUID, page: Int, size: Int): JobListView {
+        val jobs = generationJobRepository.findByWorkspaceUuidOrderByIdDesc(workspaceUuid, PageRequest.of(page, size))
+        return JobListView(
+            items = jobs.content.map { JobSummaryView(it.uuid, it.status, it.model, it.option.type, it.createdAt, it.taskCount) },
+            hasNext = jobs.hasNext(),
+        )
+    }
 
     /**
      * 생성 요청을 접수한다 — 받아들일지 판단하고, 받아들이기로 했으면 기록을 만든다.

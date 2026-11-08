@@ -85,6 +85,65 @@ class GenerationJobQueryApiTest @Autowired constructor(
         }
 
     @Test
+    fun `작업 목록은 서비스 범위에서 최신순으로 나누어 조회한다`() {
+        val token = tokenOf("list-owner")
+        val first = submit(token, taskCount = 1)
+        val second = submit(token, taskCount = 1)
+        submit(tokenOf("list-other"), taskCount = 1)
+
+        mockMvc.get("/api/jobs?page=0&size=1") {
+            header("Authorization", "Bearer $token")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items.length()") { value(1) }
+            jsonPath("$.items[0].uuid") { value(second) }
+            jsonPath("$.items[0].type") { value("image-generate") }
+            jsonPath("$.hasNext") { value(true) }
+        }
+        mockMvc.get("/api/jobs?page=1&size=1") {
+            header("Authorization", "Bearer $token")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items[0].uuid") { value(first) }
+            jsonPath("$.hasNext") { value(false) }
+        }
+        mockMvc.get("/api/jobs?page=-1") {
+            header("Authorization", "Bearer $token")
+        }.andExpect { status { isBadRequest() } }
+        mockMvc.get("/api/jobs") { }.andExpect { status { isUnauthorized() } }
+    }
+
+    @Test
+    fun `같은 사용자의 서비스별 작업 목록은 격리된다`() {
+        val token = tokenOf("list-workspaces-owner")
+        val defaultJob = submit(token, taskCount = 1)
+        val workspace = mockMvc.post("/api/services") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"name":"별도 서비스"}"""
+        }.andReturn().response.contentAsString.substringAfter("\"uuid\":\"").substringBefore("\"")
+        val otherJob = mockMvc.post("/api/jobs") {
+            header("Authorization", "Bearer $token")
+            header("X-Workspace-Id", workspace)
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"option":$OPTION,"model":"$FAKE_MODEL","taskCount":1}"""
+        }.andReturn().response.contentAsString.substringAfter("\"uuid\":\"").substringBefore("\"")
+
+        mockMvc.get("/api/jobs") {
+            header("Authorization", "Bearer $token")
+            header("X-Workspace-Id", workspace)
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.items.length()") { value(1) }
+            jsonPath("$.items[0].uuid") { value(otherJob) }
+        }
+        mockMvc.get("/api/jobs") { header("Authorization", "Bearer $token") }.andExpect {
+            jsonPath("$.items.length()") { value(1) }
+            jsonPath("$.items[0].uuid") { value(defaultJob) }
+        }
+    }
+
+    @Test
     fun `자기 Job 을 조회하면 수명과 진행 상황이 온다`() {
         val token = tokenOf("query-owner")
         val uuid = submit(token, taskCount = 2)

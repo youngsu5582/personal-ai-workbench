@@ -147,3 +147,8 @@ jooq {
 		}
 	}
 }
+
+// Vite 산출물을 같은 출처의 Spring 정적 리소스로 제공한다.
+tasks.processResources {
+    from("frontend/dist") { into("static") }
+}

@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.generation.application.GenerationJobTaskView
 import dev.joyson.aiworkbench.generation.application.GenerationJobView
 import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
+import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
 import dev.joyson.aiworkbench.generation.domain.TaskStatus
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
@@ -15,6 +16,17 @@ import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
 import java.util.UUID
+
+data class GenerationJobListResponse(val items: List<GenerationJobSummaryResponse>, val hasNext: Boolean)
+
+data class GenerationJobSummaryResponse(
+    val uuid: UUID,
+    val status: JobLifecycle,
+    val model: String,
+    val type: GenerationJobType,
+    val createdAt: Instant,
+    val taskCount: Int,
+)
 
 /**
  * 조회 응답.

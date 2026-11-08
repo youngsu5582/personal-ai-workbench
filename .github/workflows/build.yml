@@ -35,6 +35,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # 테스트가 Testcontainers 로 PostgreSQL 을 띄운다. ubuntu-latest 러너에는 Docker 가 있다.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
       - run: ./gradlew build --no-daemon
 
       # 실패했을 때 어느 테스트가 왜 깨졌는지 보려면 리포트가 필요하다.

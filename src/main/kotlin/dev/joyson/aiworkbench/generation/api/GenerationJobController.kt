@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
+import org.springframework.http.HttpStatus
 import java.util.*
 
 @RestController
@@ -26,6 +29,23 @@ import java.util.*
 class GenerationJobController(
     private val generationJobService: GenerationJobService,
 ) {
+
+    /** 현재 서비스의 작업을 최신순으로 조회한다. */
+    @GetMapping
+    fun list(
+        scope: WorkspaceContext,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): GenerationJobListResponse {
+        if (page < 0 || size !in 1..50 || page.toLong() * size > Int.MAX_VALUE) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 페이지 요청입니다.")
+        }
+        val result = generationJobService.listOwned(scope.workspaceUuid, page, size)
+        return GenerationJobListResponse(
+            result.items.map { GenerationJobSummaryResponse(it.uuid, it.status, it.model, it.type, it.createdAt, it.taskCount) },
+            result.hasNext,
+        )
+    }
 
     @PostMapping
     fun generate(scope: WorkspaceContext, @Valid @RequestBody request: GenerationRequest): ResponseEntity<GenerationResponse> {
