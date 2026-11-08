@@ -1,0 +1,103 @@
+/*
+ * 콘솔 디자인 시스템의 토큰과 Tailwind 연결.
+ *
+ * Tailwind 의 기본 리셋(preflight)은 불러오지 않는다. 기존 화면은 style.css · console-panels.css 의
+ * 전역 규칙에 기대고 있어서, 리셋을 켜면 옮기지 않은 화면까지 한꺼번에 모양이 바뀐다.
+ * 유틸리티는 레이어 없이 불러온다. 레이어에 넣으면 레이어 밖의 기존 전역 규칙에 항상 지기 때문이다.
+ *
+ * 토큰 이름에 `--ds-` 를 붙이는 이유: 기존 전역 변수 `--muted` · `--accent` 가 다른 뜻(글자색 · 브랜드 색)으로 쓰인다.
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --ds-background: #fafafa;
+  --ds-surface: #ffffff;
+  --ds-foreground: #18181b;
+  --ds-muted-foreground: #5f5f68;
+  --ds-subtle-foreground: #71717a;
+  --ds-muted: #f4f4f5;
+  --ds-border: #e4e4e7;
+  --ds-border-strong: #d4d4d8;
+  --ds-primary: #18181b;
+  --ds-primary-foreground: #ffffff;
+  --ds-accent: #3451b2;
+  --ds-accent-soft: #eef2ff;
+  --ds-accent-subtle: #f8faff;
+  --ds-ring: #c7d2fe;
+  --ds-tone-text: #4338ca;
+  --ds-tone-text-soft: #eef2ff;
+  --ds-tone-image: #b4441f;
+  --ds-tone-image-soft: #fff1ec;
+  --ds-tone-decision: #6d3fc4;
+  --ds-tone-decision-soft: #f3eeff;
+  --ds-success: #2f7a57;
+  --ds-success-soft: #e7f5ee;
+  --ds-danger: #c42b2b;
+  --ds-danger-soft: #fdecec;
+}
+
+html[data-theme="dark"] {
+  --ds-background: #111113;
+  --ds-surface: #18181b;
+  --ds-foreground: #fafafa;
+  --ds-muted-foreground: #b4b4bc;
+  --ds-subtle-foreground: #9c9ca6;
+  --ds-muted: #27272a;
+  --ds-border: #2e2e33;
+  --ds-border-strong: #3f3f46;
+  --ds-primary: #fafafa;
+  --ds-primary-foreground: #18181b;
+  --ds-accent: #93a8f4;
+  --ds-accent-soft: #232a45;
+  --ds-accent-subtle: #1c2135;
+  --ds-ring: #3b4a80;
+  --ds-tone-text: #b4bdfc;
+  --ds-tone-text-soft: #262b4a;
+  --ds-tone-image: #fdb79c;
+  --ds-tone-image-soft: #3a2620;
+  --ds-tone-decision: #cdb4fb;
+  --ds-tone-decision-soft: #2f2645;
+  --ds-success: #86d7b0;
+  --ds-success-soft: #173528;
+  --ds-danger: #f8a3a3;
+  --ds-danger-soft: #3d1d1f;
+}
+
+@theme inline {
+  --color-background: var(--ds-background);
+  --color-surface: var(--ds-surface);
+  --color-foreground: var(--ds-foreground);
+  --color-muted-foreground: var(--ds-muted-foreground);
+  --color-subtle-foreground: var(--ds-subtle-foreground);
+  --color-muted: var(--ds-muted);
+  --color-border: var(--ds-border);
+  --color-border-strong: var(--ds-border-strong);
+  --color-primary: var(--ds-primary);
+  --color-primary-foreground: var(--ds-primary-foreground);
+  --color-accent: var(--ds-accent);
+  --color-accent-soft: var(--ds-accent-soft);
+  --color-accent-subtle: var(--ds-accent-subtle);
+  --color-ring: var(--ds-ring);
+  --color-tone-text: var(--ds-tone-text);
+  --color-tone-text-soft: var(--ds-tone-text-soft);
+  --color-tone-image: var(--ds-tone-image);
+  --color-tone-image-soft: var(--ds-tone-image-soft);
+  --color-tone-decision: var(--ds-tone-decision);
+  --color-tone-decision-soft: var(--ds-tone-decision-soft);
+  --color-success: var(--ds-success);
+  --color-success-soft: var(--ds-success-soft);
+  --color-danger: var(--ds-danger);
+  --color-danger-soft: var(--ds-danger-soft);
+
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-popover: 0 10px 30px rgb(24 24 27 / 0.1), 0 2px 6px rgb(24 24 27 / 0.05);
+  --shadow-control: 0 1px 2px rgb(24 24 27 / 0.06);
+}

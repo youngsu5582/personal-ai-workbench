@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import "./style.css";
 import "./console-panels.css";
+// 디자인 시스템은 기존 전역 CSS 뒤에 둔다. 유틸리티 클래스가 전역 요소 규칙(label input 등)을 이기게 하기 위해서다.
+import "./shared/ui/design-system.css";
 
 type Page =
   "home" | "studio" | "jobs" | "templates" | "library" | "usage" | "services" | "keys" | "settings";
