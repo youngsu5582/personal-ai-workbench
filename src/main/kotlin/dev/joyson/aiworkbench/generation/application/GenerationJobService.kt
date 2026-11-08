@@ -65,14 +65,7 @@ class GenerationJobService(
      * 트랜잭션에 들어가야 한다 — 한쪽만 되면 크레딧은 빠졌는데 작업이 없는 상태가 생긴다.
      */
     fun submit(ownerUuid: UUID, workspaceUuid: UUID, command: GenerationCommand): GenerationJobView {
-        // 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
-        val supported = when (command.option) {
-            is ImageOption -> providerRegistry.find(command.model) != null
-            is TextGenerateOption -> providerRegistry.findText(command.model) != null
-            is DecisionOption -> providerRegistry.findDecision(command.model) != null
-        }
-        if (!supported) throw UnsupportedModelException(command.model, providerRegistry.availableNames)
-
+        requireSupported(command.option, command.model)
         requireOwnedSources(workspaceUuid, command.option)
 
         return generationJobWriter.create(ownerUuid, workspaceUuid, command)
@@ -112,6 +105,21 @@ class GenerationJobService(
                 )
             },
         )
+    }
+
+    /**
+     * 이 모델이 이 옵션의 종류를 다룰 수 있는지 본다. 못 하면 [UnsupportedModelException] 이다.
+     *
+     * 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
+     * 템플릿이 기본 모델을 저장할 때도 같은 규칙으로 묻는다.
+     */
+    fun requireSupported(option: GenerationOption, model: String) {
+        val supported = when (option) {
+            is ImageOption -> providerRegistry.find(model) != null
+            is TextGenerateOption -> providerRegistry.findText(model) != null
+            is DecisionOption -> providerRegistry.findDecision(model) != null
+        }
+        if (!supported) throw UnsupportedModelException(model, providerRegistry.availableNames)
     }
 
     /**
