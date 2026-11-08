@@ -23,6 +23,18 @@ interface ExternalApiTextProvider {
     fun supports(model: String): Boolean = model in models
 
     /**
+     * 이 모델에 보낼 수 있는 effort. 여기 없는 값은 부르지 않고 거절한다. 모르는 모델이면 빈 집합이다.
+     *
+     * 저쪽 API 가 **표현할 수 있는** 값이 상한이다. 모델이 실제로 받는 값은 그 부분집합이고,
+     * 확인한 모델만 좁힌다 — 확인하지 않은 칸을 좁히면 받을 수 있는 요청을 막는다.
+     * 좁히지 않은 값을 모델이 거절하면 그건 저쪽 응답으로 안다.
+     *
+     * 모델을 받는 이유는 그 좁히는 자리를 포트를 고치지 않고 어댑터 안에 두기 위해서다.
+     * 기본값을 두지 않는 이유는 어댑터를 더할 때마다 이 질문에 답하게 하려는 것이다.
+     */
+    fun efforts(model: String): Set<ReasoningEffort>
+
+    /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.
      *
      * 실패는 [ExternalApiException] 으로 알린다. 응답을 받았으면 — 모델이 거절했든 잘렸든 — 실패가 아니다.
