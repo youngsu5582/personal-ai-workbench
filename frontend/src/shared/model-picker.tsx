@@ -26,15 +26,18 @@ const NONE = "__none__";
 
 /** 서버가 이 작업 종류에 등록한 모델을 공급자별로 묶어 고르게 한다. */
 export function ModelPicker({ id, token, workspace, type, value, onChange, required = true, label = "모델", emptyLabel = "실행할 때 고르기", hint, autoSelectFirst }: Props) {
-  const [models, setModels] = useState<Model[] | null>(null);
+  // 목록은 어느 서비스 · 종류의 것인지와 함께 둔다. 종류를 바꾼 직후의 렌더에는 이전 종류의 목록이 아직 남아 있어,
+  // 그 목록으로 자동 선택하면 다른 종류의 모델이 실린다. 지금 서비스 · 종류의 목록이 아니면 불러오는 중으로 본다.
+  const source = `${workspace}/${type}`;
+  const [loaded, setLoaded] = useState<{ source: string; models: Model[] } | null>(null);
+  const models = loaded?.source === source ? loaded.models : null;
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
   useEffect(() => {
     let active = true;
-    setModels(null);
     setError("");
     request<{ models: Model[] }>(token, `/api/models?type=${encodeURIComponent(type)}`, workspace)
-      .then(result => { if (active) setModels(result.models); })
+      .then(result => { if (active) setLoaded({ source: `${workspace}/${type}`, models: result.models }); })
       .catch(e => { if (active) setError(errorText(e)); });
     return () => { active = false; };
   }, [token, workspace, type, version]);

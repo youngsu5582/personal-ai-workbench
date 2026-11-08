@@ -88,6 +88,34 @@ test("진행 중 작업 조회가 일시적으로 실패해도 결과 조회를 
   expect(calls).toBeGreaterThanOrEqual(3);
 });
 
+test("작업 유형을 바꾸면 그 유형의 모델 목록을 받기 전에는 이전 유형의 모델로 실행하지 않는다", async ({ page }) => {
+  await prepare(page);
+  let textModels = false;
+  await page.route("**/api/models?**", route => {
+    if (route.request().url().includes("type=image-generate"))
+      return route.fulfill({ json: { models: [{ id: "image-model", provider: "example" }] } });
+    return textModels ? route.fulfill({ json: { models: [{ id: "text-model", provider: "example" }] } }) : route.fulfill({ status: 503 });
+  });
+  const submitted: unknown[] = [];
+  await page.route("**/api/jobs", route => {
+    submitted.push(route.request().postDataJSON());
+    return route.fulfill({ status: 202, json: { uuid: "job-a" } });
+  });
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  const runButton = page.getByRole("button", { name: "작업 실행" });
+  await expect(runButton).toBeEnabled();
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  await expect(page.getByRole("button", { name: "모델 다시 불러오기" })).toBeVisible();
+  await expect(runButton).toBeDisabled();
+  textModels = true;
+  await page.getByRole("button", { name: "모델 다시 불러오기" }).click();
+  await expect(runButton).toBeEnabled();
+  await page.getByLabel("프롬프트").fill("예시 요청");
+  await runButton.click();
+  await expect.poll(() => submitted.length).toBe(1);
+  expect(submitted[0]).toMatchObject({ model: "text-model" });
+});
+
 test("이미지 요청 실패 후 같은 주소로 다시 불러온다", async ({ page }) => {
   await prepare(page);
   let fileCalls = 0;
