@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.auth.application
 
 import dev.joyson.aiworkbench.auth.domain.ServiceApiKey
 import dev.joyson.aiworkbench.auth.domain.ServiceApiKeyRepository
+import dev.joyson.aiworkbench.auth.domain.ServiceKeyPrincipal
 import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -12,7 +13,7 @@ import java.util.Base64
 import java.util.HexFormat
 import java.util.UUID
 
-/** 로그인한 사용자가 소유한 서비스의 키만 관리한다. */
+/** 로그인한 사용자가 소유한 서비스의 키를 관리하고, 키로 들어온 호출을 확인한다. */
 @Service
 class ServiceApiKeyService(
     private val repository: ServiceApiKeyRepository,
@@ -29,12 +30,31 @@ class ServiceApiKeyService(
     fun issue(owner: UUID, workspace: UUID, name: String, expiresAt: Instant?): IssuedServiceApiKey? {
         if (!workspaces.isOwnedBy(workspace, owner)) return null
         val bytes = ByteArray(32).also(random::nextBytes)
-        val secret = "pawb_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-        val hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(secret.toByteArray(Charsets.UTF_8)))
+        val secret = PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
         val key = repository.save(
-            ServiceApiKey(workspaceUuid = workspace, name = name, keyHash = hash, keyHint = secret.take(11), expiresAt = expiresAt),
+            ServiceApiKey(workspaceUuid = workspace, name = name, keyHash = hash(secret), keyHint = secret.take(11), expiresAt = expiresAt),
         )
         return IssuedServiceApiKey(key, secret)
+    }
+
+    /**
+     * 키 원문으로 호출한 서비스를 확인한다. 모르는 키 · 폐기 · 만료 · 서비스가 사라진 키는 null 이다.
+     * 원문 전체의 해시로 찾는다 — 표시용 힌트는 유일하지 않아 인증에 쓰지 않는다.
+     * 사용자가 비활성인지는 여기서 보지 않는다. 로그인 토큰과 같은 자리(요청의 소유자 해석)에서 막는다.
+     */
+    @Transactional(readOnly = true)
+    fun authenticate(secret: String, now: Instant = Instant.now()): ServiceKeyPrincipal? {
+        val key = repository.findByKeyHash(hash(secret))?.takeIf { it.usableAt(now) } ?: return null
+        val owner = workspaces.findOwnerUuid(key.workspaceUuid) ?: return null
+        return ServiceKeyPrincipal(keyUuid = key.uuid, workspaceUuid = key.workspaceUuid, ownerUuid = owner)
+    }
+
+    private fun hash(secret: String): String =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(secret.toByteArray(Charsets.UTF_8)))
+
+    companion object {
+        /** 발급하는 키의 머리말. 같은 `Authorization: Bearer` 헤더에서 로그인 토큰(JWT)과 키를 이것으로 가른다. */
+        const val PREFIX = "pawb_"
     }
 
     /** 소유한 서비스의 키를 폐기된 키까지 반환한다. 서비스가 없거나 소유하지 않으면 null 이다. */

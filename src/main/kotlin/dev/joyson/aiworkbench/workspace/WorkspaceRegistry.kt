@@ -15,4 +15,7 @@ interface WorkspaceRegistry {
 
     /** 서비스가 없거나 다른 사용자의 서비스이면 false 다. */
     fun isOwnedBy(workspaceUuid: UUID, ownerUuid: UUID): Boolean
+
+    /** 서비스의 주인. 서비스가 없으면 null 이다. 사용자 없이 서비스만 아는 호출(서비스 키)에서 쓴다. */
+    fun findOwnerUuid(workspaceUuid: UUID): UUID?
 }

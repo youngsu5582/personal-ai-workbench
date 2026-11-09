@@ -3,18 +3,24 @@ package dev.joyson.aiworkbench.auth.config
 import dev.joyson.aiworkbench.auth.api.HandoffCookie
 import dev.joyson.aiworkbench.auth.api.OAuth2LoginSuccessHandler
 import dev.joyson.aiworkbench.auth.application.OidcUserService
+import dev.joyson.aiworkbench.auth.application.ServiceApiKeyService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
+import org.springframework.security.authentication.ProviderManager
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver
 import org.springframework.security.web.SecurityFilterChain
 
 /**
  * 두 개의 필터 체인이 공존한다.
  *
- *   `/api` 이하 → Bearer(내 JWT), 무상태. 브라우저·CLI·MCP 가 모두 같은 경로를 쓴다.
+ *   `/api` 이하 → Bearer, 무상태. 브라우저·CLI·MCP·내 다른 서비스가 모두 같은 경로를 쓴다.
+ *                 값이 서비스 키 머리말로 시작하면 서비스 키로, 아니면 내 JWT 로 확인한다.
  *   그 외        → OAuth2 로그인. Google 로 갔다 오는 리다이렉트 구간에서만 세션을 쓴다.
  *
  * "완전 stateless" 가 아닌 이유는 state/PKCE 를 리다이렉트 왕복 동안 어딘가 보관해야 하기 때문이다.
@@ -26,13 +32,21 @@ class SecurityConfig {
 
     @Bean
     @Order(1)
-    fun apiSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun apiSecurityFilterChain(http: HttpSecurity, jwtDecoder: JwtDecoder, serviceKeys: ServiceApiKeyService): SecurityFilterChain {
+        // 호출하는 쪽은 토큰 종류를 신경 쓰지 않고 같은 헤더로 보낸다. 어느 쪽으로 확인할지는 값의 머리말이 정한다.
+        val jwt = ProviderManager(JwtAuthenticationProvider(jwtDecoder))
+        val serviceKey = ServiceKeyAuthenticationManager(serviceKeys)
+        val bearer = DefaultBearerTokenResolver()
         http
             .securityMatcher("/api/**")
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { it.anyRequest().authenticated() }
-            .oauth2ResourceServer { rs -> rs.jwt { } }
+            .oauth2ResourceServer { rs ->
+                rs.authenticationManagerResolver { request ->
+                    if (bearer.resolve(request)?.startsWith(ServiceApiKeyService.PREFIX) == true) serviceKey else jwt
+                }
+            }
         return http.build()
     }
 

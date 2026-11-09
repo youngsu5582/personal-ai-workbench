@@ -9,4 +9,7 @@ interface WorkspaceRepository : Repository<Workspace, Long> {
     fun findAllByOwnerUserUuidOrderByCreatedAtAsc(ownerUserUuid: UUID): List<Workspace>
     fun findByUuidAndOwnerUserUuid(uuid: UUID, ownerUserUuid: UUID): Workspace?
     fun findByOwnerUserUuidAndIsDefaultTrue(ownerUserUuid: UUID): Workspace?
+
+    /** 소유자를 모르는 호출(서비스 키)에서 주인을 찾을 때만 쓴다. 사용자 요청의 조회는 소유자를 함께 조건으로 쓴다. */
+    fun findByUuid(uuid: UUID): Workspace?
 }

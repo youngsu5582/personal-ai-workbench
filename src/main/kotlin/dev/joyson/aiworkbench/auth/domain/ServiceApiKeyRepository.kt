@@ -8,4 +8,7 @@ interface ServiceApiKeyRepository : Repository<ServiceApiKey, Long> {
     fun save(key: ServiceApiKey): ServiceApiKey
     fun findAllByWorkspaceUuidOrderByCreatedAtAsc(workspaceUuid: UUID): List<ServiceApiKey>
     fun findByUuidAndWorkspaceUuid(uuid: UUID, workspaceUuid: UUID): ServiceApiKey?
+
+    /** 인증에서만 쓴다. 해시는 원문 전체로 만들어 유일하다. */
+    fun findByKeyHash(keyHash: String): ServiceApiKey?
 }
