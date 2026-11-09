@@ -72,7 +72,10 @@ migrations() {
 
 CHANGES="$(changes)"
 MIGRATION_ROWS="$(migrations)"
-CONFIG="$(git diff --name-only "$BASE" "$TARGET" -- src/main/resources/application.yaml deploy ":(exclude)$OVERLAY" | sed 's/.*/- `&`/')"
+# application.yaml 은 이미지에 들어가므로 배포할 커밋까지 본다. deploy/ 는 홈서버가 apply 할 체크아웃(지금 HEAD)까지 본다 —
+# 태그 뒤에 main 에 들어온 매니페스트도 함께 적용되기 때문이다.
+CONFIG="$( { git diff --name-only "$BASE" "$TARGET" -- src/main/resources/application.yaml
+    git diff --name-only "$BASE" HEAD -- deploy ":(exclude)$OVERLAY" ":(exclude)*.md"; } | sed 's/.*/- `&`/')"
 TAG="${GITHUB_REF_NAME:-}"
 
 {
