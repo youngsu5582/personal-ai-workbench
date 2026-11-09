@@ -151,5 +151,7 @@ class ServiceKeyAuthenticationApiTest @Autowired constructor(
         jdbc.update("UPDATE users SET status = 'DISABLED' WHERE uuid = ?", owner.uuid)
         em.flush(); em.clear()
         mockMvc.get("/api/templates") { header("Authorization", "Bearer $active") }.andExpect { status { isUnauthorized() } }
+        // 모델 목록은 소유자를 해석하지 않는 경로라, 인증 단계에서 막지 않으면 통과한다.
+        mockMvc.get("/api/models?type=text-generate") { header("Authorization", "Bearer $active") }.andExpect { status { isUnauthorized() } }
     }
 }

@@ -3,6 +3,7 @@ package dev.joyson.aiworkbench.auth.application
 import dev.joyson.aiworkbench.auth.domain.ServiceApiKey
 import dev.joyson.aiworkbench.auth.domain.ServiceApiKeyRepository
 import dev.joyson.aiworkbench.auth.domain.ServiceKeyPrincipal
+import dev.joyson.aiworkbench.user.UserRegistry
 import dev.joyson.aiworkbench.workspace.WorkspaceRegistry
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,6 +19,7 @@ import java.util.UUID
 class ServiceApiKeyService(
     private val repository: ServiceApiKeyRepository,
     private val workspaces: WorkspaceRegistry,
+    private val users: UserRegistry,
 ) {
     private val random = SecureRandom()
 
@@ -38,14 +40,17 @@ class ServiceApiKeyService(
     }
 
     /**
-     * 키 원문으로 호출한 서비스를 확인한다. 모르는 키 · 폐기 · 만료 · 서비스가 사라진 키는 null 이다.
+     * 키 원문으로 호출한 서비스를 확인한다. 모르는 키 · 폐기 · 만료 · 서비스가 사라진 키와 주인이 비활성인 키는 null 이다.
      * 원문 전체의 해시로 찾는다 — 표시용 힌트는 유일하지 않아 인증에 쓰지 않는다.
-     * 사용자가 비활성인지는 여기서 보지 않는다. 로그인 토큰과 같은 자리(요청의 소유자 해석)에서 막는다.
+     *
+     * 주인의 활성 상태를 인증 단계에서 본다. 모델 목록처럼 소유자를 해석하지 않는 경로가 있어,
+     * 요청의 소유자 해석에만 맡기면 비활성 사용자의 키가 그런 경로를 통과한다.
      */
     @Transactional(readOnly = true)
     fun authenticate(secret: String, now: Instant = Instant.now()): ServiceKeyPrincipal? {
         val key = repository.findByKeyHash(hash(secret))?.takeIf { it.usableAt(now) } ?: return null
         val owner = workspaces.findOwnerUuid(key.workspaceUuid) ?: return null
+        if (users.findByUuid(owner)?.active != true) return null
         return ServiceKeyPrincipal(keyUuid = key.uuid, workspaceUuid = key.workspaceUuid, ownerUuid = owner)
     }
 
