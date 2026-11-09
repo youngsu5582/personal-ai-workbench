@@ -92,8 +92,9 @@ class ServiceApiKeyApiTest @Autowired constructor(
         }.andExpect { status { isNotFound() } }
         mockMvc.delete("$path/$id") { header("Authorization", "Bearer $stranger") }.andExpect { status { isNotFound() } }
         mockMvc.delete("/api/services/$otherId/keys/$id") { header("Authorization", "Bearer $owner") }.andExpect { status { isNotFound() } }
-        mockMvc.get(path) { header("Authorization", "Bearer $secret") }.andExpect { status { isUnauthorized() } }
-        mockMvc.get("/api/services") { header("Authorization", "Bearer $secret") }.andExpect { status { isUnauthorized() } }
+        // 키로는 인증되지만 키 관리 · 서비스 목록 같은 계정 수준 경로는 열지 못한다.
+        mockMvc.get(path) { header("Authorization", "Bearer $secret") }.andExpect { status { isForbidden() } }
+        mockMvc.get("/api/services") { header("Authorization", "Bearer $secret") }.andExpect { status { isForbidden() } }
         mockMvc.delete("$path/$id") { header("Authorization", "Bearer $owner") }.andExpect { status { isNoContent() } }
         mockMvc.delete("$path/$id") { header("Authorization", "Bearer $owner") }.andExpect { status { isNoContent() } }
         mockMvc.delete("$path/${UUID.randomUUID()}") { header("Authorization", "Bearer $owner") }.andExpect { status { isNotFound() } }

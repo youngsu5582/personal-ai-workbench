@@ -43,4 +43,7 @@ class ServiceApiKey(
     fun revoke(now: Instant) {
         if (revokedAt == null) revokedAt = now
     }
+
+    /** 폐기되지 않았고 만료 시각 전이면 인증에 쓸 수 있다. 만료 시각과 같은 순간부터는 쓸 수 없다. */
+    fun usableAt(now: Instant): Boolean = revokedAt == null && (expiresAt == null || now.isBefore(expiresAt))
 }
