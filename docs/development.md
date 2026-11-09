@@ -602,6 +602,21 @@ sudo k3s kubectl -n workbench logs deployment/workbench -c configure-garage-cors
 
 키 원문을 잃어버리면 해당 키를 폐기하고 새로 발급한다. 교체할 때는 새 키를 먼저 배포한 뒤 기존 키를 폐기한다. 키를 비밀번호처럼 취급하고 소스 코드나 브라우저에 넣지 않는다.
 
+내 다른 서비스(블로그 서버 등)는 로그인 대신 서비스 키로 부른다. 헤더는 로그인 토큰과 같다.
+
+```http
+POST /api/templates/{uuid}/jobs
+Content-Type: application/json
+Authorization: Bearer pawb_...
+
+{"variables":{"request":"이 글을 요약해 줘"}}
+```
+
+- 키의 서비스가 범위라 `X-Workspace-Id` 는 생략한다. 주면 키의 서비스와 같아야 하고, 같은 사용자의 다른 서비스라도 다르면 403 이다.
+- 컨트롤러가 서비스 범위(`WorkspaceContext`)를 받는 경로 — 작업 · 템플릿 · 업로드 · 파일 · 서비스별 사용량 — 와 모델 목록만 열린다.
+  소유자(`OwnerContext`)만 받는 계정 수준 경로 — 서비스 · 키 관리, `GET /api/me`, 전체 사용량 — 는 403 이다. 키로 키를 더 발급하거나 다른 서비스를 만들 수 없게 하려는 것이다.
+- 모르는 키 · 폐기 · 만료된 키와 비활성 사용자의 키는 사유를 나누지 않고 401 이다.
+
 서비스 소유권과 격리의 설계 근거는 [ADR 0004](adr/0004-service-ownership.md)에 정리한다.
 
 ## 인증
