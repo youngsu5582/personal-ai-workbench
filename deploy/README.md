@@ -103,10 +103,25 @@ overlay 에는 값이 든 Secret 이 없다. 운영자가 만든다.
 
 ## 새 버전 배포
 
-`main` 에 머지하면 `image.yml` 이 이미지를 GHCR 에 올리고, 실행 요약(Actions → 해당 실행 → Summary)에 digest 를 남긴다.
-그 값을 `overlays/home/kustomization.yaml` 의 `images[].digest` 에 적고, 적용한 뒤 커밋한다. 그래야 클러스터에 무엇이 떠 있는지 Git 이 말한다.
+`main` 에 머지하면 `image.yml` 이 커밋마다 이미지를 GHCR 에 올린다(`sha-<커밋 7자리>`).
+배포할 커밋에 `v` 로 시작하는 태그를 밀면 `deploy-pr.yml` 이 그 이미지의 digest 로 `overlays/home/kustomization.yaml` 의 `images[].digest` 를 바꾸는 PR 과 Release 를 만든다.
+PR 을 머지한 뒤 홈서버에서 적용한다. Git 의 digest 가 클러스터에 무엇이 떠 있는지 말하게 하려는 것이다.
 
 ```bash
+git tag -a v2026.11.09 -m "서비스 · 템플릿 · 새 콘솔" origin/main && git push origin v2026.11.09
+```
+
+- 태그 이름은 날짜다(`vYYYY.MM.DD`, 같은 날 두 번째부터 `.1`). 이 서비스는 호환을 약속하는 버전 번호가 없어, 언제 배포했는지가 보이는 이름을 쓴다.
+- 그 커밋의 이미지가 아직 없으면 멈춘다. `image.yml` 이 덜 끝났거나, 연달아 머지돼 앞 실행이 취소된 경우다. 이미지가 생긴 뒤 Actions 에서 그 실행을 다시 돌린다.
+- PR 본문은 `.claude/scripts/deploy-pr.sh` 가 만든다. 지금 떠 있는 커밋(고정된 digest 이미지의 revision 라벨)부터 들어가는 PR · 마이그레이션 · 설정 변경을 적고, 기존 행을 바꾸는 마이그레이션이 있으면 백업 명령을 넣는다. 손으로 돌려도 같다.
+- 워크플로가 PR 을 열려면 저장소 설정 Actions → General 의 "Allow GitHub Actions to create and approve pull requests" 가 켜져 있어야 한다.
+
+PR 을 머지한 뒤 홈서버에서:
+
+```bash
+cd ~/personal-ai-workbench-deploy && git pull
+# 기존 행을 바꾸는 마이그레이션이 있으면 먼저 백업한다(PR 본문이 알려 준다)
+sudo k3s kubectl -n workbench exec postgresql-0 -- sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > ~/workbench-$(date +%Y%m%d-%H%M).dump
 sudo k3s kubectl diff -k deploy/overlays/home     # live 와 무엇이 다른지
 sudo k3s kubectl apply -k deploy/overlays/home
 sudo k3s kubectl -n workbench rollout status deployment/workbench
