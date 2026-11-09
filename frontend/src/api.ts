@@ -90,6 +90,7 @@ export async function upload(
   const sha256 = Array.from(new Uint8Array(digest), (x) =>
     x.toString(16).padStart(2, "0"),
   ).join("");
+  // 서버 · 보관소의 원문 오류 대신 사용자가 할 수 있는 일을 알려 준다. 원인은 상태 코드로 가른다.
   const issued = await request<{
     sha256: string;
     uploadRequired: boolean;
@@ -102,18 +103,27 @@ export async function upload(
       contentLength: file.size,
       sha256,
     }),
+  }).catch((e: unknown) => {
+    if (e instanceof ApiError && e.status === 501)
+      throw new ApiError(501, "이 서버의 보관소는 아직 브라우저 업로드를 받지 않아요. 보관소 설정을 확인해 주세요.");
+    if (e instanceof ApiError && e.status === 400)
+      throw new ApiError(400, `이 파일은 올릴 수 없어요. PNG · JPG · WEBP 인지 확인해 주세요. (${e.message})`);
+    throw e;
   });
   if (issued.uploadRequired) {
-    if (!issued.url) throw new Error("업로드 주소가 없습니다.");
+    if (!issued.url) throw new Error("업로드 주소를 받지 못했어요. 잠시 뒤 다시 시도해 주세요.");
     const headers = new Headers(issued.headers);
     headers.delete("Content-Length");
+    // 보관소는 다른 출처라, 닿지 못하거나 CORS 가 막으면 fetch 가 상태 코드 없이 실패한다.
     const response = await fetch(issued.url, {
       method: "PUT",
       headers,
       body: file,
+    }).catch(() => {
+      throw new Error("보관소에 파일을 보내지 못했어요. 네트워크나 보관소 설정(CORS)을 확인해 주세요.");
     });
     if (!response.ok)
-      throw new Error(`이미지를 업로드하지 못했어요 (${response.status}).`);
+      throw new Error(`보관소가 파일을 받지 않았어요 (${response.status}). 잠시 뒤 다시 시도해 주세요.`);
   }
   return issued.sha256;
 }

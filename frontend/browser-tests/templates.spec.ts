@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
 
+/** 사이드바의 서비스 전환(목록 선택)에서 이름으로 고른다. */
+async function pickService(page: import("@playwright/test").Page, name: RegExp) {
+  await page.getByRole("combobox", { name: "서비스 선택" }).click();
+  await page.getByRole("option", { name }).click();
+}
+
 /** 목록 선택(Radix Select)에서 항목을 고른다. 운영체제 기본 선택 상자가 아니라 selectOption 을 쓰지 못한다. */
 async function choose(page: import("@playwright/test").Page, label: string | RegExp, option: string) {
   await page.getByRole("combobox", { name: label }).click();
@@ -59,9 +65,9 @@ test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
   expect(submitted).toEqual({ model: "model-a", taskCount: 1, variables: { role: "작가", tone: "친근한", request: "글을 써줘" } });
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
-  await page.getByLabel("서비스 선택").selectOption("b");
+  await pickService(page, /^서비스 B/);
   await expect(page.getByText("아직 템플릿이 없어요")).toBeVisible();
-  await page.getByLabel("서비스 선택").selectOption("a");
+  await pickService(page, /^서비스 A/);
   await page.getByRole("button", { name: /수정한 편집자/ }).click();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "삭제", exact: true }).click();
@@ -95,7 +101,7 @@ test("실행 접수 중 서비스를 바꾸면 이전 서비스의 작업으로 
   await choose(page, /^모델$/, "model-a");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await arrived;
-  await page.getByLabel("서비스 선택").selectOption("b");
+  await pickService(page, /^서비스 B/);
   await expect(page.getByText("아직 템플릿이 없어요")).toBeVisible();
   const completed = page.waitForResponse(r => r.url().endsWith("/api/templates/t1/jobs") && r.request().method() === "POST");
   release();

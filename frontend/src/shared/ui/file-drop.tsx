@@ -27,7 +27,8 @@ export function FileDrop({ id, label, accept, onFile, disabled, hint, children, 
       over && "border-accent bg-accent-subtle", disabled && "pointer-events-none opacity-50", className)}>
     <input id={id} type="file" accept={accept} disabled={disabled} aria-label={label} className="sr-only"
       onChange={e => onFile(e.target.files?.[0] ?? null)} />
-    {children ?? <>
+    {/* `{file && …}` 처럼 넘기면 빈 문자열 · false 가 오기도 한다. 그때도 안내를 보인다. */}
+    {children || <>
       <Upload className="size-4.5 text-subtle-foreground" aria-hidden="true" />
       <span>끌어 놓거나 <span className="font-medium text-accent">파일 선택</span></span>
       {hint && <span className="text-[11px] text-subtle-foreground">{hint}</span>}
