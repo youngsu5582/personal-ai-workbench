@@ -68,6 +68,15 @@ data class TaskResponse(
     val texts: List<TextResponse>,
     /** 판정 결과물. 다른 종류의 Task 면 빈 목록이다. */
     val decisions: List<DecisionResponse>,
+    /**
+     * **마지막 시도가** 집힌 시각. 아직 집히지 않았으면 `null` 이다.
+     *
+     * Job 의 `createdAt` 부터 이 시각까지가 대기다. 재시도한 Task 는 앞선 시도에 쓴 시간도 그 안에 든다.
+     * 이 시각을 남기기 전에 끝난 Task 도 `null` 이라, `null` 만으로 "아직 안 집혔다" 고 읽지 않는다 — [status] 를 함께 본다.
+     */
+    val startedAt: Instant?,
+    /** 끝난 시각. 성공이든 실패든 끝나야 찬다. 다시 큐로 돌아간 Task 는 `null` 로 돌아간다. */
+    val finishedAt: Instant?,
 )
 
 data class DecisionResponse(
@@ -145,6 +154,8 @@ private fun GenerationJobTaskView.toResponse(textFormat: TextFormat): TaskRespon
     files = files.map { it.toResponse() },
     texts = texts.map { TextResponse(contentOf(it.content, textFormat)) },
     decisions = decisions.map { DecisionResponse(it.answers) },
+    startedAt = startedAt,
+    finishedAt = finishedAt,
 )
 
 /** 성공으로 기록된 글은 워커가 형식을 확인한 뒤라 여기서 파싱이 실패하지 않는다. */
