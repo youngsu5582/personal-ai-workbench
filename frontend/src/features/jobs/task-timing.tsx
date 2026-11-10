@@ -15,14 +15,15 @@ function clock(value: string) {
  *
  * 대기는 요청부터 워커가 집을 때까지, 처리는 집은 때부터 끝날 때까지다.
  * 시작 시각은 마지막 시도의 것이라, 재시도한 결과는 앞선 시도가 대기에 들어간다.
- * 시각이 없는 결과(기록하기 전에 만들어진 것)는 아무것도 그리지 않는다.
+ * 시각이 없는 결과(기록하기 전에 만들어진 것)와 다시 줄을 선 결과는 아무것도 그리지 않는다.
  */
-export function TaskTiming({ requestedAt, startedAt, finishedAt, failed }: { requestedAt: string; startedAt?: string | null; finishedAt?: string | null; failed: boolean }) {
+export function TaskTiming({ requestedAt, startedAt, finishedAt, running, failed }: { requestedAt: string; startedAt?: string | null; finishedAt?: string | null; running: boolean; failed: boolean }) {
   if (!startedAt) return null;
   const requested = new Date(requestedAt).valueOf();
   const started = new Date(startedAt).valueOf();
   const waited = Math.max(0, started - requested);
-  if (!finishedAt) return <p className="m-0 text-xs text-muted-foreground">대기 <strong className="font-medium text-foreground">{duration(waited)}</strong> → 처리 중 · {clock(startedAt)} 시작</p>;
+  // 끝난 시각이 없다고 처리 중인 것은 아니다. 재시도로 큐에 돌아간 결과도 앞선 시도의 시작 시각을 들고 있다.
+  if (!finishedAt) return !running ? null : <p className="m-0 text-xs text-muted-foreground">대기 <strong className="font-medium text-foreground">{duration(waited)}</strong> → 처리 중 · {clock(startedAt)} 시작</p>;
   const worked = Math.max(0, new Date(finishedAt).valueOf() - started);
   const total = Math.max(1, waited + worked);
   return <div className="flex min-w-0 flex-col gap-1.5">

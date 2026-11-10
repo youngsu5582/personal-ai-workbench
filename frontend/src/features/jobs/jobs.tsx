@@ -42,7 +42,8 @@ const inputHeading = (type: string) => type === "decision" ? "근거 이미지" 
 function finishedAtOf(job: Job) {
   const ends = job.tasks.map(task => task.finishedAt);
   if (job.status !== "CLOSED" || ends.length === 0 || ends.some(end => !end)) return null;
-  return ends.reduce((a, b) => a! > b! ? a : b)!;
+  // 글자로 견주지 않는다. 소수 자릿수가 값마다 달라 `12.5Z` 가 `12Z` 보다 앞선 것으로 읽힌다.
+  return ends.reduce((a, b) => new Date(a!).valueOf() >= new Date(b!).valueOf() ? a : b)!;
 }
 const alertClass = "m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger";
 const loadingClass = "m-0 text-[13px] text-muted-foreground";
@@ -64,17 +65,32 @@ function LongText({ text, mono = false }: { text: string; mono?: boolean }) {
   </div>;
 }
 
-/** 글 결과가 따른 JSON Schema 를 복사한다. 저장된 원문을 들여쓰기만 다시 해서, 키 순서는 요청한 그대로다. */
+/**
+ * 저장된 원문을 들여쓰기만 다시 한다. 다시 읽고 쓴 것이 원문과 달라지면(숫자 꼴 키는 앞으로 옮겨지고 큰 수는 깎인다)
+ * 원문을 그대로 돌려준다 — 요청한 키 순서가 출력 순서라서 바뀌면 안 된다.
+ */
+function pretty(schema: string) {
+  try {
+    const parsed: unknown = JSON.parse(schema);
+    return JSON.stringify(parsed) === schema ? JSON.stringify(parsed, null, 2) : schema;
+  } catch {
+    return schema;
+  }
+}
+
+/** 글 결과가 따른 JSON Schema 를 복사한다. 못 했으면 못 했다고 말한다 — 조용하면 빈 클립보드를 붙여 넣게 된다. */
 function CopySchema({ schema }: { schema: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 2000);
+    if (state === "idle") return;
+    const timer = setTimeout(() => setState("idle"), 2000);
     return () => clearTimeout(timer);
-  }, [copied]);
-  const text = () => { try { return JSON.stringify(JSON.parse(schema), null, 2); } catch { return schema; } };
-  return <Button variant="ghost" size="sm" className="-my-1 ml-auto text-muted-foreground" onClick={() => { void navigator.clipboard.writeText(text()).then(() => setCopied(true)); }}>
-    {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}{copied ? "복사됨" : "스키마 복사"}
+  }, [state]);
+  // 보안 컨텍스트가 아니면 clipboard 자체가 없다.
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(pretty(schema)) : Promise.reject(new Error("clipboard 없음")))
+    .then(() => setState("copied"), () => setState("failed"));
+  return <Button variant="ghost" size="sm" className={cn("-my-1 ml-auto", state === "failed" ? "text-danger" : "text-muted-foreground")} onClick={() => { void copy(); }}>
+    {state === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}{state === "copied" ? "복사됨" : state === "failed" ? "복사하지 못했어요" : "스키마 복사"}
   </Button>;
 }
 
@@ -106,7 +122,7 @@ function JobInputs({ job, token, workspace, onRefresh }: Props & { job: Job; onR
   const heading = inputHeading(job.type);
   return <div className="flex flex-col gap-2 border-t border-border pt-4">
     <h3 className={headingClass}>{heading}</h3>
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map(input => <figure key={`${input.source.type}-${input.source.sha256}`} className="m-0 flex min-w-0 flex-col gap-1.5">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map((input, i) => <figure key={`${i}-${input.source.sha256}`} className="m-0 flex min-w-0 flex-col gap-1.5">
       {input.url || input.previewUrl
         ? <AuthenticatedImage token={token} workspace={workspace} url={input.url ?? ""} previewUrl={input.previewUrl} onRefresh={onRefresh} alt={heading} />
         : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />미리 볼 수 없어요.</p>}
@@ -153,7 +169,7 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
           {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
               {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
-            <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} failed={task.status === "FAILED"} />
+            <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} running={task.status === "RUNNING"} failed={task.status === "FAILED"} />
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
             {task.texts.map((t, j) => typeof t.content === "string" ? <LongText key={j} text={t.content} /> : <LongText key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
             {task.decisions.map((d, j) => <LongText key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
