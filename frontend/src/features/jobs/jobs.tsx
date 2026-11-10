@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Copy, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
+import { duration, TaskTiming } from "./task-timing";
 import { Button } from "../../shared/ui/button";
 import { cn } from "../../shared/ui/cn";
 import { EmptyState } from "../../shared/ui/empty-state";
@@ -37,6 +38,12 @@ function outcome(job: Job) {
   return failed ? `성공 ${succeeded} · 실패 ${failed} / ${total}` : `성공 ${succeeded} / ${total}`;
 }
 const inputHeading = (type: string) => type === "decision" ? "근거 이미지" : "참고 이미지";
+/** 모든 결과가 끝났을 때만 답한다. 하나라도 끝난 시각이 없으면 작업이 끝났다고 말할 수 없다. */
+function finishedAtOf(job: Job) {
+  const ends = job.tasks.map(task => task.finishedAt);
+  if (job.status !== "CLOSED" || ends.length === 0 || ends.some(end => !end)) return null;
+  return ends.reduce((a, b) => a! > b! ? a : b)!;
+}
 const alertClass = "m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger";
 const loadingClass = "m-0 text-[13px] text-muted-foreground";
 const headingClass = "m-0 text-xs font-medium text-subtle-foreground";
@@ -146,6 +153,7 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
           {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
               {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
+            <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} failed={task.status === "FAILED"} />
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
             {task.texts.map((t, j) => typeof t.content === "string" ? <LongText key={j} text={t.content} /> : <LongText key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
             {task.decisions.map((d, j) => <LongText key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
@@ -158,6 +166,8 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
             <dt className="text-muted-foreground">유형</dt><dd className="m-0 text-right text-foreground">{labels[job.type] || job.type}</dd>
             <dt className="text-muted-foreground">모델</dt><dd className="m-0 text-right font-mono text-xs text-foreground [overflow-wrap:anywhere]">{job.model}</dd>
             <dt className="text-muted-foreground">요청 시각</dt><dd className="m-0 text-right text-foreground">{date(job.createdAt)}</dd>
+            {finishedAtOf(job) && <><dt className="text-muted-foreground">완료 시각</dt><dd className="m-0 text-right text-foreground">{date(finishedAtOf(job)!)}</dd>
+              <dt className="text-muted-foreground">총 소요</dt><dd className="m-0 text-right text-foreground">{duration(new Date(finishedAtOf(job)!).valueOf() - new Date(job.createdAt).valueOf())}</dd></>}
             <dt className="text-muted-foreground">작업 ID</dt><dd className="m-0 text-right font-mono text-xs text-foreground [overflow-wrap:anywhere]">{job.uuid}</dd>
           </dl>
           <JobRequest job={job} />

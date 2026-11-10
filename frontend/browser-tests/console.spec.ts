@@ -119,6 +119,38 @@ test("모양을 정하지 않은 글 결과에는 스키마 복사가 없다", a
   await expect(page.getByRole("button", { name: "스키마 복사" })).toHaveCount(0);
 });
 
+test("결과마다 대기와 처리 시간을 보이고 모두 끝난 작업에만 총 소요를 붙인다", async ({ page }) => {
+  await prepare(page);
+  const timed = {
+    ...job, taskCount: 2, progress: { total: 2, succeeded: 1, failed: 1 },
+    tasks: [
+      { ...job.tasks[0], startedAt: "2026-11-01T00:00:02Z", finishedAt: "2026-11-01T00:00:12Z" },
+      { ...job.tasks[0], status: "FAILED", failureReason: "거절됨", texts: [], startedAt: "2026-11-01T00:00:03Z", finishedAt: "2026-11-01T00:00:45Z" },
+    ],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: timed }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByRole("img", { name: "대기 2.0초, 처리 10.0초" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "대기 3.0초, 처리 42.0초" })).toBeVisible();
+  // 총 소요는 요청부터 가장 늦게 끝난 결과까지다.
+  await expect(page.getByText("45.0초", { exact: true })).toBeVisible();
+});
+
+test("처리 중인 결과는 시작 시각만 보이고, 시각이 없는 결과에는 시간 줄이 없다", async ({ page }) => {
+  await prepare(page);
+  const running = {
+    ...job, status: "DISPATCHED", taskCount: 2, progress: { total: 2, succeeded: 0, failed: 0 },
+    tasks: [
+      { status: "RUNNING", failureReason: null, files: [], texts: [], decisions: [], startedAt: "2026-11-01T00:00:02Z", finishedAt: null },
+      { status: "PENDING", failureReason: null, files: [], texts: [], decisions: [], startedAt: null, finishedAt: null },
+    ],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: running }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByText(/대기 2\.0초 → 처리 중/)).toHaveCount(1);
+  await expect(page.getByText("총 소요")).toHaveCount(0);
+});
+
 test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러온다", async ({ page }) => {
   await prepare(page);
   await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();

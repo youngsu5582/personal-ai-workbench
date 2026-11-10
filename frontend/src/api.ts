@@ -52,6 +52,9 @@ export type Job = {
   tasks: {
     status: string;
     failureReason: string | null;
+    /** 마지막 시도가 집힌 시각과 끝난 시각. 시각을 남기기 전에 끝난 결과는 둘 다 없다. */
+    startedAt?: string | null;
+    finishedAt?: string | null;
     files: { url: string; previewUrl: string | null; sha256: string }[];
     texts: { content: unknown }[];
     decisions: { answers: unknown[] }[];
