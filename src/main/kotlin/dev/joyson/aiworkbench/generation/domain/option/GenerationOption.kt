@@ -41,3 +41,16 @@ sealed interface GenerationOption {
     @get:JsonIgnore
     val type: GenerationJobType
 }
+
+/**
+ * 요청이 참조하는 파일들. 접수 때 소유를 확인하고, 실행 때 읽어 넘기고, 조회 때 미리보기를 붙인다.
+ *
+ * 프로퍼티가 아니라 확장 함수인 이유: 인터페이스의 getter 에 붙인 Jackson 애노테이션은 구현체가 이어받아,
+ * [ImageOption.sources] 처럼 저장되는 필드가 직렬화에서 빠질 수 있다.
+ */
+fun GenerationOption.fileSources(): List<FileSource> = when (this) {
+    is ImageOption -> sources
+    // 입력 파일을 받지 않는 종류다.
+    is TextGenerateOption -> emptyList()
+    is DecisionOption -> sources
+}

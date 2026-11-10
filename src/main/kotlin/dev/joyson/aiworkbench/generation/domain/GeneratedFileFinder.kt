@@ -17,4 +17,7 @@ data class FileLocation(
 interface GeneratedFileFinder {
 
     fun findOwned(sha256: String, workspaceUuid: UUID): FileLocation?
+
+    /** 여러 장을 한 번에 찾는다. 찾은 해시만 키로 담기고, 같은 내용이 여러 번 만들어졌어도 해시마다 하나다. */
+    fun findOwned(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, FileLocation>
 }

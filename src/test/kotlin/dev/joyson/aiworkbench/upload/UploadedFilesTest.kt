@@ -117,6 +117,31 @@ class UploadedFilesTest @Autowired constructor(
     }
 
     @Test
+    fun `여러 장의 읽기 주소는 한 번에 내고 검증을 통과한 것만 담는다`() {
+        val ready = pending()
+        fileStorage.put(ready.storageKey, png, "image/png")
+        uploadedFiles.findUsable(ready.sha256, owner)
+        val notVerified = pending()
+        val unknown = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
+
+        val urls = withIssuer().issueReadUrls(listOf(ready.sha256, notVerified.sha256, unknown), owner)
+
+        assertEquals(
+            mapOf(ready.sha256 to URI.create("https://storage.test/${ready.storageKey}?name=${ready.sha256}.png")),
+            urls,
+        )
+    }
+
+    @Test
+    fun `남의 서비스 업로드는 여러 장 주소에도 담지 않는다`() {
+        val file = pending()
+        fileStorage.put(file.storageKey, png, "image/png")
+        uploadedFiles.findUsable(file.sha256, owner)
+
+        assertTrue(withIssuer().issueReadUrls(listOf(file.sha256), UUID.randomUUID()).isEmpty())
+    }
+
+    @Test
     fun `검증 전 업로드에는 읽기 주소를 내지 않는다`() {
         val file = pending()
         fileStorage.put(file.storageKey, png, "image/png")

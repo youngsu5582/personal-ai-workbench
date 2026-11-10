@@ -323,6 +323,9 @@ Content-Type: application/json
 `202 Accepted`의 Job UUID로 `GET /api/jobs/{uuid}`에서 결과를 조회한다.
 존재하지 않거나 다른 사용자 소유인 입력은 접수 시 거절하며, 워커 실행 시에도 소유권을 확인한다.
 
+조회 응답의 `inputs[]` 에 참조한 파일이 그릴 주소와 함께 온다. 목록(`GET /api/jobs`)의 항목도 상세와 같은 모양(`GenerationJobDetailResponse`)이고,
+필드마다의 뜻은 `InputFileResponse` 에, 주소를 저장하지 않는 이유는 `InputFileView` 에 있다.
+
 S3 호환 보관소에서는 워커가 실행·재시도마다 새 presigned GET URL을 발급하고, OpenAI의
 `POST /v1/images/edits`에 JSON `images[].image_url`로 전달한다. 이미지 바이트는 보관소에서
 Provider로 직접 이동하며, URL은 Job 옵션에 저장하거나 로그에 출력하지 않는다.

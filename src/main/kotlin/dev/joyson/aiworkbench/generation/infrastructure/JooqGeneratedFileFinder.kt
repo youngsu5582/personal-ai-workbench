@@ -53,4 +53,21 @@ class JooqGeneratedFileFinder(
             ?.let { (storageKey, mimeType) ->
                 FileLocation(storageKey = storageKey!!, mimeType = mimeType!!)
             }
+
+    override fun findOwned(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, FileLocation> {
+        if (sha256s.isEmpty()) return emptyMap()
+        return dsl.select(GENERATED_FILES.SHA256, GENERATED_FILES.STORAGE_KEY, mimeType)
+            .from(GENERATED_FILES)
+            .join(GENERATION_JOB_TASKS).on(GENERATION_JOB_TASKS.ID.eq(GENERATED_FILES.TASK_ID))
+            .join(GENERATION_JOBS).on(GENERATION_JOBS.ID.eq(GENERATION_JOB_TASKS.JOB_ID))
+            .where(GENERATED_FILES.SHA256.`in`(sha256s))
+            .and(GENERATION_JOBS.WORKSPACE_UUID.eq(workspaceUuid))
+            .orderBy(GENERATED_FILES.ID)
+            .fetch()
+            // 한 장 조회와 같은 행을 고른다 — 먼저 만들어진 것.
+            .distinctBy { it.value1() }
+            .associate { (sha256, storageKey, mimeType) ->
+                sha256!! to FileLocation(storageKey = storageKey!!, mimeType = mimeType!!)
+            }
+    }
 }

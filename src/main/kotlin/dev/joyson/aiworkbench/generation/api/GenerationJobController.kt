@@ -41,10 +41,7 @@ class GenerationJobController(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 페이지 요청입니다.")
         }
         val result = generationJobService.listOwned(scope.workspaceUuid, page, size)
-        return GenerationJobListResponse(
-            result.items.map { GenerationJobSummaryResponse(it.uuid, it.status, it.model, it.type, it.createdAt, it.taskCount) },
-            result.hasNext,
-        )
+        return GenerationJobListResponse(result.items.map { it.toResponse() }, result.hasNext)
     }
 
     @PostMapping
