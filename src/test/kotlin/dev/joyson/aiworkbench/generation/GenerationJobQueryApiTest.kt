@@ -181,6 +181,28 @@ class GenerationJobQueryApiTest @Autowired constructor(
         query(uuid, token = null).andExpect { status { isUnauthorized() } }
     }
 
+    @Test
+    fun `끝난 Task 는 집힌 시각과 끝난 시각을 주고 집히지 않은 Task 는 비워 둔다`() {
+        val token = tokenOf("timing-owner")
+        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
+        val waiting = submit(token, taskCount = 1)
+
+        // 성공이든 실패든 끝났으면 둘 다 찬다. 대기와 처리 시간은 받는 쪽이 이 둘과 createdAt 으로 낸다.
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].startedAt") { isString() }
+            jsonPath("$.tasks[0].finishedAt") { isString() }
+            jsonPath("$.tasks[1].startedAt") { isString() }
+            jsonPath("$.tasks[1].finishedAt") { isString() }
+        }
+        query(waiting, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].status") { value("PENDING") }
+            jsonPath("$.tasks[0].startedAt") { value(null) }
+            jsonPath("$.tasks[0].finishedAt") { value(null) }
+        }
+    }
+
     /**
      * 한 장은 성공하고 한 장은 실패한 Job 을 만든다.
      *
@@ -250,28 +272,6 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks[1].files.length()") { value(0) }
             // 글 결과물은 null 이 아니라 빈 목록이다. "해당 없음" 과 "아직 없음" 을 가를 필요가 없다.
             jsonPath("$.tasks[0].texts.length()") { value(0) }
-        }
-    }
-
-    @Test
-    fun `끝난 Task 는 집힌 시각과 끝난 시각을 주고 집히지 않은 Task 는 비워 둔다`() {
-        val token = tokenOf("timing-owner")
-        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
-        val waiting = submit(token, taskCount = 1)
-
-        // 성공이든 실패든 끝났으면 둘 다 찬다. 대기와 처리 시간은 받는 쪽이 이 둘과 createdAt 으로 낸다.
-        query(jobUuid, token).andExpect {
-            status { isOk() }
-            jsonPath("$.tasks[0].startedAt") { isString() }
-            jsonPath("$.tasks[0].finishedAt") { isString() }
-            jsonPath("$.tasks[1].startedAt") { isString() }
-            jsonPath("$.tasks[1].finishedAt") { isString() }
-        }
-        query(waiting, token).andExpect {
-            status { isOk() }
-            jsonPath("$.tasks[0].status") { value("PENDING") }
-            jsonPath("$.tasks[0].startedAt") { value(null) }
-            jsonPath("$.tasks[0].finishedAt") { value(null) }
         }
     }
 
