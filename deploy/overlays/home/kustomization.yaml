@@ -21,4 +21,4 @@ images:
     # 띄울 이미지는 digest 로 가리킨다. 태그(main)는 옮겨 가서 apply 해도 Pod 가 바뀌지 않고,
     # 노드가 캐시한 옛 이미지를 그대로 쓴다. 배포할 커밋에 v 태그를 밀면 deploy-pr.yml 이 이 값을 바꾸는 PR 을 연다.
     # 0 으로 채운 값은 아직 고르지 않았다는 표시다 — 이대로 apply 하면 이미지를 받지 못하고 멈춘다.
-    digest: sha256:a4d80a0d20af7aa8cd6269af390f8cfb04c7bd148191101fde5ea77c0b9a8056
+    digest: sha256:278c8ba68f54c0e4831adfde5d2c73c915aa1bc3732bc21630fdd7530921b8a8
