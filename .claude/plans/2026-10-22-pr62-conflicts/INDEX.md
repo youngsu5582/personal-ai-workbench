@@ -5,7 +5,7 @@ Status: completed
 ## Progress
 - [x] 최신 main 과 Task 시간 측정 변경 통합
 - [x] 선행 PR 의 큐 Gauge 제외와 Provider 지표 유지
-- [x] V9 충돌을 V14 신규 마이그레이션으로 해결
+- [x] V9 충돌을 신규 마이그레이션으로 해결 (지금은 `V19__task_started_finished_at.sql`)
 - [x] 글 생성 성공 시도 집계와 회귀 검증 추가
 - [x] 전체 테스트와 diff 검증 — XML 기준 418개 중 413개 통과, 5개 건너뜀, 실패·오류 0
 - [x] 병합 커밋 e72ad33 을 feat/task-timing 에 일반 push, PR base 를 main 으로 변경

@@ -41,7 +41,7 @@ Status: active
 
 ## Resume Point
 #62 는 최신 main 을 병합해 충돌을 해결했다. 검증과 원격 반영은 `../2026-10-22-pr62-conflicts/INDEX.md` 에서 확인한다.
-- 현재 구현은 마지막 시도의 `started_at` · `finished_at` 이다. 기존 행은 채우지 않는다. 마이그레이션은 main 의 V13 다음인 V14 로 둔다.
+- 현재 구현은 마지막 시도의 `started_at` · `finished_at` 이다. 기존 행은 채우지 않는다. 마이그레이션은 `V19__task_started_finished_at.sql` 이다.
 - 재시도율은 시도 Timer 의 `outcome="retried"` 개수다. 글 생성의 성공도 같은 Timer 에 기록한다.
 - 시도 길이는 벽시계 차를 0 이상으로 올려 건수를 지킨다. 앞으로 보정될 때 길이가 부푸는 것과 트랜잭션 커밋 전 기록의 드문 과대 집계는 기존 결정을 유지한다.
 - 보관 Timer 는 이미지 바이트 쓰기를 결과별로 잰다. 글은 DB 행에 저장되므로 포함하지 않는다.

@@ -128,6 +128,7 @@ class TaskStateWriter(
 
         generatedDecisionRepository.save(GeneratedDecision(taskId = taskId, answers = answers, providerInfo = providerInfo))
         task.transitionTo(TaskStatus.SUCCEEDED)
+        recordAttempt(task, SUCCEEDED)
         closeIfFinished(task)
     }
 

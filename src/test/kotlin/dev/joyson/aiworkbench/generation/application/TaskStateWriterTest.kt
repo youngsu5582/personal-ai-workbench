@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.IntegrationTest
+import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -211,6 +212,20 @@ class TaskStateWriterTest @Autowired constructor(
         // 건수를 다르게 둔다. 같으면 재시도와 실패를 뒤바꿔 세도 통과한다.
         val expected = mapOf("succeeded" to 1L, "retried" to 2L, "failed" to 1L)
         before.forEach { (outcome, count) -> assertEquals(expected.getValue(outcome), attempts(outcome) - count, outcome) }
+    }
+
+    /** 성공을 적는 길이 결과물 종류마다 따로 있다. 한 곳이 빠지면 그 종류의 성공이 없어 재시도율이 부푼다. */
+    @Test
+    fun `성공한 시도는 결과물이 이미지든 글이든 판정이든 센다`() {
+        val (_, taskIds) = newJob(taskCount = 3)
+        writer.claim(limit = 3)
+        val before = attempts("succeeded")
+
+        writer.succeed(taskIds[0], listOf(StoredFile(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "k0", metadata())))
+        writer.succeed(taskIds[1], "요약입니다", ProviderInfo(providerId = "resp_1"))
+        writer.succeed(taskIds[2], listOf(DecisionAnswer.Predicate(name = "matches", probability = 0.9)), ProviderInfo(providerId = "resp_2"))
+
+        assertEquals(3, attempts("succeeded") - before)
     }
 
     /** 시도 길이는 벽시계 두 시각의 차다. 시계가 뒤로 가 음수가 되어도 건수는 빠지면 안 된다 — 재시도율이 그 건수다. */
