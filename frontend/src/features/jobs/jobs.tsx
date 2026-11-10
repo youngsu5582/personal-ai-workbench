@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileImage, FileText, ChevronDown, ChevronUp, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
 import { Button } from "../../shared/ui/button";
@@ -40,7 +40,22 @@ const inputHeading = (type: string) => type === "decision" ? "근거 이미지" 
 const alertClass = "m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger";
 const loadingClass = "m-0 text-[13px] text-muted-foreground";
 const headingClass = "m-0 text-xs font-medium text-subtle-foreground";
-const quoteClass = "m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]";
+const quoteClass = "m-0 w-full whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-[inherit] text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]";
+
+/**
+ * 요청 · 결과 본문. 길면 접어서 보이고 누르면 펼친다 — 본문 하나가 나머지 결과와 작업 정보를 화면 밖으로 밀어내지 않게 한다.
+ * 줄바꿈 없는 긴 글도 접히도록 글자 수와 줄 수를 함께 본다.
+ */
+function LongText({ text, mono = false }: { text: string; mono?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 600 || text.split("\n").length > 12;
+  return <div className="flex min-w-0 flex-col items-start gap-1">
+    <pre className={cn(quoteClass, mono && "font-mono text-xs", long && !open && "max-h-56 overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]")}>{text}</pre>
+    {long && <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" aria-expanded={open} onClick={() => setOpen(x => !x)}>
+      {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}{open ? "접기" : `전체 보기 (${text.length.toLocaleString("ko-KR")}자)`}
+    </Button>}
+  </div>;
+}
 
 /** 서명 주소가 있으면 첫 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. */
 function JobThumb({ job }: { job: Job }) {
@@ -54,11 +69,11 @@ function JobThumb({ job }: { job: Job }) {
 function JobRequest({ job }: { job: Job }) {
   const evidence = (job.option.input ?? []).flatMap(e => e.type === "text" ? [e.text] : []);
   const questions = job.option.questions ?? [];
-  const section = "flex flex-col gap-1.5 border-t border-border pt-4";
+  const section = "flex min-w-0 flex-col gap-1.5 border-t border-border pt-4";
   return <>
-    {job.option.prompt && <div className={section}><h3 className={headingClass}>요청 내용</h3><p className={quoteClass}>{job.option.prompt}</p></div>}
-    {job.option.instructions && <div className={section}><h3 className={headingClass}>지침</h3><p className={quoteClass}>{job.option.instructions}</p></div>}
-    {evidence.length > 0 && <div className={section}><h3 className={headingClass}>근거</h3>{evidence.map((text, i) => <p key={i} className={quoteClass}>{text}</p>)}</div>}
+    {job.option.prompt && <div className={section}><h3 className={headingClass}>요청 내용</h3><LongText text={job.option.prompt} /></div>}
+    {job.option.instructions && <div className={section}><h3 className={headingClass}>지침</h3><LongText text={job.option.instructions} /></div>}
+    {evidence.length > 0 && <div className={section}><h3 className={headingClass}>근거</h3>{evidence.map((text, i) => <LongText key={i} text={text} />)}</div>}
     {questions.length > 0 && <div className={section}><h3 className={headingClass}>질문</h3>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{questions.map(q => <li key={q.name} className="text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]"><span className="mr-1.5 font-mono text-xs text-muted-foreground">{q.name}</span>{q.instructions}</li>)}</ul>
     </div>}
@@ -111,22 +126,22 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
     <PageHeader eyebrow="Job details" title="작업 상세" description="실행 결과와 요청 정보를 확인하세요." actions={refresh} />
     {error ? <p role="alert" className={alertClass}>{error}</p> : !job ? <p className={loadingClass}>작업을 불러오는 중이에요.</p> :
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
-        <Card className="flex flex-col gap-4 p-6">
-          <CardTitle aside={<span className="flex items-center gap-2">{outcome(job) && <small className="text-xs text-muted-foreground">{outcome(job)}</small>}<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge></span>}>결과</CardTitle>
+        <Card className="flex min-w-0 flex-col gap-4 p-4 sm:p-6">
+          <CardTitle aside={<span className="flex flex-wrap items-center justify-end gap-2">{outcome(job) && <small className="text-xs text-muted-foreground">{outcome(job)}</small>}<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge></span>}>결과</CardTitle>
           {job.tasks.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">아직 결과가 없어요.</p>}
-          {job.tasks.map((task, i) => <div key={i} className="flex flex-col gap-2 border-t border-border pt-4">
+          {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge></span>
-            {task.failureReason && <p role="alert" className={alertClass}>{task.failureReason}</p>}
-            {task.texts.map((t, j) => <pre key={j} className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-[inherit] text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]">{typeof t.content === "string" ? t.content : JSON.stringify(t.content, null, 2)}</pre>)}
-            {task.decisions.map((d, j) => <pre key={j} className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-mono text-xs text-foreground">{JSON.stringify(d.answers, null, 2)}</pre>)}
+            {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
+            {task.texts.map((t, j) => typeof t.content === "string" ? <LongText key={j} text={t.content} /> : <LongText key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
+            {task.decisions.map((d, j) => <LongText key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
             {task.files.map(f => <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
           </div>)}
         </Card>
-        <Card className="flex flex-col gap-4 p-6">
+        <Card className="flex min-w-0 flex-col gap-4 p-4 sm:p-6">
           <CardTitle>작업 정보</CardTitle>
           <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[13px]">
             <dt className="text-muted-foreground">유형</dt><dd className="m-0 text-right text-foreground">{labels[job.type] || job.type}</dd>
-            <dt className="text-muted-foreground">모델</dt><dd className="m-0 text-right font-mono text-xs text-foreground">{job.model}</dd>
+            <dt className="text-muted-foreground">모델</dt><dd className="m-0 text-right font-mono text-xs text-foreground [overflow-wrap:anywhere]">{job.model}</dd>
             <dt className="text-muted-foreground">요청 시각</dt><dd className="m-0 text-right text-foreground">{date(job.createdAt)}</dd>
             <dt className="text-muted-foreground">작업 ID</dt><dd className="m-0 text-right font-mono text-xs text-foreground [overflow-wrap:anywhere]">{job.uuid}</dd>
           </dl>
@@ -144,17 +159,17 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
       : <div className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">{list.items.map(item => {
         const result = outcome(item);
         return <button key={item.uuid} type="button" onClick={() => setSelected(item.uuid)}
-          className="group m-0 flex w-full items-center gap-3 border-0 bg-transparent px-5 py-3.5 text-left text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring">
+          className="group m-0 flex w-full items-center gap-3 border-0 bg-transparent px-4 py-3.5 text-left sm:px-5 text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring">
           <JobThumb job={item} />
           <span className="flex min-w-0 flex-1 flex-col">
             <strong className="truncate text-[13px] font-medium">{summary(item)}</strong>
-            <small className="truncate text-xs text-muted-foreground">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${item.inputs.length}장`} · <span className="font-mono">{item.model}</span> · {date(item.createdAt)}</small>
+            <small className="text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${item.inputs.length}장`}<span className="hidden sm:inline"> · <span className="font-mono">{item.model}</span></span> · {date(item.createdAt)}{result && <span className="sm:hidden"> · {result}</span>}</small>
           </span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <Badge tone={item.status === "DISPATCHED" ? "accent" : "neutral"} shape="pill">{statusLabel[item.status] || item.status}</Badge>
             {result && <small className="hidden text-[11px] text-muted-foreground sm:block">{result}</small>}
           </span>
-          <ArrowRight className="size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          <ArrowRight className="hidden size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5 sm:block" aria-hidden="true" />
         </button>;
       })}</div>}
     {list && <div className="mt-4 flex items-center justify-end gap-3 text-xs text-muted-foreground">

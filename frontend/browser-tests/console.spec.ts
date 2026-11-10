@@ -74,6 +74,29 @@ test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께
   await expect(page.getByText(/생성한 이미지/)).toBeVisible();
 });
 
+test("긴 요청과 결과는 접어서 보이고 누르면 펼친다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await prepare(page);
+  const long = {
+    ...job, model: "provider-with-a-very-long-model-identifier-preview",
+    option: { type: "text-generate", prompt: "긴 요청 ".repeat(300) + "https://example.com/" + "a".repeat(400) },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { rows: Array.from({ length: 40 }, (_, i) => i) } }], decisions: [] }],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [long], hasNext: false } }));
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: long }));
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /긴 요청/ }).click();
+  const more = page.getByRole("button", { name: /전체 보기/ });
+  await expect(more).toHaveCount(2);
+  const collapsed = await page.evaluate(() => document.documentElement.scrollHeight);
+  await more.first().click();
+  await more.first().click();
+  await expect(page.getByRole("button", { name: "접기" })).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(collapsed);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
 test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러온다", async ({ page }) => {
   await prepare(page);
   await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
@@ -94,7 +117,7 @@ test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수
   await page.getByRole("button", { name: "다크 모드로 변경" }).click();
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
-  await expect(page.getByRole("button", { name: /예시 요청.*example-model/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*성공 1 \/ 1/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
