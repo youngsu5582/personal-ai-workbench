@@ -10,15 +10,16 @@ const services = [
   { uuid: "workspace-a", name: "첫 서비스", isDefault: true },
   { uuid: "workspace-b", name: "둘째 서비스", isDefault: false },
 ];
-const summary = {
+/** 목록 항목과 상세는 같은 모양이다. */
+const job = {
   uuid: "job-a", status: "CLOSED", model: "example-model",
   type: "text-generate", createdAt: "2026-11-01T00:00:00Z", taskCount: 1,
-};
-const job = {
-  ...summary, option: { type: "text-generate", prompt: "예시 요청" },
-  progress: { total: 1 },
+  option: { type: "text-generate", prompt: "예시 요청" },
+  inputs: [],
+  progress: { total: 1, succeeded: 1, failed: 0 },
   tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: "첫 서비스의 결과" }], decisions: [] }],
 };
+const summary = job;
 
 async function prepare(page: Page) {
   await page.route("**/auth/handoff", route => route.fulfill({ json: { accessToken: "test-token" } }));
@@ -46,6 +47,129 @@ test("최근 작업 상세를 보고 서비스를 전환하면 이전 결과가 
   await expect(page.getByText("첫 서비스의 결과")).toHaveCount(0);
 });
 
+test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께 보인다", async ({ page }) => {
+  await prepare(page);
+  const edit = {
+    ...job, uuid: "job-b", type: "image-generate",
+    option: { type: "image-generate", prompt: "배경을 바꿔 줘" },
+    inputs: [
+      { source: { type: "uploaded", sha256: "a".repeat(64) }, url: null, previewUrl: null },
+      { source: { type: "generated", sha256: "b".repeat(64) }, url: "/api/files/b", previewUrl: "data:image/gif;base64,R0lGODlhAQABAAAAACw=" },
+      { source: { type: "generated", sha256: "b".repeat(64) }, url: "/api/files/b", previewUrl: "data:image/gif;base64,R0lGODlhAQABAAAAACw=" },
+    ],
+    progress: { total: 2, succeeded: 1, failed: 1 },
+    tasks: [
+      { status: "SUCCEEDED", failureReason: null, files: [], texts: [], decisions: [] },
+      { status: "FAILED", failureReason: "거절됨", files: [], texts: [], decisions: [] },
+    ],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [edit], hasNext: false } }));
+  await page.route("**/api/jobs/job-b", route => route.fulfill({ json: edit }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  const row = page.getByRole("button", { name: /배경을 바꿔 줘.*참고 이미지 3장.*성공 1 · 실패 1 \/ 2/ });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByRole("heading", { name: "참고 이미지" })).toBeVisible();
+  await expect(page.getByText("미리 볼 수 없어요.")).toBeVisible();
+  // 같은 파일을 두 번 참조한 요청도 참조한 만큼 그린다.
+  await expect(page.getByRole("img", { name: "참고 이미지" })).toHaveCount(2);
+  await expect(page.getByText(/생성한 이미지/)).toHaveCount(2);
+});
+
+test("긴 요청과 결과는 접어서 보이고 누르면 펼친다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await prepare(page);
+  const long = {
+    ...job, model: "provider-with-a-very-long-model-identifier-preview",
+    option: { type: "text-generate", prompt: "긴 요청 ".repeat(300) + "https://example.com/" + "a".repeat(400) },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { rows: Array.from({ length: 40 }, (_, i) => i) } }], decisions: [] }],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [long], hasNext: false } }));
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: long }));
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /긴 요청/ }).click();
+  const more = page.getByRole("button", { name: /전체 보기/ });
+  await expect(more).toHaveCount(2);
+  const collapsed = await page.evaluate(() => document.documentElement.scrollHeight);
+  await more.first().click();
+  await more.first().click();
+  await expect(page.getByRole("button", { name: "접기" })).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(collapsed);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test("스키마를 준 글 결과 옆에서 그 스키마를 복사한다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  const structured = {
+    ...job, option: { type: "text-generate", prompt: "예시 요청", output: { type: "json-schema", schema: '{"type":"object","properties":{"reasoning":{"type":"string"},"answer":{"type":"string"}}}' } },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { reasoning: "근거", answer: "답" } }], decisions: [] }],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: structured }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await page.getByRole("button", { name: "스키마 복사" }).click();
+  await expect(page.getByRole("button", { name: "복사됨" })).toBeVisible();
+  const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  expect(Object.keys(copied.properties)).toEqual(["reasoning", "answer"]);
+});
+
+test("스키마를 복사하지 못하면 못 했다고 알린다", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) } });
+  });
+  await prepare(page);
+  const structured = {
+    ...job, option: { type: "text-generate", prompt: "예시 요청", output: { type: "json-schema", schema: '{"type":"object"}' } },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { answer: "답" } }], decisions: [] }],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: structured }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await page.getByRole("button", { name: "스키마 복사" }).click();
+  await expect(page.getByRole("button", { name: "복사하지 못했어요" })).toBeVisible();
+});
+
+test("모양을 정하지 않은 글 결과에는 스키마 복사가 없다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByText("첫 서비스의 결과")).toBeVisible();
+  await expect(page.getByRole("button", { name: "스키마 복사" })).toHaveCount(0);
+});
+
+test("결과마다 대기와 처리 시간을 보이고 모두 끝난 작업에만 총 소요를 붙인다", async ({ page }) => {
+  await prepare(page);
+  const timed = {
+    ...job, taskCount: 2, progress: { total: 2, succeeded: 1, failed: 1 },
+    tasks: [
+      { ...job.tasks[0], startedAt: "2026-11-01T00:00:02Z", finishedAt: "2026-11-01T00:00:45Z" },
+      { ...job.tasks[0], status: "FAILED", failureReason: "거절됨", texts: [], startedAt: "2026-11-01T00:00:03Z", finishedAt: "2026-11-01T00:00:45.5Z" },
+    ],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: timed }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByRole("img", { name: "대기 2.0초, 처리 43.0초" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "대기 3.0초, 처리 42.5초" })).toBeVisible();
+  // 총 소요는 요청부터 가장 늦게 끝난 결과까지다. 두 시각은 소수 자릿수가 달라 글자로 견주면 앞의 것이 늦다고 나온다.
+  await expect(page.getByText("45.5초", { exact: true })).toBeVisible();
+});
+
+test("처리 중인 결과는 시작 시각만 보이고, 시각이 없는 결과에는 시간 줄이 없다", async ({ page }) => {
+  await prepare(page);
+  const running = {
+    ...job, status: "DISPATCHED", taskCount: 2, progress: { total: 2, succeeded: 0, failed: 0 },
+    tasks: [
+      { status: "RUNNING", failureReason: null, files: [], texts: [], decisions: [], startedAt: "2026-11-01T00:00:02Z", finishedAt: null },
+      { status: "PENDING", failureReason: null, files: [], texts: [], decisions: [], startedAt: null, finishedAt: null },
+      // 재시도로 다시 줄을 선 결과. 앞선 시도의 시작 시각이 남아 있지만 처리 중이 아니다.
+      { status: "PENDING", failureReason: null, files: [], texts: [], decisions: [], startedAt: "2026-11-01T00:00:01Z", finishedAt: null },
+    ],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: running }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByText(/대기 2\.0초 → 처리 중/)).toHaveCount(1);
+  await expect(page.getByText("총 소요")).toHaveCount(0);
+});
+
 test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러온다", async ({ page }) => {
   await prepare(page);
   await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
@@ -57,7 +181,7 @@ test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러�
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "새로고침" }).click();
-  await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*example-model/ })).toBeVisible();
 });
 
 test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수 있다", async ({ page }) => {
@@ -66,7 +190,7 @@ test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수
   await page.getByRole("button", { name: "다크 모드로 변경" }).click();
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
-  await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*성공 1 \/ 1/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

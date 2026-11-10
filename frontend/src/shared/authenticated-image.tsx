@@ -5,7 +5,7 @@ import { errorText, type Context } from "./console-utils";
 import { Button } from "./ui/button";
 
 /**
- * 결과 이미지를 그린다. 보관소가 서명한 주소(`previewUrl`)가 있으면 그대로 쓰고,
+ * 인증이 필요한 이미지를 그린다. 보관소가 서명한 주소(`previewUrl`)가 있으면 그대로 쓰고,
  * 없으면 앱 주소를 토큰과 함께 받아 브라우저 안에서 그린다 — `<img>` 는 토큰을 실을 수 없다.
  */
 export function AuthenticatedImage({
@@ -14,10 +14,12 @@ export function AuthenticatedImage({
   url,
   previewUrl,
   onRefresh,
+  alt = "생성된 이미지",
 }: Context & {
   url: string;
   previewUrl: string | null;
   onRefresh: () => void;
+  alt?: string;
 }) {
   const [src, setSrc] = useState("");
   const [fail, setFail] = useState("");
@@ -61,10 +63,10 @@ export function AuthenticatedImage({
       </Button>
     </div>
   ) : previewUrl ? (
-    <img src={previewUrl} alt="생성된 이미지" className={frame}
+    <img src={previewUrl} alt={alt} className={frame}
       onError={() => setFail("이미지를 불러오지 못했어요. 다시 조회해 주세요.")} />
   ) : src ? (
-    <img src={src} alt="생성된 이미지" className={frame} />
+    <img src={src} alt={alt} className={frame} />
   ) : (
     <div className="h-48 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="이미지를 불러오는 중" />
   );
