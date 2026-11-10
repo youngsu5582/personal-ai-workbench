@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, FileImage, FileText, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
 import { Button } from "../../shared/ui/button";
@@ -22,8 +22,62 @@ function date(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString("ko-KR");
 }
+const sourceLabel: Record<string, string> = { generated: "생성한 이미지", uploaded: "올린 이미지" };
+/** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로 대신한다. */
+function summary(job: Job) {
+  if (job.option.prompt) return job.option.prompt;
+  const questions = job.option.questions ?? [];
+  if (questions.length) return questions.map(q => q.instructions).join(" · ");
+  return `${labels[job.type] || job.type} 작업`;
+}
+/** 처리 종료는 성공이 아니다. 몇 개가 성공했는지는 결과마다 센다. */
+function outcome(job: Job) {
+  const { total, succeeded, failed } = job.progress;
+  if (succeeded + failed === 0) return "";
+  return failed ? `성공 ${succeeded} · 실패 ${failed} / ${total}` : `성공 ${succeeded} / ${total}`;
+}
+const inputHeading = (type: string) => type === "decision" ? "근거 이미지" : "참고 이미지";
 const alertClass = "m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger";
 const loadingClass = "m-0 text-[13px] text-muted-foreground";
+const headingClass = "m-0 text-xs font-medium text-subtle-foreground";
+const quoteClass = "m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]";
+
+/** 서명 주소가 있으면 첫 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. */
+function JobThumb({ job }: { job: Job }) {
+  const [broken, setBroken] = useState(false);
+  const src = job.tasks.flatMap(t => t.files).find(f => f.previewUrl)?.previewUrl;
+  if (src && !broken) return <img src={src} alt="" className="size-8 shrink-0 rounded-md border border-border bg-background object-cover" onError={() => setBroken(true)} />;
+  const Icon = TYPE_ICON[job.type] ?? FileText;
+  return <span className={cn("grid size-8 shrink-0 place-items-center rounded-md", TYPE_TILE[job.type] ?? "bg-muted text-muted-foreground")}><Icon className="size-4" aria-hidden="true" /></span>;
+}
+
+function JobRequest({ job }: { job: Job }) {
+  const evidence = (job.option.input ?? []).flatMap(e => e.type === "text" ? [e.text] : []);
+  const questions = job.option.questions ?? [];
+  const section = "flex flex-col gap-1.5 border-t border-border pt-4";
+  return <>
+    {job.option.prompt && <div className={section}><h3 className={headingClass}>요청 내용</h3><p className={quoteClass}>{job.option.prompt}</p></div>}
+    {job.option.instructions && <div className={section}><h3 className={headingClass}>지침</h3><p className={quoteClass}>{job.option.instructions}</p></div>}
+    {evidence.length > 0 && <div className={section}><h3 className={headingClass}>근거</h3>{evidence.map((text, i) => <p key={i} className={quoteClass}>{text}</p>)}</div>}
+    {questions.length > 0 && <div className={section}><h3 className={headingClass}>질문</h3>
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{questions.map(q => <li key={q.name} className="text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]"><span className="mr-1.5 font-mono text-xs text-muted-foreground">{q.name}</span>{q.instructions}</li>)}</ul>
+    </div>}
+  </>;
+}
+
+function JobInputs({ job, token, workspace, onRefresh }: Props & { job: Job; onRefresh: () => void }) {
+  if (job.inputs.length === 0) return null;
+  const heading = inputHeading(job.type);
+  return <div className="flex flex-col gap-2 border-t border-border pt-4">
+    <h3 className={headingClass}>{heading}</h3>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map(input => <figure key={`${input.source.type}-${input.source.sha256}`} className="m-0 flex min-w-0 flex-col gap-1.5">
+      {input.url || input.previewUrl
+        ? <AuthenticatedImage token={token} workspace={workspace} url={input.url ?? ""} previewUrl={input.previewUrl} onRefresh={onRefresh} alt={heading} />
+        : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />미리 볼 수 없어요.</p>}
+      <figcaption className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{sourceLabel[input.source.type] || input.source.type} · <span className="font-mono">{input.source.sha256.slice(0, 12)}</span></figcaption>
+    </figure>)}</div>
+  </div>;
+}
 
 export function JobsPanel({ token, workspace, initialSelected }: Props & { initialSelected: string | null }) {
   const [page, setPage] = useState(0);
@@ -49,36 +103,35 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
       .catch(e => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [token, workspace, selected, version]);
-  const refresh = <Button onClick={() => setVersion(x => x + 1)}><RefreshCw aria-hidden="true" />새로고침</Button>;
+  const reload = () => setVersion(x => x + 1);
+  const refresh = <Button onClick={reload}><RefreshCw aria-hidden="true" />새로고침</Button>;
 
   if (selected) return <div>
-    <Button variant="ghost" size="sm" className="-ml-2.5 mb-4 text-muted-foreground" onClick={() => { setSelected(null); setError(""); }}><ArrowLeft aria-hidden="true" />작업 내역</Button>
+    <Button variant="ghost" size="sm" className="-ml-2.5 mb-4 text-muted-foreground" onClick={() => { setSelected(null); setJob(null); setError(""); }}><ArrowLeft aria-hidden="true" />작업 내역</Button>
     <PageHeader eyebrow="Job details" title="작업 상세" description="실행 결과와 요청 정보를 확인하세요." actions={refresh} />
     {error ? <p role="alert" className={alertClass}>{error}</p> : !job ? <p className={loadingClass}>작업을 불러오는 중이에요.</p> :
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
         <Card className="flex flex-col gap-4 p-6">
-          <CardTitle aside={<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge>}>결과</CardTitle>
+          <CardTitle aside={<span className="flex items-center gap-2">{outcome(job) && <small className="text-xs text-muted-foreground">{outcome(job)}</small>}<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge></span>}>결과</CardTitle>
           {job.tasks.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">아직 결과가 없어요.</p>}
           {job.tasks.map((task, i) => <div key={i} className="flex flex-col gap-2 border-t border-border pt-4">
             <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge></span>
             {task.failureReason && <p role="alert" className={alertClass}>{task.failureReason}</p>}
             {task.texts.map((t, j) => <pre key={j} className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-[inherit] text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]">{typeof t.content === "string" ? t.content : JSON.stringify(t.content, null, 2)}</pre>)}
             {task.decisions.map((d, j) => <pre key={j} className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-mono text-xs text-foreground">{JSON.stringify(d.answers, null, 2)}</pre>)}
-            {task.files.map(f => <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={() => setVersion(x => x + 1)} />)}
+            {task.files.map(f => <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
           </div>)}
         </Card>
         <Card className="flex flex-col gap-4 p-6">
           <CardTitle>작업 정보</CardTitle>
           <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[13px]">
-            <dt className="text-muted-foreground">유형</dt><dd className="m-0 text-right text-foreground">{labels[job.option.type] || job.option.type}</dd>
+            <dt className="text-muted-foreground">유형</dt><dd className="m-0 text-right text-foreground">{labels[job.type] || job.type}</dd>
             <dt className="text-muted-foreground">모델</dt><dd className="m-0 text-right font-mono text-xs text-foreground">{job.model}</dd>
             <dt className="text-muted-foreground">요청 시각</dt><dd className="m-0 text-right text-foreground">{date(job.createdAt)}</dd>
             <dt className="text-muted-foreground">작업 ID</dt><dd className="m-0 text-right font-mono text-xs text-foreground [overflow-wrap:anywhere]">{job.uuid}</dd>
           </dl>
-          {job.option.prompt && <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-            <h3 className="m-0 text-xs font-medium text-subtle-foreground">요청 내용</h3>
-            <p className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]">{job.option.prompt}</p>
-          </div>}
+          <JobRequest job={job} />
+          <JobInputs job={job} token={token} workspace={workspace} onRefresh={reload} />
         </Card>
       </div>}
   </div>;
@@ -89,15 +142,18 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
       : !list ? <p className={loadingClass}>작업을 불러오는 중이에요.</p>
       : list.items.length === 0 ? <EmptyState icon={<ListChecks />} title="작업 내역이 없어요" description="이 서비스에서 요청한 작업이 여기에 표시돼요." />
       : <div className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">{list.items.map(item => {
-        const Icon = TYPE_ICON[item.type] ?? FileText;
+        const result = outcome(item);
         return <button key={item.uuid} type="button" onClick={() => setSelected(item.uuid)}
           className="group m-0 flex w-full items-center gap-3 border-0 bg-transparent px-5 py-3.5 text-left text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring">
-          <span className={cn("grid size-8 shrink-0 place-items-center rounded-md", TYPE_TILE[item.type] ?? "bg-muted text-muted-foreground")}><Icon className="size-4" aria-hidden="true" /></span>
+          <JobThumb job={item} />
           <span className="flex min-w-0 flex-1 flex-col">
-            <strong className="text-[13px] font-medium">{labels[item.type] || item.type} 작업</strong>
-            <small className="truncate text-xs text-muted-foreground"><span className="font-mono">{item.model}</span> · {date(item.createdAt)}</small>
+            <strong className="truncate text-[13px] font-medium">{summary(item)}</strong>
+            <small className="truncate text-xs text-muted-foreground">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${item.inputs.length}장`} · <span className="font-mono">{item.model}</span> · {date(item.createdAt)}</small>
           </span>
-          <Badge tone={item.status === "DISPATCHED" ? "accent" : "neutral"} shape="pill">{statusLabel[item.status] || item.status}</Badge>
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <Badge tone={item.status === "DISPATCHED" ? "accent" : "neutral"} shape="pill">{statusLabel[item.status] || item.status}</Badge>
+            {result && <small className="hidden text-[11px] text-muted-foreground sm:block">{result}</small>}
+          </span>
           <ArrowRight className="size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
         </button>;
       })}</div>}

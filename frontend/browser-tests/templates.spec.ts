@@ -29,7 +29,7 @@ test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async
   await page.route("**/api/usage**", r => r.fulfill({ json: { calls: 0, succeededCalls: 0, failedCalls: 0, costUsd: null, costComplete: true, byModel: [] } }));
   await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "model-a", provider: "Example" }] } }));
   await page.route("**/api/jobs?**", r => r.fulfill({ json: { items: [], hasNext: false } }));
-  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-a", createdAt: "2026-11-01T00:00:00Z", option: { type: "text-generate" }, progress: { total: 1 }, tasks: [] } }));
+  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-a", createdAt: "2026-11-01T00:00:00Z", type: "text-generate", taskCount: 1, option: { type: "text-generate" }, inputs: [], progress: { total: 1, succeeded: 0, failed: 0 }, tasks: [] } }));
   await page.route("**/api/templates**", r => {
     const method = r.request().method();
     const path = new URL(r.request().url()).pathname;
@@ -152,7 +152,7 @@ async function imageRoutes(page: import("@playwright/test").Page) {
   await page.route("**/api/services", r => r.fulfill({ json: [{ uuid: "a", name: "서비스 A", isDefault: true }] }));
   await page.route("**/api/usage**", r => r.fulfill({ json: { calls: 0, succeededCalls: 0, failedCalls: 0, costUsd: null, costComplete: true, byModel: [] } }));
   await page.route("**/api/jobs?**", r => r.fulfill({ json: { items: [], hasNext: false } }));
-  await page.route("**/api/jobs/job-2", r => r.fulfill({ json: { uuid: "job-2", status: "DISPATCHED", model: "image-a", createdAt: "2026-11-01T00:00:00Z", option: { type: "image-generate" }, progress: { total: 1 }, tasks: [] } }));
+  await page.route("**/api/jobs/job-2", r => r.fulfill({ json: { uuid: "job-2", status: "DISPATCHED", model: "image-a", createdAt: "2026-11-01T00:00:00Z", type: "image-generate", taskCount: 1, option: { type: "image-generate" }, inputs: [], progress: { total: 1, succeeded: 0, failed: 0 }, tasks: [] } }));
   await page.route("**/api/uploads", r => r.fulfill({ json: { sha256: "f".repeat(64), uploadRequired: false, url: null, headers: {} } }));
   await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "image-a", provider: "Example" }] } }));
 }
@@ -227,7 +227,7 @@ test("기본 모델을 저장하면 실행 화면에서 미리 선택되고 바�
   await page.route("**/api/services", r => r.fulfill({ json: [{ uuid: "a", name: "서비스 A", isDefault: true }] }));
   await page.route("**/api/usage**", r => r.fulfill({ json: { calls: 0, succeededCalls: 0, failedCalls: 0, costUsd: null, costComplete: true, byModel: [] } }));
   await page.route("**/api/jobs?**", r => r.fulfill({ json: { items: [], hasNext: false } }));
-  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-b", createdAt: "2026-11-01T00:00:00Z", option: { type: "text-generate" }, progress: { total: 1 }, tasks: [] } }));
+  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-b", createdAt: "2026-11-01T00:00:00Z", type: "text-generate", taskCount: 1, option: { type: "text-generate" }, inputs: [], progress: { total: 1, succeeded: 0, failed: 0 }, tasks: [] } }));
   await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "model-a", provider: "Example" }, { id: "model-b", provider: "Example" }] } }));
   await page.route("**/api/templates**", r => {
     if (r.request().url().endsWith("/jobs")) { submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: { uuid: "job-1" } }); }
@@ -259,7 +259,7 @@ async function single(page: import("@playwright/test").Page, template: Record<st
   await page.route("**/api/services", r => r.fulfill({ json: [{ uuid: "a", name: "서비스 A", isDefault: true }] }));
   await page.route("**/api/usage**", r => r.fulfill({ json: { calls: 0, succeededCalls: 0, failedCalls: 0, costUsd: null, costComplete: true, byModel: [] } }));
   await page.route("**/api/jobs?**", r => r.fulfill({ json: { items: [], hasNext: false } }));
-  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-a", createdAt: "2026-11-01T00:00:00Z", option: { type: "text-generate" }, progress: { total: 1 }, tasks: [] } }));
+  await page.route("**/api/jobs/job-1", r => r.fulfill({ json: { uuid: "job-1", status: "DISPATCHED", model: "model-a", createdAt: "2026-11-01T00:00:00Z", type: "text-generate", taskCount: 1, option: { type: "text-generate" }, inputs: [], progress: { total: 1, succeeded: 0, failed: 0 }, tasks: [] } }));
   await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "model-a", provider: "Example" }] } }));
   await page.route("**/api/templates**", r => {
     if (r.request().url().endsWith("/jobs")) { sink.submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: { uuid: "job-1" } }); }

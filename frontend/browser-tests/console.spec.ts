@@ -10,15 +10,16 @@ const services = [
   { uuid: "workspace-a", name: "첫 서비스", isDefault: true },
   { uuid: "workspace-b", name: "둘째 서비스", isDefault: false },
 ];
-const summary = {
+/** 목록 항목과 상세는 같은 모양이다. */
+const job = {
   uuid: "job-a", status: "CLOSED", model: "example-model",
   type: "text-generate", createdAt: "2026-11-01T00:00:00Z", taskCount: 1,
-};
-const job = {
-  ...summary, option: { type: "text-generate", prompt: "예시 요청" },
-  progress: { total: 1 },
+  option: { type: "text-generate", prompt: "예시 요청" },
+  inputs: [],
+  progress: { total: 1, succeeded: 1, failed: 0 },
   tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: "첫 서비스의 결과" }], decisions: [] }],
 };
+const summary = job;
 
 async function prepare(page: Page) {
   await page.route("**/auth/handoff", route => route.fulfill({ json: { accessToken: "test-token" } }));
@@ -46,6 +47,33 @@ test("최근 작업 상세를 보고 서비스를 전환하면 이전 결과가 
   await expect(page.getByText("첫 서비스의 결과")).toHaveCount(0);
 });
 
+test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께 보인다", async ({ page }) => {
+  await prepare(page);
+  const edit = {
+    ...job, uuid: "job-b", type: "image-generate",
+    option: { type: "image-generate", prompt: "배경을 바꿔 줘" },
+    inputs: [
+      { source: { type: "uploaded", sha256: "a".repeat(64) }, url: null, previewUrl: null },
+      { source: { type: "generated", sha256: "b".repeat(64) }, url: "/api/files/b", previewUrl: "data:image/gif;base64,R0lGODlhAQABAAAAACw=" },
+    ],
+    progress: { total: 2, succeeded: 1, failed: 1 },
+    tasks: [
+      { status: "SUCCEEDED", failureReason: null, files: [], texts: [], decisions: [] },
+      { status: "FAILED", failureReason: "거절됨", files: [], texts: [], decisions: [] },
+    ],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [edit], hasNext: false } }));
+  await page.route("**/api/jobs/job-b", route => route.fulfill({ json: edit }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  const row = page.getByRole("button", { name: /배경을 바꿔 줘.*참고 이미지 2장.*성공 1 · 실패 1 \/ 2/ });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByRole("heading", { name: "참고 이미지" })).toBeVisible();
+  await expect(page.getByText("미리 볼 수 없어요.")).toBeVisible();
+  await expect(page.getByRole("img", { name: "참고 이미지" })).toBeVisible();
+  await expect(page.getByText(/생성한 이미지/)).toBeVisible();
+});
+
 test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러온다", async ({ page }) => {
   await prepare(page);
   await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
@@ -57,7 +85,7 @@ test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러�
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "새로고침" }).click();
-  await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*example-model/ })).toBeVisible();
 });
 
 test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수 있다", async ({ page }) => {
@@ -66,7 +94,7 @@ test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수
   await page.getByRole("button", { name: "다크 모드로 변경" }).click();
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
-  await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*example-model/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

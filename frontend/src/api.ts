@@ -20,13 +20,33 @@ export type Usage = {
     costUsd: string | null;
   }[];
 };
+/** 판정의 근거 하나. 글이거나, 파일을 가리키는 참조다. */
+export type DecisionEvidence =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: string; sha256: string } };
+/** 요청이 참조한 파일. 올린 파일은 `url` 이 없고, 서명할 수 없으면 `previewUrl` 이 없다. */
+export type JobInput = {
+  source: { type: string; sha256: string };
+  url: string | null;
+  previewUrl: string | null;
+};
+/** 목록 항목과 상세가 같은 모양이다. */
 export type Job = {
   uuid: string;
   status: string;
+  type: string;
   model: string;
   createdAt: string;
-  option: { type: string; prompt?: string };
-  progress: { total: number };
+  taskCount: number;
+  option: {
+    type: string;
+    prompt?: string;
+    instructions?: string;
+    input?: DecisionEvidence[];
+    questions?: { name: string; instructions: string }[];
+  };
+  inputs: JobInput[];
+  progress: { total: number; succeeded: number; failed: number };
   tasks: {
     status: string;
     failureReason: string | null;
@@ -35,15 +55,7 @@ export type Job = {
     decisions: { answers: unknown[] }[];
   }[];
 };
-export type JobSummary = {
-  uuid: string;
-  status: string;
-  model: string;
-  type: string;
-  createdAt: string;
-  taskCount: number;
-};
-export type JobList = { items: JobSummary[]; hasNext: boolean };
+export type JobList = { items: Job[]; hasNext: boolean };
 export class ApiError extends Error {
   constructor(
     public status: number,
