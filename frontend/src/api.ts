@@ -42,6 +42,8 @@ export type Job = {
     type: string;
     prompt?: string;
     instructions?: string;
+    /** 글의 모양. `json-schema` 면 `schema` 가 JSON Schema 원문 문자열이다. */
+    output?: { type: string; schema?: string };
     input?: DecisionEvidence[];
     questions?: { name: string; instructions: string }[];
   };

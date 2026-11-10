@@ -97,6 +97,28 @@ test("긴 요청과 결과는 접어서 보이고 누르면 펼친다", async ({
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
+test("스키마를 준 글 결과 옆에서 그 스키마를 복사한다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  const structured = {
+    ...job, option: { type: "text-generate", prompt: "예시 요청", output: { type: "json-schema", schema: '{"type":"object","properties":{"reasoning":{"type":"string"},"answer":{"type":"string"}}}' } },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { reasoning: "근거", answer: "답" } }], decisions: [] }],
+  };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: structured }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await page.getByRole("button", { name: "스키마 복사" }).click();
+  await expect(page.getByRole("button", { name: "복사됨" })).toBeVisible();
+  const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  expect(Object.keys(copied.properties)).toEqual(["reasoning", "answer"]);
+});
+
+test("모양을 정하지 않은 글 결과에는 스키마 복사가 없다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByText("첫 서비스의 결과")).toBeVisible();
+  await expect(page.getByRole("button", { name: "스키마 복사" })).toHaveCount(0);
+});
+
 test("조회 실패를 표시하고 새로고침으로 목록을 다시 불러온다", async ({ page }) => {
   await prepare(page);
   await expect(page.getByRole("button", { name: /텍스트 작업.*example-model/ })).toBeVisible();

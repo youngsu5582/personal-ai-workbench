@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, FileImage, FileText, ChevronDown, ChevronUp, ImageOff, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Copy, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
 import { Button } from "../../shared/ui/button";
@@ -55,6 +55,20 @@ function LongText({ text, mono = false }: { text: string; mono?: boolean }) {
       {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}{open ? "접기" : `전체 보기 (${text.length.toLocaleString("ko-KR")}자)`}
     </Button>}
   </div>;
+}
+
+/** 글 결과가 따른 JSON Schema 를 복사한다. 저장된 원문을 들여쓰기만 다시 해서, 키 순서는 요청한 그대로다. */
+function CopySchema({ schema }: { schema: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const text = () => { try { return JSON.stringify(JSON.parse(schema), null, 2); } catch { return schema; } };
+  return <Button variant="ghost" size="sm" className="-my-1 ml-auto text-muted-foreground" onClick={() => { void navigator.clipboard.writeText(text()).then(() => setCopied(true)); }}>
+    {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}{copied ? "복사됨" : "스키마 복사"}
+  </Button>;
 }
 
 /** 서명 주소가 있으면 첫 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. */
@@ -130,7 +144,8 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
           <CardTitle aside={<span className="flex flex-wrap items-center justify-end gap-2">{outcome(job) && <small className="text-xs text-muted-foreground">{outcome(job)}</small>}<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge></span>}>결과</CardTitle>
           {job.tasks.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">아직 결과가 없어요.</p>}
           {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge></span>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
+              {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
             {task.texts.map((t, j) => typeof t.content === "string" ? <LongText key={j} text={t.content} /> : <LongText key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
             {task.decisions.map((d, j) => <LongText key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
