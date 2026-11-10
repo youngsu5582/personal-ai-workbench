@@ -253,6 +253,28 @@ class GenerationJobQueryApiTest @Autowired constructor(
         }
     }
 
+    @Test
+    fun `끝난 Task 는 집힌 시각과 끝난 시각을 주고 집히지 않은 Task 는 비워 둔다`() {
+        val token = tokenOf("timing-owner")
+        val (jobUuid, _) = jobWithOneSuccessAndOneFailure(token)
+        val waiting = submit(token, taskCount = 1)
+
+        // 성공이든 실패든 끝났으면 둘 다 찬다. 대기와 처리 시간은 받는 쪽이 이 둘과 createdAt 으로 낸다.
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].startedAt") { isString() }
+            jsonPath("$.tasks[0].finishedAt") { isString() }
+            jsonPath("$.tasks[1].startedAt") { isString() }
+            jsonPath("$.tasks[1].finishedAt") { isString() }
+        }
+        query(waiting, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].status") { value("PENDING") }
+            jsonPath("$.tasks[0].startedAt") { value(null) }
+            jsonPath("$.tasks[0].finishedAt") { value(null) }
+        }
+    }
+
     /** 워커가 꺼져 있어 성공을 직접 옮기고 글을 넣는다. 워커가 쓰는 것과 같은 모양이다. */
     private fun textJobAnswered(token: String, option: String, content: String): String {
         val jobUuid = submit(token, taskCount = 1, option = option, model = FAKE_TEXT_MODEL)

@@ -56,6 +56,8 @@ data class GenerationJobTaskView(
     val files: List<GeneratedFileView>,
     val texts: List<GeneratedTextView> = emptyList(),
     val decisions: List<GeneratedDecisionView> = emptyList(),
+    val startedAt: Instant? = null,
+    val finishedAt: Instant? = null,
 )
 
 /** 판정 한 번의 답들. 답은 [DecisionAnswer.name] 으로 질문을 가리킨다. */
@@ -130,6 +132,8 @@ internal fun GenerationJobTask.toView(
         files = files.map { it.toView(presignedUrlIssuer) },
         texts = texts.map { it.toView() },
         decisions = decisions.map { it.toView() },
+        startedAt = startedAt,
+        finishedAt = finishedAt,
     )
 
 internal fun GenerationJob.toView(
