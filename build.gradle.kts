@@ -42,6 +42,8 @@ dependencies {
 	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-client")
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+	// 인가 서버 라이브러리는 이 모듈 안에만 있다. 여기서는 모듈이 공개한 타입만 보인다.
+	implementation(project(":module-authserver"))
 	implementation("org.springframework.modulith:spring-modulith-starter-core")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")

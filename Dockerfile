@@ -14,6 +14,7 @@ COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 RUN chmod +x ./gradlew
 
+COPY module-authserver ./module-authserver
 COPY src ./src
 COPY --from=frontend /frontend/dist ./frontend/dist
 RUN ./gradlew bootJar --no-daemon \
