@@ -53,6 +53,18 @@ class AuthorizationServerMetadataTest @Autowired constructor(
     }
 
     @Test
+    fun `메타데이터는 내주기로 한 것만 알린다`() {
+        val metadata = getJson("/.well-known/oauth-authorization-server")
+
+        assertEquals(listOf("authorization_code"), metadata["grant_types_supported"].values().map { it.asString() })
+        assertEquals(listOf("client_secret_basic"), metadata["token_endpoint_auth_methods_supported"].values().map { it.asString() })
+        assertEquals(listOf("S256"), metadata["code_challenge_methods_supported"].values().map { it.asString() })
+        assertEquals(listOf("code"), metadata["response_types_supported"].values().map { it.asString() })
+        listOf("introspection_endpoint", "dpop_signing_alg_values_supported", "tls_client_certificate_bound_access_tokens")
+            .forEach { assertFalse(metadata.has(it), "$it 를 알리고 있다") }
+    }
+
+    @Test
     fun `JWKS 는 RSA 공개키만 내보낸다`() {
         val keys = getJson("/oauth2/jwks")["keys"]
 
