@@ -17,7 +17,7 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 import org.springframework.security.web.SecurityFilterChain
 
 /**
- * 두 개의 필터 체인이 공존한다.
+ * 두 개의 필터 체인이 공존한다. 인가 서버의 엔드포인트는 `authserver` 모듈의 체인이 이보다 먼저 받는다.
  *
  *   `/api` 이하 → Bearer, 무상태. 브라우저·CLI·MCP·내 다른 서비스가 모두 같은 경로를 쓴다.
  *                 값이 서비스 키 머리말로 시작하면 서비스 키로, 아니면 내 JWT 로 확인한다.

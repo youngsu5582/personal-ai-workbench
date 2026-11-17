@@ -651,6 +651,13 @@ AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된�
 
 `AUTH_ALLOWED_EMAILS`를 비운 채로 외부에 노출하면 구글 계정이 있는 누구나 로그인해 Provider 크레딧을 쓴다.
 
+인가 서버의 서명 키는 환경변수가 아니라 파일로 둔다. 로컬 프로필이 아래 위치를 가리킨다.
+
+```bash
+mkdir -p var/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out var/keys/authserver-signing-key.pem
+```
+
 ### 3. 확인
 
 `http://localhost:8080` 의 Auth Playground에서 로그인 → 발급된 토큰의 claim 확인 → `GET /api/me` 호출까지 한 페이지에서 된다.
