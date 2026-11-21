@@ -2,12 +2,16 @@ package dev.joyson.aiworkbench.auth.api
 
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.auth.application.WorkbenchOidcUser
+import dev.joyson.aiworkbench.authserver.AuthorizationServerPaths
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpHeaders
 import org.springframework.security.core.Authentication
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache
+import org.springframework.security.web.savedrequest.SavedRequest
 import org.springframework.stereotype.Component
+import java.net.URI
 
 /**
  * 로그인이 끝나면 곧바로 내 access token 을 발급한다. 이후 Google 은 흐름에서 빠진다.
@@ -19,6 +23,9 @@ import org.springframework.stereotype.Component
  * 토큰을 리다이렉트 URL 에 실어 보내지 않는 이유: 브라우저 히스토리·서버 로그·Referer 로 샌다.
  * 대신 짧은 수명의 HttpOnly 쿠키로 건네고, 페이지가 한 번 교환해 간다.
  * 교환 이후 토큰은 브라우저 메모리에만 있고 JS 가 읽을 수 있는 저장소에는 남지 않는다.
+ *
+ * 인가 엔드포인트로 가다가 로그인하러 온 요청은 예외다. 토큰을 발급하지 않고 그 요청으로 돌려보낸다.
+ * 인가 서버가 인가 코드를 내주려면 로그인된 세션이 남아 있어야 하므로, 이때는 세션을 지우지 않는다.
  */
 @Component
 class OAuth2LoginSuccessHandler(
@@ -26,11 +33,19 @@ class OAuth2LoginSuccessHandler(
     private val handoffCookie: HandoffCookie,
 ) : AuthenticationSuccessHandler {
 
+    private val requestCache = HttpSessionRequestCache()
+
     override fun onAuthenticationSuccess(
         request: HttpServletRequest,
         response: HttpServletResponse,
         authentication: Authentication,
     ) {
+        val saved = requestCache.getRequest(request, response)
+        if (saved != null && isAuthorizationRequest(saved)) {
+            response.sendRedirect(saved.redirectUrl)
+            return
+        }
+
         val principal = authentication.principal as WorkbenchOidcUser
         val issued = tokenService.issueAccessToken(principal.userUuid, principal.workbenchDisplayName)
 
@@ -41,4 +56,7 @@ class OAuth2LoginSuccessHandler(
         request.getSession(false)?.invalidate()
         response.sendRedirect("/?login=success")
     }
+
+    private fun isAuthorizationRequest(saved: SavedRequest): Boolean =
+        URI.create(saved.redirectUrl).path == AuthorizationServerPaths.AUTHORIZATION
 }
