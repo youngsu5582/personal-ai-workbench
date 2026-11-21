@@ -50,7 +50,7 @@ test("최근 작업 상세를 보고 서비스를 전환하면 이전 결과가 
 test("다시 로그인하면 이 브라우저에서 마지막으로 고른 서비스를 연다", async ({ page }) => {
   await prepare(page);
   const picker = page.getByRole("combobox", { name: "서비스 선택" });
-  await expect(picker).toContainText("첫 서비스 (기본)");
+  await expect(picker).toContainText("첫 서비스");
   await pickService(page, /^둘째 서비스/);
   await page.goto("/?login=success");
   await expect(picker).toContainText("둘째 서비스");
@@ -59,7 +59,21 @@ test("다시 로그인하면 이 브라우저에서 마지막으로 고른 서�
 test("마지막으로 고른 서비스가 목록에 없으면 기본 서비스를 연다", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("workbench-last-service", "deleted-workspace"));
   await prepare(page);
-  await expect(page.getByRole("combobox", { name: "서비스 선택" })).toContainText("첫 서비스 (기본)");
+  await expect(page.getByRole("combobox", { name: "서비스 선택" })).toContainText("첫 서비스");
+});
+
+test("콘솔은 어느 서비스가 기본인지 드러내지 않는다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("combobox", { name: "서비스 선택" }).click();
+  await expect(page.getByRole("option", { name: /첫 서비스/ })).toBeVisible();
+  await expect(page.getByRole("listbox")).not.toContainText("기본");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "서비스 관리" }).click();
+  await expect(page.getByText("나의 서비스")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("기본");
+  await page.getByRole("button", { name: /^첫 서비스/ }).click();
+  await expect(page.getByRole("heading", { name: "첫 서비스" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("기본");
 });
 
 test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께 보인다", async ({ page }) => {

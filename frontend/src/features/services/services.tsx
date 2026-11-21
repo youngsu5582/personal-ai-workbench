@@ -59,14 +59,14 @@ export function ServicePicker({
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="text-[11px] text-subtle-foreground">현재 서비스</span>
             <SelectValue placeholder={value ? "서비스 선택" : "불러오는 중"}>
-              <span className="truncate text-[13px] font-medium text-foreground">{current?.name}{current?.isDefault ? " (기본)" : ""}</span>
+              <span className="truncate text-[13px] font-medium text-foreground">{current?.name}</span>
             </SelectValue>
           </span>
         </SelectTrigger>
         <SelectContent>
           {value?.map((s) => (
             <SelectItem key={s.uuid} value={s.uuid} className="h-9">
-              <span className="flex items-center gap-2"><Avatar label={s.name} seed={s.uuid} size="sm" />{s.name}{s.isDefault ? " (기본)" : ""}</span>
+              <span className="flex items-center gap-2"><Avatar label={s.name} seed={s.uuid} size="sm" />{s.name}</span>
             </SelectItem>
           ))}
         </SelectContent>
@@ -140,7 +140,7 @@ export function ServicesPanel({
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">Service overview</span>
               <h2 className="m-0 truncate text-lg font-semibold tracking-[-0.01em] text-foreground">{current.name}</h2>
               <p className="m-0 text-[13px] text-muted-foreground">
-                {current.isDefault ? "기본 서비스" : "서비스 작업 공간"} · ID <span className="font-mono text-xs">{current.uuid.slice(0, 8)}</span>
+                서비스 작업 공간 · ID <span className="font-mono text-xs">{current.uuid.slice(0, 8)}</span>
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -175,7 +175,7 @@ export function ServicesPanel({
                   </span>
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <strong className="truncate text-sm font-semibold">{s.name}</strong>
-                    <span className="text-xs text-muted-foreground">{s.isDefault ? "기본 서비스" : "서비스 작업 공간"}</span>
+                    <span className="text-xs text-muted-foreground">서비스 작업 공간</span>
                   </span>
                   <span className="flex w-full items-center justify-between border-t border-border pt-3 text-xs text-subtle-foreground">
                     <span className="font-mono">{s.uuid.slice(0, 8)}</span>
