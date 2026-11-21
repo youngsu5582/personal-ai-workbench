@@ -797,6 +797,8 @@ class TaskWorkerTest @Autowired constructor(
 
             override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 한 장씩 묻는다")
 
+            override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 형식을 묻지 않는다")
+
             override fun readContent(sha256: String, ownerUuid: UUID) = error("주소로 넘길 수 있으면 바이트를 읽지 않는다")
         }
         var sent: URI? = null
@@ -824,6 +826,7 @@ class TaskWorkerTest @Autowired constructor(
             override fun findUsable(sha256: String, ownerUuid: UUID): UsableUpload? = null
             override fun issueReadUrl(sha256: String, ownerUuid: UUID, fileName: String) = error("주소를 받으면 안 된다")
             override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("주소를 받으면 안 된다")
+            override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID) = error("형식을 묻으면 안 된다")
             override fun readContent(sha256: String, ownerUuid: UUID) = error("바이트를 읽으면 안 된다")
         }
         val (_, task) = newTask(option = editOption(FileSource.Uploaded(Sha256.of(UUID.randomUUID().toString().toByteArray()).hex)))
@@ -880,6 +883,8 @@ class TaskWorkerTest @Autowired constructor(
 
             override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 한 장씩 묻는다")
 
+            override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 형식을 묻지 않는다")
+
             override fun readContent(sha256: String, ownerUuid: UUID) = image.takeIf { sha256 == uploadUuid && ownerUuid == owner }
         }
         val sent = mutableListOf<ExternalApiFileInput>()
@@ -912,6 +917,82 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     private fun editOption(sourceSha256: String) = editOption(FileSource.Generated(sourceSha256))
+
+    /** 올린 오디오 하나를 가진 업로드 모듈. 바이트를 읽는지 세어 주소로 먼저 보냈는지 가른다. */
+    private class AudioUploads(val owner: UUID, val sha256: String, val bytes: ByteArray) : UploadedFiles {
+        var contentReads = 0
+        override fun findUsable(sha256: String, workspaceUuid: UUID) =
+            UsableUpload("audio/wav").takeIf { sha256 == this.sha256 && workspaceUuid == owner }
+
+        override fun issueReadUrl(sha256: String, workspaceUuid: UUID, fileName: String): URI {
+            assertEquals("${this.sha256}.wav", fileName)
+            return URI.create("https://storage.test/audio?X-Amz-Signature=a")
+        }
+
+        override fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 한 장씩 묻는다")
+        override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID) = error("워커는 형식을 묻지 않는다")
+        override fun readContent(sha256: String, workspaceUuid: UUID): ByteArray? {
+            contentReads += 1
+            return bytes.takeIf { sha256 == this.sha256 && workspaceUuid == owner }
+        }
+    }
+
+    private fun audioTask(): Pair<AudioUploads, GenerationJobTask> {
+        val owner = UUID.randomUUID()
+        val uploads = AudioUploads(owner, Sha256.of(UUID.randomUUID().toString().toByteArray()).hex, "RIFFxxxxWAVE".toByteArray())
+        val (_, task) = newTask(
+            model = TEXT_MODEL,
+            option = TextGenerateOption("받아 써", attachments = listOf(FileSource.Uploaded(uploads.sha256))),
+            ownerUuid = owner,
+        )
+        return uploads to task
+    }
+
+    @Test
+    fun `글 생성의 첨부는 주소로 먼저 넘기고 바이트는 읽지 않는다`() {
+        val (uploads, task) = audioTask()
+        var sent: ExternalApiFileInput? = null
+
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }, uploadedFiles = uploads, textProvider = textProvider {
+            sent = it.files.single()
+            answered("전사")
+        }).process(task.id!!)
+
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        val url = assertIs<ExternalApiFileInput.Url>(sent)
+        assertEquals("audio/wav", url.mimeType)
+        assertEquals(0, uploads.contentReads)
+        // 원장에는 첨부 수가 남는다. 파일이 입력 토큰을 크게 바꿔 같은 모델의 호출을 가르는 축이다.
+        assertEquals(1, assertIs<dev.joyson.aiworkbench.usage.TextRequest>(callRepository.findAllByTaskUuid(task.uuid).single().request).attachments)
+    }
+
+    @Test
+    fun `글 생성의 첨부 주소를 받아가지 못하면 같은 파일을 바이트로 한 번 더 보낸다`() {
+        val (uploads, task) = audioTask()
+        val sent = mutableListOf<ExternalApiFileInput>()
+
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }, uploadedFiles = uploads, textProvider = textProvider {
+            val file = it.files.single().also { f -> sent += f }
+            if (file is ExternalApiFileInput.Url) throw ExternalApiException(FailureKind.INPUT_UNREACHABLE, "[fake 400] 받아가지 못했다")
+            answered("전사")
+        }).process(task.id!!)
+
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertIs<ExternalApiFileInput.Url>(sent[0])
+        assertContentEquals(uploads.bytes, assertIs<ExternalApiFileInput.Bytes>(sent[1]).bytes)
+        assertEquals(1, uploads.contentReads)
+    }
+
+    @Test
+    fun `첨부가 없는 글은 파일 없이 한 번만 부른다`() {
+        val (_, task) = newTask(model = TEXT_MODEL, option = TextGenerateOption("질문"))
+        val calls = mutableListOf<ExternalApiTextRequest>()
+
+        textWorker { calls += it; answered("답") }.process(task.id!!)
+
+        assertEquals(1, calls.size)
+        assertEquals(emptyList(), calls.single().files)
+    }
 
     private fun editOption(source: FileSource) = ImageOption(
         prompt = "수채화로",

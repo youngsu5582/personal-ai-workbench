@@ -407,6 +407,26 @@ Content-Type: application/json
   응답의 `availableEfforts` 에 받는 값이 실린다.
 - 그 안에서도 모델마다 받는 값이 다르다. `gpt-6-astra` 는 `none` 을, `gpt-6.1-sol` 은 `none` 을 받지 않는다. 접수는 되고 Task 가 저쪽 400 사유로 실패한다.
 
+### 첨부 — 이미지 · 오디오를 함께 읽힌다
+
+글 생성 옵션의 `attachments` 에 먼저 올린 파일(`POST /api/uploads`)을 가리키면 모델이 글과 함께 읽는다. 오디오를 첨부해 "들리는 그대로 받아 써"라고 하면 받아쓰기가 된다.
+
+```json
+{"type": "text-generate", "prompt": "이 오디오를 들리는 그대로 받아 써", "attachments": [{"type": "uploaded", "sha256": "<업로드 SHA-256>"}]}
+```
+
+```bash
+./scripts/upload.sh ./answer.m4a        # 출력된 sha256 을 쓴다
+ATTACH=<sha256> ./scripts/text.sh "이 오디오를 들리는 그대로 받아 써" 1 gemini-3.5-flash-lite
+```
+
+- 개수 상한은 `TextGenerateOption.MAX_ATTACHMENTS` 다. 순서가 곧 모델이 읽는 순서라 목록이다.
+- **모델이 받는 형식만 접수한다.** 받는 형식은 어댑터의 `inputTypes` 가 밝힌다(`GeminiTextProvider`). 밝히지 않은 어댑터의 모델에는 첨부를 보낼 수 없다.
+  남의 파일 · 없는 파일 · 받지 않는 형식은 구분 없이 같은 400 이다.
+- 파일은 읽기 주소로 먼저 보내고, 저쪽이 받아가지 못하면 같은 파일을 바이트로 한 번 더 보낸다. 로컬 보관소처럼 닿지 않는 주소여도 바이트로 간다.
+- 파일이 입력 토큰을 크게 바꾼다. 비용은 같은 단가표로 잡히고(`promptTokenCount` 가 모든 입력의 합이다), 호출 원장에는 첨부 수가 남는다.
+- 오디오 길이 · 말투 평가 같은 것은 프롬프트로 요청한다. 자막 · 타임스탬프가 붙는 전사는 아직 없다.
+
 Gemini 모델은 `.env` 의 `WORKBENCH_PROVIDER_GEMINI_API_KEY` 가 있어야 나타난다. 공용 이름 `GEMINI_API_KEY` 는 읽지 않는다.
 키를 만든 프로젝트에 결제가 연결돼 있지 않으면 Free Tier 로 불리는데, 그때 입력과 출력은 Google 제품 개선에 쓰인다.
 결제를 연결한 프로젝트가 2026-10-26 이후에 만들어졌으면 Google 이 요청을 기본으로 로그에 남긴다(55일).

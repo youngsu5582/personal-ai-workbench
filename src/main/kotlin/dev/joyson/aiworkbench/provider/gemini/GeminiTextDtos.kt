@@ -32,7 +32,15 @@ data class GeminiPart(
     val text: String? = null,
     /** 응답에서만 온다. true 면 생각의 요약이지 답이 아니다. */
     val thought: Boolean? = null,
+    /** 요청에서만 보낸다. 바이트를 base64 로 담는다. */
+    val inlineData: GeminiInlineData? = null,
+    /** 요청에서만 보낸다. 저쪽이 읽어 갈 주소를 담는다. */
+    val fileData: GeminiFileData? = null,
 )
+
+data class GeminiInlineData(val mimeType: String, val data: String)
+
+data class GeminiFileData(val mimeType: String, val fileUri: String)
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class GeminiGenerationConfig(

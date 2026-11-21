@@ -161,6 +161,24 @@ class ProviderRequestMapperTest {
         assertEquals(schema, request.jsonSchema)
     }
 
+    @Test
+    fun `첨부는 받은 순서대로 파일 입력으로 옮긴다`() {
+        val option = TextGenerateOption(prompt = "받아 써", attachments = listOf(FileSource.Uploaded(Sha256.of("녹음".toByteArray()).hex)))
+
+        val request = ProviderRequestMapper.from(option, listOf(ResolvedFile.Bytes(byteArrayOf(1, 2), "audio/wav", "a.wav")))
+
+        assertEquals("audio/wav", request.files.single().mimeType)
+        assertEquals("a.wav", request.files.single().filename)
+    }
+
+    /** 부르는 쪽이 첨부를 읽어 넘기다 빠뜨린 것이다. 그대로 보내면 파일 없이 글만 만들어지고 과금된다. */
+    @Test
+    fun `첨부 수가 옵션과 다르면 옮기지 않는다`() {
+        val option = TextGenerateOption(prompt = "받아 써", attachments = listOf(FileSource.Uploaded(Sha256.of("녹음".toByteArray()).hex)))
+
+        assertFailsWith<IllegalArgumentException> { ProviderRequestMapper.from(option, emptyList()) }
+    }
+
     private val evidenceImage = ResolvedFile.Bytes(byteArrayOf(1), "image/png", "evidence.png")
 
     private fun decisionOption(vararg input: DecisionEvidence) = DecisionOption(

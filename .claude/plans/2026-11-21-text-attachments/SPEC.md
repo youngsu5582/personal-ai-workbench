@@ -30,6 +30,8 @@
 | F4 | 입력 종류별 값은 **배열**이다: `promptTokensDetails: [{modality: AUDIO, tokenCount: 50}, {modality: TEXT, tokenCount: 9}]`. 0 인 종류는 항목이 빠진다(텍스트만 보내면 TEXT 하나). **`promptTokenCount`(59)는 모든 종류의 합**이다. 2초 WAV 가 50 토큰 — 문서의 초당 32 와 어긋난다 | live |
 | F5 | Responses API 의 `input` 파트는 `input_text` · `input_image` · `input_file` 뿐, 오디오가 없다. 오디오 입력은 Chat Completions 의 audio 모델(`gpt-audio-*`) 경로다 | 공식 문서 — 같은 페이지 안에 "audio" 를 말하는 문장이 하나 있으나 열거된 파트에는 없다 |
 
+| F6 | 어댑터 경로로 확인한 것(2026-11-21, `GeminiTextProviderLiveTest`): ① `audio/mp4`(M4A)를 받는다 ② 받아가지 못하는 주소는 400(`INVALID_ARGUMENT`, 이름이 풀리지 않음) 또는 404(`NOT_FOUND`) 에 `Cannot fetch content from the provided URL` 로 시작하는 문구가 온다 — 이것으로 `INPUT_UNREACHABLE` 을 가른다 ③ 한국어 합성 음성(macOS `say`, 6초)을 정확히 받아 썼다. 오디오 입력 201 토큰/6초 | live — 합성 음성이라 **사람 녹음의 품질은 미검증** |
+
 **D3 을 하지 않는다.** F3 · F4 로 현재 단가표(`promptTokenCount` 한 칸)가 이미 오디오 · 이미지 입력을 맞게 매긴다.
 배열 경로 · `PriceRates` 확장 · ADR 0002 절이 모두 빠진다. 입력 단가가 다른 모델을 목록에 더하는 날 다시 연다.
 

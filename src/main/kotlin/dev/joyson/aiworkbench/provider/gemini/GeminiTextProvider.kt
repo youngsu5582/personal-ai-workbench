@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.provider.gemini
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
@@ -9,6 +10,7 @@ import dev.joyson.aiworkbench.provider.ProviderUsage
 import dev.joyson.aiworkbench.provider.ReasoningEffort
 import dev.joyson.aiworkbench.provider.StopReason
 import org.slf4j.LoggerFactory
+import java.util.Base64
 
 /**
  * 표준 글 생성 요청을 Gemini `generateContent` 의 어휘로 옮기는 어댑터.
@@ -31,8 +33,8 @@ class GeminiTextProvider(
     /** `thinkingLevel` 이 표현하는 넷이다([EXPRESSIBLE]). 모델마다 좁히지 않는다. */
     override fun efforts(model: String): Set<ReasoningEffort> = if (supports(model)) EXPRESSIBLE else emptySet()
 
-    /** 파일 파트를 아직 싣지 않아 받는 형식이 없다. */
-    override fun inputTypes(model: String): Set<String> = emptySet()
+    /** 파일 파트로 싣는 이미지와 오디오다([INPUT_TYPES]). */
+    override fun inputTypes(model: String): Set<String> = if (supports(model)) INPUT_TYPES else emptySet()
 
     override fun generateText(
         model: String,
@@ -48,7 +50,7 @@ class GeminiTextProvider(
         val response = client.generateContent(
             target.modelName,
             GeminiGenerateContentRequest(
-                contents = listOf(GeminiContent(role = USER, parts = listOf(GeminiPart(text = request.prompt)))),
+                contents = listOf(GeminiContent(role = USER, parts = partsOf(request))),
                 systemInstruction = request.instructions?.let { GeminiContent(parts = listOf(GeminiPart(text = it))) },
                 generationConfig = generationConfigOf(request.jsonSchema, thinkingLevel),
             ),
@@ -56,6 +58,19 @@ class GeminiTextProvider(
 
         assemble(response)
     }
+
+    /**
+     * 글 뒤에 파일을 받은 순서대로 붙인다. 순서가 곧 모델이 읽는 순서다.
+     *
+     * 주소는 `fileData`, 바이트는 `inlineData`(base64) 다. 주소를 Gemini 가 못 받아가면 부르는 쪽이 바이트로 다시 보낸다.
+     */
+    private fun partsOf(request: ExternalApiTextRequest): List<GeminiPart> =
+        listOf(GeminiPart(text = request.prompt)) + request.files.map { file ->
+            when (file) {
+                is ExternalApiFileInput.Bytes -> GeminiPart(inlineData = GeminiInlineData(file.mimeType, Base64.getEncoder().encodeToString(file.bytes)))
+                is ExternalApiFileInput.Url -> GeminiPart(fileData = GeminiFileData(file.mimeType, file.url.toString()))
+            }
+        }
 
     /** 바꿀 것이 없으면 칸째 보내지 않는다 — 모델 기본값을 우리가 지어내지 않는다. */
     private fun generationConfigOf(jsonSchema: String?, thinkingLevel: String?): GeminiGenerationConfig? {
@@ -103,6 +118,15 @@ class GeminiTextProvider(
     private companion object {
         const val USER = "user"
         const val JSON = "application/json"
+
+        /**
+         * 파일 파트로 싣는 형식. 업로드가 허용하는 이미지 셋과 오디오 여섯이 모두 Gemini 가 받는 형식이다.
+         * 업로드가 형식을 늘려도 여기가 따라 늘지 않으면 접수가 거절한다.
+         */
+        val INPUT_TYPES = setOf(
+            "image/png", "image/jpeg", "image/webp",
+            "audio/wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/mp4", "audio/aac",
+        )
 
         const val STOP = "STOP"
         const val MAX_TOKENS = "MAX_TOKENS"

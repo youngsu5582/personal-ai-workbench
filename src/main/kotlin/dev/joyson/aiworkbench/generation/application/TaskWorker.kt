@@ -17,6 +17,7 @@ import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiException
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
+import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ProviderRegistry
@@ -135,7 +136,7 @@ class TaskWorker(
     }
 
     /**
-     * 글 한 편을 만든다. 입력 파일도 보관소도 없어 이미지 경로보다 짧다.
+     * 글 한 편을 만든다. 첨부가 있으면 판정의 근거 이미지처럼 준비해 넘긴다 — 주소로 먼저, 못 받아가면 바이트로.
      *
      * 응답이 왔으면 지출은 **성공 호출로** 적는다 — 거절이나 잘림도 저쪽은 만들었고 과금했다.
      * 그 글을 결과로 받을지는 그 다음에 정한다.
@@ -150,24 +151,7 @@ class TaskWorker(
         log.info("task 를 처리한다. uuid={} jobUuid={} workspaceUuid={} model={} 시도={}", task.uuid, job.uuid, job.workspaceUuid, job.model, task.attemptCount)
 
         val processMark = TimeSource.Monotonic.markNow()
-        val request = ProviderRequestMapper.from(option)
-
-        // 이미지 경로의 call 과 같은 순서다 — 벽시계로 시각을, 단조 시계로 길이를 잰다.
-        val calledAt = Instant.now()
-        val callMark = TimeSource.Monotonic.markNow()
-        val response = try {
-            activeCalls(provider.name, job.model).record(Supplier { provider.generateText(job.model, request) })
-        } catch (e: ExternalApiException) {
-            record(
-                ProviderCallMapper.failed(
-                    job, task, provider.name, request,
-                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
-                ),
-            )
-            failCall(taskId, e)
-            return
-        }
-        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+        val response = callWithInputs(taskId, task, job) { files -> callText(job, task, provider, option, files) } ?: return
 
         unusableReason(response, option.output)?.let { reason ->
             // 같은 요청을 다시 보내도 대개 같은 답이 온다. 다시 하면 돈만 또 나간다.
@@ -181,6 +165,33 @@ class TaskWorker(
             ProviderInfo(providerId = response.providerId).takeIf { !it.isEmpty },
         )
         log.info("task 처리를 완료했다. uuid={} 소요={}ms 글={}자", task.uuid, processMark.elapsedMillis(), response.text.length)
+    }
+
+    /** 이미지 경로의 [call] 과 같은 순서다 — 벽시계로 시각을, 단조 시계로 길이를 재고, 실패한 호출도 적는다. */
+    private fun callText(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        provider: ExternalApiTextProvider,
+        option: TextGenerateOption,
+        files: List<ResolvedFile>,
+    ): ExternalApiTextResponse {
+        val request = ProviderRequestMapper.from(option, files)
+
+        val calledAt = Instant.now()
+        val callMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            activeCalls(provider.name, job.model).record(Supplier { provider.generateText(job.model, request) })
+        } catch (e: ExternalApiException) {
+            record(
+                ProviderCallMapper.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
+                ),
+            )
+            throw e
+        }
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+        return response
     }
 
     /**

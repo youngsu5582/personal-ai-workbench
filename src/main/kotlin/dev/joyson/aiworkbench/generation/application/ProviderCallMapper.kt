@@ -155,6 +155,7 @@ object ProviderCallMapper {
     private fun textRequestOf(request: ExternalApiTextRequest) = TextRequest(
         format = if (request.jsonSchema == null) "text" else "json-schema",
         effort = request.effort?.name?.lowercase(),
+        attachments = request.files.size,
     )
 
     private fun decisionRequestOf(request: ExternalApiDecisionRequest) = DecisionRequest(

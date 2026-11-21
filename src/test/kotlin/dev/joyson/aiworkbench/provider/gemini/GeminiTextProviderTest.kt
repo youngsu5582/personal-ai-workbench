@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.provider.gemini
 
 import dev.joyson.aiworkbench.provider.ExternalApiException
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.FailureKind
 import dev.joyson.aiworkbench.provider.ReasoningEffort
@@ -67,11 +68,55 @@ class GeminiTextProviderTest {
         assertEquals(emptySet(), provider.efforts("gpt-6-luna"))
     }
 
-    /** 파일 파트를 싣지 않는 동안은 받는다고 밝히지 않는다 — 밝히면 접수된 첨부가 조용히 빠진다. */
+    /** 밝힌 형식은 모두 실제로 싣는다. 업로드가 허용하는 형식 전부이고, 모르는 모델이면 아무것도 받지 않는다. */
     @Test
-    fun `파일을 아직 싣지 않으므로 받는 입력 형식이 없다고 밝힌다`() {
-        assertEquals(emptySet(), provider.inputTypes("gemini-3.6-flash"))
+    fun `이미지와 오디오를 받는다고 밝히고 모르는 모델은 받지 않는다`() {
+        assertEquals(
+            setOf(
+                "image/png", "image/jpeg", "image/webp",
+                "audio/wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/mp4", "audio/aac",
+            ),
+            provider.inputTypes("gemini-3.6-flash"),
+        )
+        assertEquals(provider.inputTypes("gemini-3.6-flash"), provider.inputTypes("gemini-3.5-flash-lite"))
         assertEquals(emptySet(), provider.inputTypes("gpt-6-luna"))
+    }
+
+    /** 순서가 곧 모델이 읽는 순서다. 글이 먼저고 파일이 받은 순서대로 뒤따른다. 바이트는 base64, 주소는 fileUri 다. */
+    @Test
+    fun `파일은 글 뒤에 받은 순서대로 바이트는 inlineData 로 주소는 fileData 로 싣는다`() {
+        server.expect(requestTo(URL))
+            .andExpect(jsonPath("$.contents[0].parts.length()").value(3))
+            .andExpect(jsonPath("$.contents[0].parts[0].text").value("받아 써"))
+            .andExpect(jsonPath("$.contents[0].parts[1].inlineData.mimeType").value("audio/wav"))
+            .andExpect(jsonPath("$.contents[0].parts[1].inlineData.data").value("AQID"))
+            .andExpect(jsonPath("$.contents[0].parts[2].fileData.mimeType").value("image/png"))
+            .andExpect(jsonPath("$.contents[0].parts[2].fileData.fileUri").value("https://storage.test/a.png?sig=1"))
+            .andRespond(withSuccess(response("STOP", text("전사")), MediaType.APPLICATION_JSON))
+
+        provider.generateText(
+            MODEL,
+            ExternalApiTextRequest(
+                "받아 써",
+                files = listOf(
+                    ExternalApiFileInput.Bytes(byteArrayOf(1, 2, 3), "audio/wav", "a.wav"),
+                    ExternalApiFileInput.Url(java.net.URI.create("https://storage.test/a.png?sig=1"), "image/png", "a.png"),
+                ),
+            ),
+        )
+
+        server.verify()
+    }
+
+    @Test
+    fun `파일이 없으면 글 파트 하나만 싣는다`() {
+        server.expect(requestTo(URL))
+            .andExpect(jsonPath("$.contents[0].parts.length()").value(1))
+            .andRespond(withSuccess(response("STOP", text("답")), MediaType.APPLICATION_JSON))
+
+        provider.generateText(MODEL, ExternalApiTextRequest("질문"))
+
+        server.verify()
     }
 
     @Test
@@ -234,6 +279,23 @@ class GeminiTextProviderTest {
             assertEquals(kind, ex.kind, status.toString())
             assertTrue(ex.message!!.contains("${status.value()}"), "상태 코드가 사라졌다: ${ex.message}")
             assertTrue(ex.message!!.contains("REASON_${status.value()}"), "저쪽 오류 이름이 사라졌다: ${ex.message}")
+        }
+    }
+
+    /** 실제 응답의 문구다(live 로 확인). 상태 코드는 400 과 404 가 모두 온다 — 그래서 문구로 가른다. */
+    @Test
+    fun `주소를 받아가지 못한 4xx 는 바이트로 다시 보낼 수 있도록 따로 가른다`() {
+        for (status in listOf(HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND)) {
+            server.reset()
+            server.expect(requestTo(URL)).andRespond(
+                withStatus(status)
+                    .body("""{"error":{"code":${status.value()},"message":"Cannot fetch content from the provided URL. The URL could not be found.","status":"X"}}""")
+                    .contentType(MediaType.APPLICATION_JSON),
+            )
+
+            val ex = assertFailsWith<ExternalApiException> { provider.generateText(MODEL, ExternalApiTextRequest("질문")) }
+
+            assertEquals(FailureKind.INPUT_UNREACHABLE, ex.kind, status.toString())
         }
     }
 

@@ -85,6 +85,29 @@ class FileSourceResolverTest @Autowired constructor(
         )
     }
 
+    /** 조회 화면이 이미지로 그릴지 오디오로 그릴지 가르는 근거다. 쓸 수 없는 참조는 형식도 모른다. */
+    @Test
+    fun `참조의 형식을 종류마다 한 번에 묻고 쓸 수 없는 참조는 담지 않는다`() {
+        val workspace = UUID.randomUUID()
+        val audio = Sha256.of("audio".toByteArray()).hex
+        val missing = Sha256.of("missing".toByteArray()).hex
+        val asked = mutableListOf<Collection<String>>()
+        val uploads = object : UploadedFiles by uploadedFiles {
+            override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, String> {
+                asked += sha256s
+                return mapOf(audio to "audio/mp4").takeIf { workspaceUuid == workspace }.orEmpty()
+            }
+        }
+
+        val types = resolver(uploadedFiles = uploads).mimeTypesOf(
+            listOf(FileSource.Uploaded(audio), FileSource.Uploaded(missing), FileSource.Uploaded(audio)),
+            workspace,
+        )
+
+        assertEquals(mapOf<FileSource, String>(FileSource.Uploaded(audio) to "audio/mp4"), types)
+        assertEquals(listOf(setOf(audio, missing)), asked.map { it.toSet() }, "참조가 겹쳐도 한 번만 묻는다")
+    }
+
     @Test
     fun `올린 파일은 upload 모듈에 한 번에 묻고 그 답을 그대로 쓴다`() {
         val workspace = UUID.randomUUID()

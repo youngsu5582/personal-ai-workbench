@@ -109,7 +109,9 @@ class GenerationJobService(
         val textsByTaskId = generatedTextRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
         val decisionsByTaskId = generatedDecisionRepository.findAllByTaskIdIn(taskIds).groupBy { it.taskId }
 
-        val previewUrls = fileSourceResolver.issuePreviewUrls(jobs.flatMap { it.option.fileSources() }, workspaceUuid)
+        val sources = jobs.flatMap { it.option.fileSources() }
+        val previewUrls = fileSourceResolver.issuePreviewUrls(sources, workspaceUuid)
+        val mimeTypes = fileSourceResolver.mimeTypesOf(sources, workspaceUuid)
 
         return jobs.map { job ->
             val jobTasks = tasksByJobId[job.id].orEmpty()
@@ -123,7 +125,7 @@ class GenerationJobService(
                         decisionsByTaskId[it.id].orEmpty(),
                     )
                 },
-                inputs = job.option.fileSources().map { InputFileView(it, previewUrls[it]?.toString()) },
+                inputs = job.option.fileSources().map { InputFileView(it, previewUrls[it]?.toString(), mimeTypes[it]) },
             )
         }
     }

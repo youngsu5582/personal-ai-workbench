@@ -45,15 +45,23 @@ internal object GeminiFailures {
     /**
      * 상태 코드를 의미로 옮긴다.
      *
+     * 주소로 넘긴 입력을 받아가지 못한 4xx 는 따로 가른다. 바이트로 다시 보내면 될 수 있어서다.
+     * 이름이 풀리지 않거나 공개되지 않은 주소는 400, 찾지 못하는 주소는 404 로 와서 상태 코드로는 가를 수 없다. 그래서 문구로 가른다.
+     * 문구가 바뀌면 [FailureKind.REJECTED] 로 떨어진다 — 다시 보내지 않을 뿐 틀린 판정은 아니다.
+     *
      * Free Tier 의 일일 한도도 429(`RESOURCE_EXHAUSTED`)로 온다. 분당 한도와 가르지 않는다 —
      * 다시 해서 될지는 기다린 시간에 달렸고, 재시도 상한이 막아 준다. 끝내 실패하면 사유가 Task 에 남는다.
      */
     fun kindOf(e: GeminiException): FailureKind = when {
         e.status.value() == 429 -> FailureKind.THROTTLED
         e.status.is5xxServerError -> FailureKind.PROVIDER_ERROR
+        e.status.is4xxClientError && e.detail.startsWith(INPUT_FETCH_FAILED) -> FailureKind.INPUT_UNREACHABLE
         e.status.is4xxClientError -> FailureKind.REJECTED
         else -> FailureKind.UNKNOWN
     }
 
     const val PROVIDER_NAME = "gemini"
+
+    /** 주소로 넘긴 입력을 Gemini 가 받아오지 못했을 때 오는 문구의 앞부분. */
+    private const val INPUT_FETCH_FAILED = "Cannot fetch content from the provided URL"
 }
