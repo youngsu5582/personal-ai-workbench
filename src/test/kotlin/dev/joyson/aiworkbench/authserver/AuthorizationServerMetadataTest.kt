@@ -56,7 +56,7 @@ class AuthorizationServerMetadataTest @Autowired constructor(
     fun `메타데이터는 내주기로 한 것만 알린다`() {
         val metadata = getJson("/.well-known/oauth-authorization-server")
 
-        assertEquals(listOf("authorization_code"), metadata["grant_types_supported"].values().map { it.asString() })
+        assertEquals(setOf("authorization_code", "refresh_token"), metadata["grant_types_supported"].values().map { it.asString() }.toSet())
         assertEquals(listOf("client_secret_basic"), metadata["token_endpoint_auth_methods_supported"].values().map { it.asString() })
         assertEquals(listOf("S256"), metadata["code_challenge_methods_supported"].values().map { it.asString() })
         assertEquals(listOf("code"), metadata["response_types_supported"].values().map { it.asString() })

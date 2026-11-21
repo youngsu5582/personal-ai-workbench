@@ -115,13 +115,6 @@ class AuthorizationCodeFlowTest @Autowired constructor(
     }
 
     @Test
-    fun `토큰 응답에 리프레시 토큰은 없다`() {
-        val body = exchange(authorizationCode()).andReturn().response.contentAsString
-
-        assertFalse(json.readTree(body).has("refresh_token"))
-    }
-
-    @Test
     fun `code_verifier 가 다르면 토큰을 주지 않는다`() {
         exchange(authorizationCode(), codeVerifier = "wrong-" + verifier).andExpect {
             status { isBadRequest() }
