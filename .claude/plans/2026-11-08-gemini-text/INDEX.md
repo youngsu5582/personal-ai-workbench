@@ -1,6 +1,6 @@
 # Plan: Gemini 텍스트 모델로 text-generate 를 받는다
 Created: 2026-11-08
-Status: active
+Status: completed
 
 ## Progress
 - [x] 모델 ID · Free Tier · 단가 · API 모양 확인 (공식 문서)
@@ -18,9 +18,14 @@ Status: active
   usageMetadata 에 문서에 없던 `serviceTier: "standard"` 가 온다 — Free Tier 인지는 응답에 드러나지 않는다
 - [x] main(#106) 위로 다시 rebase · 단가표를 V20 으로 옮김 · 전체 테스트 556개 통과 (2026-11-21)
 - [x] 관심사 셋으로 스택 PR — #115(effort) → #116(zeroIfAbsent) → #114(Gemini) · roadmap "걸어온 길" 행
+- [x] effort 포트를 `efforts(model)` 로 (모델마다 좁힐 자리) · Codex 지적으로 명시적 `null` 은 0 으로 보지 않게 (#116)
+- [x] 로컬 스모크 (2026-11-21, 임시 DB · OpenAI 끔) — V1~V20 기동, `/api/models` 에 두 모델, 글 · JSON Schema 성공,
+  `effort: max` 는 접수 400 과 `availableEfforts`, `thoughtsTokenCount` 없는 두 호출의 비용(DERIVED)이 손 계산과 같다.
+  usage 에 `promptTokensDetails: [{modality, tokenCount}]` 가 온다 — 입력 종류별 단가를 매길 때의 근거
 
 ## Resume Point
-스택 #115 → #116 → #114 리뷰 · 머지 대기 (아래부터). 다음은 `text-generate` 에 이미지 · 오디오 입력(`attachments`). 막힌 프롬프트(`blockReason`)의 실제 응답은 아직 못 봤다.
+#115 · #116 머지됨, #114 머지로 끝난다. 다음은 `text-generate` 에 이미지 · 오디오 입력(`attachments`) — 새 plan 에서 시작한다.
+막힌 프롬프트(`blockReason`)의 실제 응답은 아직 못 봤다.
 콘솔은 모델 선택이 `/api/models` 로 저절로 반영된다. 사용량 화면의 `gemini` 표기와 effort 칸은 정하지 않았다.
 
 ## 남은 결정 (뒤로 미룸)
