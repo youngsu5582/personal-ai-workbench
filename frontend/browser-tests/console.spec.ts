@@ -23,6 +23,14 @@ const summary = job;
 /** 재생할 수 있는 가장 작은 WAV(24kHz 모노 16bit, 0.01초). 깨진 바이트를 주면 재생 칸이 "불러오지 못했어요" 로 바뀐다. */
 const PLAYABLE_WAV = "data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAwF0AAIC7AAACABAAZGF0YeABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
+/** TTS 작업 하나. 결과는 재생할 수 있는 WAV 다. */
+const spoken = {
+  ...job, uuid: "job-v", type: "audio-generate", model: "tts-model",
+  option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Kore", style: "차분하게" },
+  tasks: [{ status: "SUCCEEDED", failureReason: null, texts: [], decisions: [],
+    files: [{ sha256: "a".repeat(64), url: `/api/files/${"a".repeat(64)}`, previewUrl: PLAYABLE_WAV, mimeType: "audio/wav", durationSeconds: 8.48 }] }],
+};
+
 async function prepare(page: Page) {
   await page.route("**/auth/handoff", route => route.fulfill({ json: { accessToken: "test-token" } }));
   await page.route("**/api/services", route => route.fulfill({ json: services }));
@@ -224,12 +232,6 @@ test("음성 작업은 모델이 받는 목소리로 읽을 글과 말투를 보
 
 test("작업 내역은 음성 결과를 재생 칸과 길이로 보이고 읽을 글로 알아본다", async ({ page }) => {
   await prepare(page);
-  const spoken = {
-    ...job, uuid: "job-v", type: "audio-generate", model: "tts-model",
-    option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Kore", style: "차분하게" },
-    tasks: [{ status: "SUCCEEDED", failureReason: null, texts: [], decisions: [],
-      files: [{ sha256: "a".repeat(64), url: `/api/files/${"a".repeat(64)}`, previewUrl: PLAYABLE_WAV, mimeType: "audio/wav", durationSeconds: 8.48 }] }],
-  };
   await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [spoken], hasNext: false } }));
   await page.route("**/api/jobs/job-v", route => route.fulfill({ json: spoken }));
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
@@ -243,6 +245,17 @@ test("작업 내역은 음성 결과를 재생 칸과 길이로 보이고 읽을
   await expect(page.getByRole("heading", { name: "읽을 글" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "목소리" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "말투" })).toBeVisible();
+});
+
+test("대시보드의 최근 작업은 TTS 작업을 음성 작업으로 부른다", async ({ page }) => {
+  await prepare(page);
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [spoken], hasNext: false } }));
+  // 새로고침하면 로그인이 풀린다. 다른 메뉴에 갔다 돌아와 대시보드가 목록을 다시 받게 한다.
+  const nav = page.getByRole("navigation", { name: "주 메뉴" });
+  await nav.getByRole("button", { name: "작업 내역", exact: true }).click();
+  await nav.getByRole("button", { name: "대시보드" }).click();
+  await expect(page.getByText("음성 작업")).toBeVisible();
+  await expect(page.getByText("알 수 없는 작업")).toHaveCount(0);
 });
 
 test("이미지 작업에서는 첨부 파일 칸이 없다", async ({ page }) => {

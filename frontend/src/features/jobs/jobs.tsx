@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, AudioLines, ChevronDown, ChevronUp, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedAudio, AuthenticatedImage } from "../../shared/authenticated-media";
 import { CopyButton } from "../../shared/copy-button";
+import { JOB_TYPE_ICON as TYPE_ICON, JOB_TYPE_LABEL as labels, JOB_TYPE_TILE as TYPE_TILE } from "../../shared/job-types";
 import { duration, TaskTiming } from "./task-timing";
 import { Button } from "../../shared/ui/button";
 import { cn } from "../../shared/ui/cn";
@@ -11,15 +12,7 @@ import { PageHeader } from "../../shared/ui/page-header";
 import { Badge, Card, CardTitle } from "../../shared/ui/surface";
 
 type Props = { token: string; workspace: string };
-const labels: Record<string, string> = { "image-generate": "이미지", "text-generate": "텍스트", decision: "판정", "audio-generate": "음성" };
 const statusLabel: Record<string, string> = { PENDING: "접수됨", DISPATCHED: "처리 중", CLOSED: "처리 종료", SUCCEEDED: "성공", FAILED: "실패", RUNNING: "진행 중" };
-const TYPE_TILE: Record<string, string> = {
-  "image-generate": "bg-tone-image-soft text-tone-image",
-  "text-generate": "bg-tone-text-soft text-tone-text",
-  decision: "bg-tone-decision-soft text-tone-decision",
-  "audio-generate": "bg-tone-audio-soft text-tone-audio",
-};
-const TYPE_ICON: Record<string, typeof FileText> = { "image-generate": FileImage, "text-generate": FileText, decision: ListChecks, "audio-generate": AudioLines };
 const message = (e: unknown) => e instanceof Error ? e.message : "요청을 처리하지 못했어요.";
 function date(value: string) {
   const parsed = new Date(value);

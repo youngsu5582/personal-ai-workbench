@@ -1,7 +1,8 @@
-import { ArrowRight, Boxes, FileImage, FileText, KeyRound, ListChecks, Sparkles } from "lucide-react";
+import { ArrowRight, Boxes, FileText, KeyRound, Sparkles } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { UsagePanel } from "../usage/usage";
 import { request, type JobList } from "../../api";
+import { JOB_TYPE_ICON as TYPE_ICON, JOB_TYPE_LABEL as TYPE_NAME, JOB_TYPE_TILE as TYPE_TILE } from "../../shared/job-types";
 import { Button } from "../../shared/ui/button";
 import { cn } from "../../shared/ui/cn";
 import { PageHeader } from "../../shared/ui/page-header";
@@ -9,13 +10,6 @@ import { Badge, Card } from "../../shared/ui/surface";
 
 type Destination = "studio" | "jobs" | "templates" | "usage" | "services" | "keys";
 
-const TYPE_TILE: Record<string, string> = {
-  "image-generate": "bg-tone-image-soft text-tone-image",
-  "text-generate": "bg-tone-text-soft text-tone-text",
-  decision: "bg-tone-decision-soft text-tone-decision",
-};
-const TYPE_NAME: Record<string, string> = { "image-generate": "이미지", "text-generate": "텍스트", decision: "판정" };
-const TYPE_ICON: Record<string, typeof FileText> = { "image-generate": FileImage, "text-generate": FileText, decision: ListChecks };
 
 function SectionHeading({ title, description, action }: { title: string; description: string; action: ReactNode }) {
   return <div className="mb-3 flex items-end justify-between gap-4">
@@ -67,7 +61,7 @@ export function Dashboard({ token, workspace, go }: {
           <div className="flex flex-col gap-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">Create</span>
             <h2 className="m-0 text-lg font-semibold tracking-[-0.01em] text-foreground">무엇을 만들어 볼까요?</h2>
-            <p className="m-0 max-w-md text-[13px] leading-relaxed text-muted-foreground">모델을 고르고 프롬프트를 입력해 이미지와 텍스트를 만들거나, 저장해 둔 템플릿에 변수만 채워 실행해 보세요.</p>
+            <p className="m-0 max-w-md text-[13px] leading-relaxed text-muted-foreground">모델을 고르고 프롬프트를 입력해 이미지 · 텍스트 · 음성을 만들거나, 저장해 둔 템플릿에 변수만 채워 실행해 보세요.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" onClick={() => go("studio")}>작업실 열기 <ArrowRight aria-hidden="true" /></Button>
