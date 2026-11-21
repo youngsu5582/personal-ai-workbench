@@ -34,6 +34,8 @@ STT(받아 적기)는 이미 `text-generate` + 첨부로 끝났다(PR #118~#121)
 | D5 | 길이(초) | **서버가 WAV 의 `data` 청크로** 계산한다(F5). 저쪽이 말해 주는 값이 아니라 바이트에서 나오는 값이다 |
 | D6 | 단가 | 입력 `total_input_tokens` · 출력 `total_output_tokens` 에 값을 매기는 행을 모델 둘 × 기간 둘(2026-12-31 경계)로 넣는다. 새 단가 경로 문법은 필요 없다 |
 | D7 | 기본 모델 | `gemini-3.8-flash-tts`(품질), `…flash-lite-tts` 도 받는다. 질문 한 건의 비용 차이는 $0.002 안팎이다 |
+| D8 | 조회 응답의 파일 | 공통 칸(`sha256` · `url` · `previewUrl` · `mimeType` · `fileSize`) + 종류의 사실(이미지 `width` · `height`, 오디오 `durationSeconds`). **종류에 없는 칸은 싣지 않는다**(`null` 이 아니라 칸째 없음 — `previewUrl: null` 의 "할 수 없음" 과 섞이지 않게). 받는 쪽은 `mimeType` 으로 가른다(입력 파일과 같은 기준). PR A 에서 정함 |
+| D9 | 길이를 못 구하는 바이트 | WAV 가 아니거나 `data` 청크가 없으면 길이 없이 저장하지 않고 Task 실패로 남긴다(사유에 형식). PR A 의 ADR 에서 정함, 구현은 PR B |
 
 남은 결정: 아래 §6.
 
@@ -43,11 +45,11 @@ STT(받아 적기)는 이미 `text-generate` + 첨부로 끝났다(PR #118~#121)
 POST /api/jobs  {"option": {"type":"audio-generate","text":"…","voice":"Kore","style":"…"}, "model":"gemini-3.8-flash-tts"}
   접수(GenerationJobService) — 모델 확인 · voices(model) 확인(400 + 받는 목소리)
   실행(TaskWorker.processAudio) — ExternalApiAudioProvider.generateAudio → 바이트 + 메타(mimeType, 길이) → 보관 → 결과 행
-  조회 — files[] = { sha256, url, previewUrl, mimeType, durationSeconds }
+  조회 — files[] = { sha256, url, previewUrl, mimeType, fileSize, durationSeconds }   (D8)
 ```
 
 - **저장 · 다운로드는 그대로 쓴다.** 내용 주소 저장(`BlobKey`)과 다운로드(`GeneratedFileController`)는 형식에 무관하다.
-- **바뀌는 곳**(코드로 확인): `FileMetadata`(가로 · 세로 양수 검증), `ExternalApiGenerateResult` · `ImageMetadata`(이미지 전용 — 새 포트는 이것을 쓰지 않는다), `TaskWorker.store`(메타 변환), `FileResponse`(형식 없음 — 형식과 길이를 더한다), 콘솔의 `files` 렌더링.
+- **바뀌는 곳**(코드로 확인): `FileMetadata`(가로 · 세로 양수 검증), `ExternalApiGenerateResult` · `ImageMetadata`(이미지 전용 — 새 포트는 이것을 쓰지 않는다), `TaskWorker.store`(메타 변환), `FileResponse`(형식은 `mimeType` 으로 이미 있다 — 길이를 더하고 종류에 없는 칸은 뺀다), 콘솔의 `files` 렌더링.
 - **Gemini 클라이언트:** Interactions 전용 클라이언트를 새로 둔다. 실패 번역(`GeminiFailures`)은 오류 본문의 모양(`{"error": {"message", "code"}}`)이 달라 그대로 쓸 수 있는지 확인한다.
 - **재시도:** 429 · 5xx 는 기존처럼 재시도 가능한 실패로 가른다(F9).
 
