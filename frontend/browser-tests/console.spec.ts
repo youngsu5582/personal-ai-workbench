@@ -76,6 +76,34 @@ test("콘솔은 어느 서비스가 기본인지 드러내지 않는다", async 
   await expect(page.locator("main")).not.toContainText("기본");
 });
 
+test("서비스 상세에서 이름을 바로 바꾼다", async ({ page }) => {
+  await prepare(page);
+  await page.route("**/api/services/workspace-a", route => route.fulfill({ json: { ...services[0], name: "블로그" } }));
+  await page.getByRole("button", { name: "서비스 관리" }).click();
+  await page.getByRole("button", { name: /^첫 서비스/ }).click();
+  await page.getByRole("button", { name: "이름 변경" }).click();
+  const name = page.getByRole("textbox", { name: "서비스 이름" });
+  await expect(name).toHaveValue("첫 서비스");
+  await name.fill("블로그");
+  const renamed = page.waitForRequest(request => request.url().endsWith("/api/services/workspace-a") && request.method() === "PUT");
+  await page.getByRole("button", { name: "저장" }).click();
+  expect((await renamed).postDataJSON()).toEqual({ name: "블로그" });
+  await expect(name).toHaveCount(0);
+});
+
+test("이름 변경을 취소하면 요청을 보내지 않는다", async ({ page }) => {
+  await prepare(page);
+  let sent = false;
+  await page.route("**/api/services/workspace-a", route => { sent = true; return route.fulfill({ json: services[0] }); });
+  await page.getByRole("button", { name: "서비스 관리" }).click();
+  await page.getByRole("button", { name: /^첫 서비스/ }).click();
+  await page.getByRole("button", { name: "이름 변경" }).click();
+  await page.getByRole("textbox", { name: "서비스 이름" }).fill("블로그");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "첫 서비스" })).toBeVisible();
+  expect(sent).toBe(false);
+});
+
 test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께 보인다", async ({ page }) => {
   await prepare(page);
   const edit = {
