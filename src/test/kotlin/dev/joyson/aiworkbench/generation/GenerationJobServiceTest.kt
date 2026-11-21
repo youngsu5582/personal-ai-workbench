@@ -157,8 +157,21 @@ class GenerationJobServiceTest @Autowired constructor(
         }
     }
 
-    /** 발급만 된 업로드 한 개를 만들고, [content] 가 있으면 보관소에 올려 둔다. 선언은 png 다. */
-    private fun uploadOwnedBy(ownerUuid: UUID, content: ByteArray?): UploadedFile {
+    /** 업로드가 오디오까지 넓어졌다. 이미지 자리에 오디오를 가리키면, 멀쩡히 올라와 있어도 쓸 수 없다. */
+    @Test
+    fun `올린 오디오를 이미지 자리에 가리키면 접수되지 않는다`() {
+        val me = UUID.randomUUID()
+        val wav = "RIFF".toByteArray() + byteArrayOf(0x24, 0, 0, 0) + "WAVE".toByteArray()
+        val upload = uploadOwnedBy(me, content = wav, mimeType = "audio/wav")
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = me, workspaceUuid = me, command = editCommand(FileSource.Uploaded(upload.sha256)))
+        }
+        assertEquals(0, jobRepository.count())
+    }
+
+    /** 발급만 된 업로드 한 개를 만들고, [content] 가 있으면 보관소에 올려 둔다. 선언은 기본 png 다. */
+    private fun uploadOwnedBy(ownerUuid: UUID, content: ByteArray?, mimeType: String = "image/png"): UploadedFile {
         val uuid = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex
         val file = uploadedFileRepository.save(
             UploadedFile(
@@ -166,10 +179,10 @@ class GenerationJobServiceTest @Autowired constructor(
                 ownerUserUuid = ownerUuid,
                 workspaceUuid = ownerUuid,
                 storageKey = "users/$ownerUuid/uploads/$uuid",
-                metadata = UploadedFileMetadata(mimeType = "image/png", fileSize = (content ?: png).size.toLong()),
+                metadata = UploadedFileMetadata(mimeType = mimeType, fileSize = (content ?: png).size.toLong()),
             ),
         )
-        content?.let { fileStorage.put(file.storageKey, it, "image/png") }
+        content?.let { fileStorage.put(file.storageKey, it, mimeType) }
         return file
     }
 
