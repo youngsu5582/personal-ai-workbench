@@ -45,8 +45,13 @@ VERIFIER="$(cat "$VERIFIER_FILE")"
 SECRET="${AUTH_CONSOLE_CLIENT_SECRET:-$(grep '^AUTH_CONSOLE_CLIENT_SECRET=' .env 2>/dev/null | cut -d= -f2- || true)}"
 [ -n "$SECRET" ] || { echo "AUTH_CONSOLE_CLIENT_SECRET 이 없다" >&2; exit 2; }
 
+# 아이디와 비밀값은 Basic 헤더에 넣기 전에 form 인코딩해야 한다(RFC 6749 §2.3.1).
+# 서버가 꺼낸 값을 디코드하므로, `+` · `%` 가 든 비밀값을 그대로 보내면 올바른 코드로도 401 이다.
+urlencode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote_plus(sys.argv[1]), end="")' "$1"; }
+BASIC_USER="$(urlencode "$CLIENT_ID"):$(urlencode "$SECRET")"
+
 echo "  POST $BASE_URL/oauth2/token  (client_secret_basic)"
-RESPONSE="$(curl -sS -w '\n%{http_code}' -u "$CLIENT_ID:$SECRET" \
+RESPONSE="$(curl -sS -w '\n%{http_code}' -u "$BASIC_USER" \
   -d grant_type=authorization_code \
   --data-urlencode "code=$CODE" \
   --data-urlencode "redirect_uri=$REDIRECT_URI" \
