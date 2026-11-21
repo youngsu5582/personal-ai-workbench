@@ -9,12 +9,19 @@ data class UploadSpec(
     val digest: Sha256,
 ) {
     init {
-        require(contentType in ALLOWED_CONTENT_TYPES) { "PNG, JPEG, WebP만 업로드할 수 있다" }
-        require(contentLength in 1..MAX_CONTENT_LENGTH) { "파일 크기는 1바이트 이상 20MiB 이하여야 한다" }
+        require(contentType in ALLOWED_CONTENT_TYPES) { "PNG, JPEG, WebP 이미지와 WAV, MP3, OGG, FLAC, M4A, AAC 오디오만 업로드할 수 있다" }
+        require(contentLength in 1..MAX_CONTENT_LENGTH) { "파일 크기는 1바이트 이상 15MiB 이하여야 한다" }
     }
 
     companion object {
-        const val MAX_CONTENT_LENGTH = 20L * 1024 * 1024
-        val ALLOWED_CONTENT_TYPES = setOf("image/png", "image/jpeg", "image/webp")
+        /**
+         * 형식과 상관없이 하나다. Gemini 가 요청 전체(글 + 모든 파일)를 20MB 로 자르고
+         * base64 가 약 33% 늘리므로, 원본이 15MiB 아래여야 글과 함께 들어간다.
+         */
+        const val MAX_CONTENT_LENGTH = 15L * 1024 * 1024
+        val ALLOWED_CONTENT_TYPES = setOf(
+            "image/png", "image/jpeg", "image/webp",
+            "audio/wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/mp4", "audio/aac",
+        )
     }
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 이미지의 presigned URL을 발급받아 보관소에 직접 PUT한다.
+# 이미지·오디오의 presigned URL을 발급받아 보관소에 직접 PUT한다.
 #   ./scripts/upload.sh ./image.png
 #   BASE_URL=http://localhost:8099 ./scripts/upload.sh ./image.jpg
 #   ACCESS_TOKEN=<token> ./scripts/upload.sh ./image.webp
 set -euo pipefail
 
 if [ "${1:-}" = "--help" ] || [ "$#" -ne 1 ]; then
-  echo "사용법: ./scripts/upload.sh <이미지 파일>"
+  echo "사용법: ./scripts/upload.sh <이미지 또는 오디오 파일>"
   echo "환경변수: BASE_URL (기본 http://localhost:8080), ACCESS_TOKEN, USER_UUID"
   [ "${1:-}" = "--help" ] && exit 0
   exit 1
@@ -26,10 +26,10 @@ METADATA=$(python3 - "$IMAGE" <<'PY'
 import hashlib, os, sys
 path = sys.argv[1]
 if not os.path.isfile(path):
-    sys.exit("읽을 수 있는 이미지 파일이 필요하다.")
+    sys.exit("읽을 수 있는 파일이 필요하다.")
 size = os.path.getsize(path)
-if not 1 <= size <= 20 * 1024 * 1024:
-    sys.exit("이미지는 1바이트~20MiB여야 한다.")
+if not 1 <= size <= 15 * 1024 * 1024:
+    sys.exit("파일은 1바이트~15MiB여야 한다.")
 with open(path, "rb") as image:
     content = image.read()
     header = content[:12]
@@ -39,8 +39,20 @@ elif header.startswith(b"\xff\xd8\xff"):
     content_type = "image/jpeg"
 elif header[:4] == b"RIFF" and header[8:12] == b"WEBP":
     content_type = "image/webp"
+elif header[:4] == b"RIFF" and header[8:12] == b"WAVE":
+    content_type = "audio/wav"
+elif header[:3] == b"ID3" or (header[0:1] == b"\xff" and len(header) > 1 and header[1] & 0xE6 == 0xE2):
+    content_type = "audio/mpeg"
+elif header[:4] == b"OggS":
+    content_type = "audio/ogg"
+elif header[:4] == b"fLaC":
+    content_type = "audio/flac"
+elif header[4:8] == b"ftyp" and header[8:12] == b"M4A ":
+    content_type = "audio/mp4"
+elif header[0:1] == b"\xff" and len(header) > 1 and header[1] & 0xF6 == 0xF0:
+    content_type = "audio/aac"
 else:
-    sys.exit("PNG·JPEG·WebP 파일만 지원한다.")
+    sys.exit("PNG·JPEG·WebP 이미지와 WAV·MP3·OGG·FLAC·M4A·AAC 오디오만 지원한다.")
 print(content_type, size, hashlib.sha256(content).hexdigest())
 PY
 )
