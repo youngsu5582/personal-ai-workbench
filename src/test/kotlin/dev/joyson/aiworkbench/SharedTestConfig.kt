@@ -51,6 +51,9 @@ class SharedTestConfig {
 
         /** 하나를 빼 둔다. 표현하지 못하는 effort 를 접수가 거르는지 보려면 빠진 값이 있어야 한다. */
         override fun efforts(model: String) = ReasoningEffort.entries.toSet() - UNEXPRESSIBLE_EFFORT
+
+        /** 이미지와 오디오를 받는다. 받지 않는 형식을 접수가 거르는지 보려면 업로드가 허용하는 것 중 하나를 빼야 한다. */
+        override fun inputTypes(model: String) = setOf("image/png", "audio/wav")
         override fun generateText(model: String, request: ExternalApiTextRequest) =
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }

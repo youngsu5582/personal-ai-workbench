@@ -50,7 +50,6 @@ sealed interface GenerationOption {
  */
 fun GenerationOption.fileSources(): List<FileSource> = when (this) {
     is ImageOption -> sources
-    // 입력 파일을 받지 않는 종류다.
-    is TextGenerateOption -> emptyList()
+    is TextGenerateOption -> attachments
     is DecisionOption -> sources
 }

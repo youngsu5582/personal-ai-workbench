@@ -67,6 +67,13 @@ class GeminiTextProviderTest {
         assertEquals(emptySet(), provider.efforts("gpt-6-luna"))
     }
 
+    /** 파일 파트를 싣지 않는 동안은 받는다고 밝히지 않는다 — 밝히면 접수된 첨부가 조용히 빠진다. */
+    @Test
+    fun `파일을 아직 싣지 않으므로 받는 입력 형식이 없다고 밝힌다`() {
+        assertEquals(emptySet(), provider.inputTypes("gemini-3.6-flash"))
+        assertEquals(emptySet(), provider.inputTypes("gpt-6-luna"))
+    }
+
     @Test
     fun `모델은 경로로, 글과 역할은 contents 와 systemInstruction 으로 싣는다`() {
         server.expect(requestTo(URL))

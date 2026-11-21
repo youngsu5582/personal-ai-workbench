@@ -55,7 +55,7 @@ class GenerationApiExceptionHandler {
     @ExceptionHandler(UnknownFileSourceException::class)
     fun handleUnknownFileSource(e: UnknownFileSourceException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.message).apply {
-            title = "쓸 수 없는 입력 이미지"
+            title = "쓸 수 없는 입력 파일"
             setProperty("sourceSha256", e.sourceSha256)
         }
 

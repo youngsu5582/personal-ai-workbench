@@ -24,6 +24,8 @@ class TextGenerateOptionTest @Autowired constructor(
     private val mapper: ObjectMapper,
 ) {
 
+    private val sha = "a".repeat(64)
+
     private val schema = """{"type":"object","properties":{"reasoning":{"type":"string"},"answer":{"type":"string"}}}"""
 
     @Test
@@ -90,6 +92,36 @@ class TextGenerateOptionTest @Autowired constructor(
             )
         }
         assertFailsWith<IllegalArgumentException> { TextFormat.JsonSchema("이건 JSON 이 아니다") }
+    }
+
+    /** 첨부가 생기기 전의 행이다. 필드가 없으면 빈 목록으로 읽힌다 — 저장된 행을 고치지 않는다. */
+    @Test
+    fun `attachments 가 없는 옛 행은 첨부 없이 읽힌다`() {
+        val option = mapper.readValue<GenerationOption>("""{"type":"text-generate","prompt":"요약해","output":{"type":"text"}}""")
+
+        assertEquals(emptyList(), assertIs<TextGenerateOption>(option).attachments)
+        assertEquals(emptyList(), option.fileSources())
+    }
+
+    @Test
+    fun `첨부는 순서대로 왕복되고 입력 파일로 드러난다`() {
+        val option: GenerationOption = TextGenerateOption(prompt = "받아 써", attachments = listOf(FileSource.Uploaded("$sha")))
+
+        val json = mapper.writeValueAsString(option)
+
+        assertEquals(
+            """{"type":"text-generate","prompt":"받아 써","output":{"type":"text"},"attachments":[{"type":"uploaded","sha256":"$sha"}]}""",
+            json,
+        )
+        assertEquals(option, mapper.readValue<GenerationOption>(json))
+        assertEquals(listOf<FileSource>(FileSource.Uploaded("$sha")), option.fileSources())
+    }
+
+    @Test
+    fun `첨부는 상한을 넘기면 받지 않는다`() {
+        val files = List(TextGenerateOption.MAX_ATTACHMENTS + 1) { FileSource.Uploaded("$sha") }
+
+        assertFailsWith<IllegalArgumentException> { TextGenerateOption(prompt = "받아 써", attachments = files) }
     }
 
     @Test

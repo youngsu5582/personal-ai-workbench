@@ -31,6 +31,9 @@ class OpenAITextProvider(
     override fun efforts(model: String): Set<ReasoningEffort> =
         if (supports(model)) ReasoningEffort.entries.toSet() else emptySet()
 
+    /** 파일 파트를 아직 싣지 않아 받는 형식이 없다. */
+    override fun inputTypes(model: String): Set<String> = emptySet()
+
     override fun generateText(
         model: String,
         request: ExternalApiTextRequest,

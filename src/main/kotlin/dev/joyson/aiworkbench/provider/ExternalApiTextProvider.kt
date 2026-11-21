@@ -35,6 +35,18 @@ interface ExternalApiTextProvider {
     fun efforts(model: String): Set<ReasoningEffort>
 
     /**
+     * 이 모델에 첨부로 **실제로 실어 보낼 수 있는** 파일 형식(MIME). 여기 없는 형식은 부르지 않고 거절한다.
+     * 모르는 모델이면 빈 집합이다.
+     *
+     * 저쪽 API 가 받는 것이 아니라 이 어댑터가 싣는 것이 기준이다. 어댑터가 싣지 못하는 형식을 답하면
+     * 접수가 통과한 뒤 파일이 조용히 빠진 채 글만 만들어진다.
+     * 형식은 업로드 모듈의 판정과 같은 표기라 그대로 비교한다.
+     *
+     * 기본값을 두지 않는 이유는 [efforts] 와 같다 — 어댑터를 더할 때마다 이 질문에 답하게 한다.
+     */
+    fun inputTypes(model: String): Set<String>
+
+    /**
      * 외부 API 호출 **1건**. `GenerationJobTask` 1행에 대응한다.
      *
      * 실패는 [ExternalApiException] 으로 알린다. 응답을 받았으면 — 모델이 거절했든 잘렸든 — 실패가 아니다.

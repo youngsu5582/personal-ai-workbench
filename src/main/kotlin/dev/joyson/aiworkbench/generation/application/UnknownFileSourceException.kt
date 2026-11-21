@@ -12,4 +12,4 @@ import java.util.UUID
  */
 class UnknownFileSourceException(
     val sourceSha256: String,
-) : RuntimeException("참조한 입력 이미지를 쓸 수 없다: $sourceSha256")
+) : RuntimeException("참조한 입력 파일을 쓸 수 없다: $sourceSha256")
