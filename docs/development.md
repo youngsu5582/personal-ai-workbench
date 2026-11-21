@@ -713,6 +713,7 @@ cp .env.example .env   # .env 는 gitignore 된다
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 AUTH_JWT_SECRET=$(openssl rand -base64 48)   # HS256, 최소 32바이트
+AUTH_CONSOLE_CLIENT_SECRET=$(openssl rand -base64 48)   # 콘솔 백엔드가 인가 서버에 내는 비밀값, 최소 32자
 AUTH_ALLOWED_EMAILS=me@example.com           # 비우면 누구나 로그인된다
 ```
 

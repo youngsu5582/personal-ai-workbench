@@ -86,7 +86,7 @@ class AuthorizationServerMetadataTest @Autowired constructor(
     }
 
     @Test
-    fun `등록된 클라이언트가 없어 토큰 엔드포인트는 인증에 실패한다`() {
+    fun `모르는 클라이언트는 토큰 엔드포인트에서 인증에 실패한다`() {
         val response = client.send(
             HttpRequest.newBuilder(URI.create("http://localhost:$port/oauth2/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
