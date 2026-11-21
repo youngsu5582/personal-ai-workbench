@@ -29,6 +29,8 @@ export type JobInput = {
   source: { type: string; sha256: string };
   url: string | null;
   previewUrl: string | null;
+  /** 파일의 형식. 이미지로 그릴지 오디오로 그릴지 가른다. 찾지 못한 참조는 null. */
+  mimeType: string | null;
 };
 /** 목록 항목과 상세가 같은 모양이다. */
 export type Job = {
@@ -100,6 +102,29 @@ export async function request<T>(
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
+/**
+ * 서버가 받는 형식 표기로 맞춘다. 브라우저는 같은 파일을 `audio/x-m4a` · `audio/x-wav` 처럼 다른 이름으로 알려 주거나,
+ * 운영체제에 따라 비워 두기도 한다. 서버는 정확한 표기만 받고 앞부분 바이트로 다시 확인하므로, 여기서는 이름만 맞춘다.
+ */
+const CONTENT_TYPE_ALIASES: Record<string, string> = {
+  "audio/x-m4a": "audio/mp4",
+  "audio/m4a": "audio/mp4",
+  "audio/x-wav": "audio/wav",
+  "audio/wave": "audio/wav",
+  "audio/mp3": "audio/mpeg",
+  "audio/x-flac": "audio/flac",
+  "audio/x-aac": "audio/aac",
+  "image/jpg": "image/jpeg",
+};
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  m4a: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", flac: "audio/flac", aac: "audio/aac",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+};
+export function contentTypeOf(file: File): string {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return CONTENT_TYPE_ALIASES[file.type] ?? (file.type || CONTENT_TYPE_BY_EXTENSION[extension] || "");
+}
+
 export async function upload(
   token: string,
   workspace: string,
@@ -121,7 +146,7 @@ export async function upload(
   }>(token, "/api/uploads", workspace, {
     method: "POST",
     body: JSON.stringify({
-      contentType: file.type,
+      contentType: contentTypeOf(file),
       contentLength: file.size,
       sha256,
     }),
@@ -129,7 +154,7 @@ export async function upload(
     if (e instanceof ApiError && e.status === 501)
       throw new ApiError(501, "이 서버의 보관소는 아직 브라우저 업로드를 받지 않아요. 보관소 설정을 확인해 주세요.");
     if (e instanceof ApiError && e.status === 400)
-      throw new ApiError(400, `이 파일은 올릴 수 없어요. PNG · JPG · WEBP 인지 확인해 주세요. (${e.message})`);
+      throw new ApiError(400, `이 파일은 올릴 수 없어요. 이미지(PNG · JPG · WEBP)나 오디오(WAV · MP3 · OGG · FLAC · M4A · AAC), 15MB 이하인지 확인해 주세요. (${e.message})`);
     throw e;
   });
   if (issued.uploadRequired) {

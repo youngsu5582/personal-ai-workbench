@@ -133,6 +133,68 @@ test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께
   await expect(page.getByText(/생성한 이미지/)).toHaveCount(2);
 });
 
+test("글 생성의 오디오 첨부는 첨부 파일로 세고 오디오로 그린다", async ({ page }) => {
+  await prepare(page);
+  const attached = {
+    ...job, uuid: "job-c",
+    option: { type: "text-generate", prompt: "받아 써", attachments: [{ type: "uploaded", sha256: "c".repeat(64) }] },
+    inputs: [
+      { source: { type: "uploaded", sha256: "c".repeat(64) }, url: null, previewUrl: "data:audio/wav;base64,UklGRg==", mimeType: "audio/mp4" },
+      { source: { type: "uploaded", sha256: "d".repeat(64) }, url: null, previewUrl: null, mimeType: "audio/wav" },
+    ],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [attached], hasNext: false } }));
+  await page.route("**/api/jobs/job-c", route => route.fulfill({ json: attached }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  const row = page.getByRole("button", { name: /받아 써.*첨부 파일 2개/ });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByRole("heading", { name: "첨부 파일" })).toBeVisible();
+  // 오디오는 이미지로 그리지 않는다. 서명 주소가 있으면 재생 칸이고, 없으면 들을 수 없다고 말한다.
+  await expect(page.getByLabel("첨부 파일 오디오")).toHaveAttribute("src", /^data:audio/);
+  await expect(page.getByRole("img", { name: "첨부 파일" })).toHaveCount(0);
+  await expect(page.getByText("이 보관소에서는 미리 들을 수 없어요.")).toBeVisible();
+  // 올린 오디오를 올린 이미지라고 부르지 않는다.
+  await expect(page.getByText(/올린 오디오 · c{12}/)).toBeVisible();
+  await expect(page.getByText(/올린 이미지/)).toHaveCount(0);
+});
+
+test("글 생성에 오디오를 첨부하면 서버가 받는 형식으로 올리고 첨부로 보낸다", async ({ page }) => {
+  await prepare(page);
+  const uploads: unknown[] = [];
+  const submitted: unknown[] = [];
+  await page.route("**/api/uploads", route => {
+    uploads.push(route.request().postDataJSON());
+    return route.fulfill({ json: { sha256: "e".repeat(64), uploadRequired: false, url: null, headers: {} } });
+  });
+  await page.route("**/api/jobs", route => {
+    submitted.push(route.request().postDataJSON());
+    return route.fulfill({ status: 202, json: { uuid: "job-a" } });
+  });
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  await page.getByLabel("프롬프트").fill("받아 써");
+  // 브라우저가 m4a 를 audio/x-m4a 로 알려 줘도 서버가 받는 audio/mp4 로 올린다.
+  await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "answer.m4a", mimeType: "audio/x-m4a", buffer: Buffer.from("fake-audio") });
+  await expect(page.getByText(/audio\/mp4 · 실행할 때 올려요/)).toBeVisible();
+  await expect(page.getByLabel("선택한 첨부 오디오 미리듣기")).toBeVisible();
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByText("첫 서비스의 결과")).toBeVisible({ timeout: 12_000 });
+  expect(uploads).toEqual([{ contentType: "audio/mp4", contentLength: 10, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
+  expect(submitted).toEqual([{
+    option: { type: "text-generate", prompt: "받아 써", attachments: [{ type: "uploaded", sha256: "e".repeat(64) }] },
+    model: "example-model", taskCount: 1,
+  }]);
+});
+
+test("이미지 작업에서는 첨부 파일 칸이 없다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await expect(page.getByLabel("첨부 파일", { exact: true })).toHaveCount(0);
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  await expect(page.getByLabel("첨부 파일", { exact: true })).toHaveCount(1);
+});
+
 test("긴 요청과 결과는 접어서 보이고 누르면 펼친다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await prepare(page);
@@ -169,6 +231,55 @@ test("스키마를 준 글 결과 옆에서 그 스키마를 복사한다", asyn
   await expect(page.getByRole("button", { name: "복사됨" })).toBeVisible();
   const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
   expect(Object.keys(copied.properties)).toEqual(["reasoning", "answer"]);
+});
+
+test("긴 글 결과는 접혀 있어도 전문을 복사하고 전문의 글자 수를 보인다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  // 끝이 "..." 인 글이다. 화면이 자른 것이 아니라 글의 일부라는 것을 복사한 내용이 보여 준다.
+  const full = "문장입니다. ".repeat(150) + "끝...";
+  const long = { ...job, tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: full }], decisions: [] }] };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: long }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await expect(page.getByText(`전문 ${full.length.toLocaleString("ko-KR")}자`)).toBeVisible();
+  // 접힌 채로 복사해도 전문이 간다.
+  await expect(page.getByRole("button", { name: /전체 보기/ })).toBeVisible();
+  await page.getByRole("button", { name: "결과 복사" }).click();
+  await expect(page.getByRole("button", { name: "복사됨" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(full);
+});
+
+test("구조화된 결과는 들여쓴 JSON 으로 복사한다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  const structured = { ...job, tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: { reasoning: "근거", answer: "답" } }], decisions: [] }] };
+  await page.route("**/api/jobs/job-a", route => route.fulfill({ json: structured }));
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await page.getByRole("button", { name: "결과 복사" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(JSON.stringify({ reasoning: "근거", answer: "답" }, null, 2));
+});
+
+test("결과를 복사하지 못하면 못 했다고 알린다", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("denied")) } });
+  });
+  await prepare(page);
+  await page.getByRole("button", { name: /텍스트 작업.*example-model/ }).click();
+  await page.getByRole("button", { name: "결과 복사" }).click();
+  await expect(page.getByRole("button", { name: "복사하지 못했어요" })).toBeVisible();
+});
+
+test("작업실의 글 결과도 전문을 복사한다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  await page.route("**/api/jobs", route => route.fulfill({ status: 202, json: { uuid: "job-a" } }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  await page.getByLabel("프롬프트").fill("예시 요청");
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByText("첫 서비스의 결과")).toBeVisible();
+  await page.getByRole("button", { name: "결과 복사" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("첫 서비스의 결과");
 });
 
 test("스키마를 복사하지 못하면 못 했다고 알린다", async ({ page }) => {

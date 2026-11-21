@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { ApiError, request, upload, type Job } from "../../api";
+import { ApiError, contentTypeOf, request, upload, type Job } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
+import { CopyButton } from "../../shared/copy-button";
 import { errorText, type Context } from "../../shared/console-utils";
 import { ModelPicker } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
@@ -69,8 +70,7 @@ export function StudioPanel({ token, workspace }: Context) {
     setFail("");
     setJob(null);
     try {
-      const sha =
-        file && kind === "image" ? await upload(token, workspace, file) : null;
+      const sha = file ? await upload(token, workspace, file) : null;
       const option =
         kind === "image"
           ? {
@@ -80,7 +80,12 @@ export function StudioPanel({ token, workspace }: Context) {
               quality: "auto",
               ...(sha ? { sources: [{ type: "uploaded", sha256: sha }] } : {}),
             }
-          : { type: "text-generate", prompt };
+          : {
+              type: "text-generate",
+              prompt,
+              // 올린 파일 하나를 글과 함께 읽힌다. 이미지인지 오디오인지는 적지 않는다 — 업로드가 안다.
+              ...(sha ? { attachments: [{ type: "uploaded", sha256: sha }] } : {}),
+            };
       const response = await request<{ uuid: string }>(
         token,
         "/api/jobs",
@@ -105,13 +110,13 @@ export function StudioPanel({ token, workspace }: Context) {
         <form onSubmit={run} className="flex flex-col gap-5">
           <CardTitle>무엇을 만들까요?</CardTitle>
           <Segmented label="작업 유형" value={kind} className="w-56"
-            onChange={(next) => { setKind(next); setModel(""); }}
+            onChange={(next) => { setKind(next); setModel(""); setFile(null); }}
             options={[{ value: "image", label: "이미지" }, { value: "text", label: "텍스트" }]} />
           <ModelPicker id="studio-model" token={token} workspace={workspace} type={kind === "image" ? "image-generate" : "text-generate"}
             value={model} onChange={setModel} autoSelectFirst />
           <Field label="프롬프트" htmlFor="studio-prompt">
             <Textarea id="studio-prompt" required value={prompt} onChange={(e) => setPrompt(e.target.value)} className="min-h-32"
-              placeholder={kind === "image" ? "예: 햇살이 드는 카페 창가의 고양이, 수채화" : "예: 친환경 텀블러를 소개하는 문구 3개"} />
+              placeholder={kind === "image" ? "예: 햇살이 드는 카페 창가의 고양이, 수채화" : "예: 친환경 텀블러를 소개하는 문구 3개 · 첨부한 오디오를 들리는 그대로 받아 써 줘"} />
           </Field>
           {kind === "image" && (
             <Field label="참고 이미지" optional>
@@ -122,6 +127,22 @@ export function StudioPanel({ token, workspace }: Context) {
                     <span className="truncate text-[13px] text-foreground">{file?.name}</span>
                     <span className="text-xs text-muted-foreground">실행할 때 올려요 · 바꾸려면 누르세요</span>
                   </span>
+                </span>}
+              </FileDrop>
+            </Field>
+          )}
+          {kind === "text" && (
+            <Field label="첨부 파일" optional>
+              <FileDrop id="studio-attachment" label="첨부 파일" disabled={busy}
+                accept="image/png,image/jpeg,image/webp,audio/wav,audio/mpeg,audio/ogg,audio/flac,audio/mp4,audio/aac,.m4a,.mp3,.wav,.ogg,.flac,.aac"
+                hint="이미지 · 오디오(WAV · MP3 · OGG · FLAC · M4A · AAC) · 15MB 이하 · 모델이 받는 형식만" onFile={setFile}>
+                {file && <span className="flex w-full flex-col gap-2 text-left">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-[13px] text-foreground">{file.name}</span>
+                    <span className="text-xs text-muted-foreground">{contentTypeOf(file) || "형식 알 수 없음"} · 실행할 때 올려요 · 바꾸려면 누르세요</span>
+                  </span>
+                  {contentTypeOf(file).startsWith("audio/") && <audio controls preload="metadata" src={filePreview} aria-label="선택한 첨부 오디오 미리듣기" className="w-full" />}
+                  {contentTypeOf(file).startsWith("image/") && <img src={filePreview} alt="선택한 첨부 이미지 미리보기" className="h-16 w-24 rounded-md border border-border object-cover" />}
                 </span>}
               </FileDrop>
             </Field>
@@ -145,11 +166,18 @@ export function StudioPanel({ token, workspace }: Context) {
               <div key={i} className="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{STATUS[task.status] ?? task.status}</Badge></span>
                 {task.failureReason && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{task.failureReason}</p>}
-                {task.texts.map((t, j) => (
-                  <pre key={j} className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-[inherit] text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]">
-                    {typeof t.content === "string" ? t.content : JSON.stringify(t.content, null, 2)}
-                  </pre>
-                ))}
+                {task.texts.map((t, j) => {
+                  const text = typeof t.content === "string" ? t.content : JSON.stringify(t.content, null, 2);
+                  return (
+                    <div key={j} className="flex min-w-0 flex-col gap-1">
+                      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>전문 {text.length.toLocaleString("ko-KR")}자</span>
+                        <CopyButton text={text} ariaLabel="결과 복사" />
+                      </div>
+                      <pre className="m-0 whitespace-pre-wrap rounded-md bg-background px-3 py-2.5 font-[inherit] text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]">{text}</pre>
+                    </div>
+                  );
+                })}
                 {task.files.map((f) => (
                   <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl}
                     onRefresh={() => request<Job>(token, `/api/jobs/${job.uuid}`, workspace).then(setJob).catch((e) => setFail(errorText(e)))} />

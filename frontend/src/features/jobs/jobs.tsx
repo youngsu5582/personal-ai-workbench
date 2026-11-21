@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Copy, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
 import { AuthenticatedImage } from "../../shared/authenticated-image";
+import { CopyButton } from "../../shared/copy-button";
 import { duration, TaskTiming } from "./task-timing";
 import { Button } from "../../shared/ui/button";
 import { cn } from "../../shared/ui/cn";
@@ -24,6 +25,9 @@ function date(value: string) {
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString("ko-KR");
 }
 const sourceLabel: Record<string, string> = { generated: "생성한 이미지", uploaded: "올린 이미지" };
+/** 올린 파일이 오디오면 이미지라고 부르지 않는다. 생성한 결과물은 아직 이미지뿐이다. */
+const captionOf = (input: { source: { type: string }; mimeType: string | null }) =>
+  input.source.type === "uploaded" && input.mimeType?.startsWith("audio/") ? "올린 오디오" : sourceLabel[input.source.type] || input.source.type;
 /** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로 대신한다. */
 function summary(job: Job) {
   if (job.option.prompt) return job.option.prompt;
@@ -37,7 +41,10 @@ function outcome(job: Job) {
   if (succeeded + failed === 0) return "";
   return failed ? `성공 ${succeeded} · 실패 ${failed} / ${total}` : `성공 ${succeeded} / ${total}`;
 }
-const inputHeading = (type: string) => type === "decision" ? "근거 이미지" : "참고 이미지";
+const inputHeading = (type: string) => type === "decision" ? "근거 이미지" : type === "text-generate" ? "첨부 파일" : "참고 이미지";
+/** 글 생성의 첨부는 이미지가 아닐 수 있어 장이 아니라 개로 센다. */
+const inputCount = (type: string, count: number) => type === "text-generate" ? `${count}개` : `${count}장`;
+const isAudio = (mimeType: string | null) => mimeType?.startsWith("audio/") === true;
 /** 모든 결과가 끝났을 때만 답한다. 하나라도 끝난 시각이 없으면 작업이 끝났다고 말할 수 없다. */
 function finishedAtOf(job: Job) {
   const ends = job.tasks.map(task => task.finishedAt);
@@ -78,20 +85,25 @@ function pretty(schema: string) {
   }
 }
 
-/** 글 결과가 따른 JSON Schema 를 복사한다. 못 했으면 못 했다고 말한다 — 조용하면 빈 클립보드를 붙여 넣게 된다. */
+/** 글 결과가 따른 JSON Schema 를 복사한다. */
 function CopySchema({ schema }: { schema: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  useEffect(() => {
-    if (state === "idle") return;
-    const timer = setTimeout(() => setState("idle"), 2000);
-    return () => clearTimeout(timer);
-  }, [state]);
-  // 보안 컨텍스트가 아니면 clipboard 자체가 없다.
-  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(pretty(schema)) : Promise.reject(new Error("clipboard 없음")))
-    .then(() => setState("copied"), () => setState("failed"));
-  return <Button variant="ghost" size="sm" className={cn("-my-1 ml-auto", state === "failed" ? "text-danger" : "text-muted-foreground")} onClick={() => { void copy(); }}>
-    {state === "copied" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}{state === "copied" ? "복사됨" : state === "failed" ? "복사하지 못했어요" : "스키마 복사"}
-  </Button>;
+  return <CopyButton text={pretty(schema)} label="스키마 복사" className="ml-auto" />;
+}
+
+/**
+ * 결과 본문 하나. 글자 수를 위에 보이고 복사 버튼을 둔다.
+ *
+ * 길면 [LongText] 가 접어서 보이는데, 접힌 것과 잘린 것은 다르다 — 글자 수가 전문의 길이를 말해 주고
+ * 복사는 접혀 있어도 전문을 가져간다. 본문 끝의 "…" 는 모델이 쓴 글이다(받아쓰기가 음원이 끊긴 자리를 그렇게 옮기기도 한다).
+ */
+function ResultBlock({ text, mono = false }: { text: string; mono?: boolean }) {
+  return <div className="flex min-w-0 flex-col gap-1">
+    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <span>전문 {text.length.toLocaleString("ko-KR")}자</span>
+      <CopyButton text={text} ariaLabel="결과 복사" />
+    </div>
+    <LongText text={text} mono={mono} />
+  </div>;
 }
 
 /** 서명 주소가 있으면 첫 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. */
@@ -122,11 +134,16 @@ function JobInputs({ job, token, workspace, onRefresh }: Props & { job: Job; onR
   const heading = inputHeading(job.type);
   return <div className="flex flex-col gap-2 border-t border-border pt-4">
     <h3 className={headingClass}>{heading}</h3>
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map((input, i) => <figure key={`${i}-${input.source.sha256}`} className="m-0 flex min-w-0 flex-col gap-1.5">
-      {input.url || input.previewUrl
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map((input, i) => <figure key={`${i}-${input.source.sha256}`} className={`m-0 flex min-w-0 flex-col gap-1.5 ${isAudio(input.mimeType) ? "col-span-full" : ""}`}>
+      {isAudio(input.mimeType)
+        // 오디오는 서명 주소로만 재생한다. 우리가 내려보내는 경로가 없는 올린 파일이라, 서명할 수 없는 보관소에서는 들을 수 없다.
+        ? input.previewUrl
+          ? <audio controls preload="metadata" src={input.previewUrl} aria-label={`${heading} 오디오`} className="w-full" />
+          : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />이 보관소에서는 미리 들을 수 없어요.</p>
+        : input.url || input.previewUrl
         ? <AuthenticatedImage token={token} workspace={workspace} url={input.url ?? ""} previewUrl={input.previewUrl} onRefresh={onRefresh} alt={heading} />
         : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />미리 볼 수 없어요.</p>}
-      <figcaption className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{sourceLabel[input.source.type] || input.source.type} · <span className="font-mono">{input.source.sha256.slice(0, 12)}</span></figcaption>
+      <figcaption className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{captionOf(input)} · <span className="font-mono">{input.source.sha256.slice(0, 12)}</span></figcaption>
     </figure>)}</div>
   </div>;
 }
@@ -171,8 +188,8 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
               {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
             <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} running={task.status === "RUNNING"} failed={task.status === "FAILED"} />
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
-            {task.texts.map((t, j) => typeof t.content === "string" ? <LongText key={j} text={t.content} /> : <LongText key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
-            {task.decisions.map((d, j) => <LongText key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
+            {task.texts.map((t, j) => typeof t.content === "string" ? <ResultBlock key={j} text={t.content} /> : <ResultBlock key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
+            {task.decisions.map((d, j) => <ResultBlock key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
             {task.files.map(f => <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
           </div>)}
         </Card>
@@ -204,7 +221,7 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
           <JobThumb job={item} />
           <span className="flex min-w-0 flex-1 flex-col">
             <strong className="truncate text-[13px] font-medium">{summary(item)}</strong>
-            <small className="text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${item.inputs.length}장`}<span className="hidden sm:inline"> · <span className="font-mono">{item.model}</span></span> · {date(item.createdAt)}{result && <span className="sm:hidden"> · {result}</span>}</small>
+            <small className="text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${inputCount(item.type, item.inputs.length)}`}<span className="hidden sm:inline"> · <span className="font-mono">{item.model}</span></span> · {date(item.createdAt)}{result && <span className="sm:hidden"> · {result}</span>}</small>
           </span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <Badge tone={item.status === "DISPATCHED" ? "accent" : "neutral"} shape="pill">{statusLabel[item.status] || item.status}</Badge>
