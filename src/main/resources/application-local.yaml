@@ -24,6 +24,9 @@ workbench:
 authserver:
   # 키 파일은 커밋하지 않는다(var 는 gitignore). 만드는 명령은 docs/development.md 의 "환경변수" 절에 있다.
   signing-key: "file:var/keys/authserver-signing-key.pem"
+  console:
+    # 발급자 주소(workbench.local)는 로컬에서 열리지 않는다. 브라우저가 실제로 닿는 주소를 적는다.
+    redirect-uri: "http://localhost:8080/auth/session/callback"
 
 logging:
   level:

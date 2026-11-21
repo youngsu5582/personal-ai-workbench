@@ -54,6 +54,14 @@ spring:
 authserver:
   # 토큰에 서명하는 RSA 개인키(PEM)의 위치. 기본값이 없다 — 있으면 저장소에 공개된 키로 서명하게 된다.
   signing-key: "${AUTH_SIGNING_KEY}"
+  # 접근 토큰의 aud 와 수명. 지금의 자체 토큰과 같은 값을 가리킨다 — 어느 쪽이 발급해도 API 가 받는 토큰의 모양이 같다.
+  audience: "${workbench.auth.audience}"
+  access-token-ttl: "${workbench.auth.access-token-ttl}"
+  console:
+    # 콘솔 백엔드가 토큰 엔드포인트에 내는 비밀값. 기본값이 없다.
+    client-secret: "${AUTH_CONSOLE_CLIENT_SECRET}"
+    # 인가 코드를 돌려보낼 콘솔 백엔드의 주소.
+    redirect-uri: "${workbench.auth.issuer}/auth/session/callback"
 
 # 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
 workbench:
