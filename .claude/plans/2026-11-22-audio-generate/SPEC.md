@@ -18,7 +18,9 @@ STT(받아 적기)는 이미 `text-generate` + 첨부로 끝났다(PR #118~#121)
 | F6 | **사용량은 `generateContent` 의 `usageMetadata` 와 다른 모양**이다: `usage.total_input_tokens`(글), `usage.total_output_tokens`(오디오), `output_tokens_by_modality: [{modality: "audio", tokens}]`, `total_thought_tokens: 0`. 단가표 경로는 배열 없이 점으로 가른 맵 경로(`total_input_tokens`, `total_output_tokens`)로 충분하다 | live |
 | F7 | 단가(Standard): `gemini-3.8-flash-tts` 입력 $0.50 · 출력 $9.00 /1M 토큰(2026-12-31 까지), 2027-01-01 부터 $1.00 · $18.00. `flash-lite-tts` 출력 $6.00 → $12.00. 오디오 25토큰/초 | 문서(pricing 원문) |
 | F8 | 목소리 기본 30개, 한국어 지원, 언어 자동 감지. 입력 토큰 한도 8,192, 출력 16,384. 한영 혼용 기술 용어의 품질은 문서에 없다 | 문서 |
-| F9 | 같은 클래스의 연속 호출에서 **429 가 한 번** 나왔다(성공 2회 뒤). TTS 의 분당 한도가 낮을 수 있다 | live — 한도 값은 미확인 |
+| F9 | 연속 호출에서 **429 가 한 번** 나왔다(성공 2회 뒤). 본문: "limit: 3 requests per minute on **Free Tier**". 키의 프로젝트가 Free Tier 다. 문서의 한도 표에는 TTS 가 없다 | live 본문 · 문서 |
+| F11 | Interactions 의 오류 본문은 `{"error": {"message", "code": "too_many_requests"}}` 로 `code` 가 문자열이다(`generateContent` 는 숫자 + `status`) | live |
+| F12 | 모델 ID 는 `gemini-3.8-flash-tts` · `gemini-3.8-flash-lite-tts`(접미사 없음). 목소리 30개 이름, 응답의 소리는 `steps[type=model_output].content[type=audio].data`, `response_format.mime_type` 으로 `audio/wav` 를 고를 수 있다 | 문서 |
 | F10 | OpenAI `tts-1` · `tts-1-hd` · `gpt-4o-mini-tts` 는 2027-01-06 종료가 문서에 있다 → Gemini 만 | 문서 |
 
 요구 문서와 달라진 것: ① "L16 이면 WAV 헤더로 감싼다"는 필요 없다(F4) ② 사용량은 새 모양이다(F6) ③ 말투는 단계 목록이다(F3).

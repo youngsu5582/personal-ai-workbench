@@ -25,6 +25,12 @@ class GeminiClientConfig {
     @Bean
     fun geminiTextProvider(client: GeminiTextClient): GeminiTextProvider = GeminiTextProvider(client)
 
+    @Bean
+    fun geminiInteractionClient(properties: GeminiProperties): GeminiInteractionClient = GeminiInteractionClient(restClientOf(properties))
+
+    @Bean
+    fun geminiAudioProvider(client: GeminiInteractionClient): GeminiAudioProvider = GeminiAudioProvider(client)
+
     private fun restClientOf(properties: GeminiProperties): RestClient {
         val apiKey = requireNotNull(properties.apiKey) {
             "workbench.provider.gemini.api-key 가 필요하다"

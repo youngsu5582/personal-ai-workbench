@@ -16,6 +16,7 @@ class ProviderRegistry(
     private val providers: List<ExternalApiProvider>,
     private val textProviders: List<ExternalApiTextProvider> = emptyList(),
     private val decisionProviders: List<ExternalApiDecisionProvider> = emptyList(),
+    private val audioProviders: List<ExternalApiAudioProvider> = emptyList(),
 ) {
 
     /**
@@ -39,6 +40,9 @@ class ProviderRegistry(
     /** 이 모델로 판정할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
     fun findDecision(model: String): ExternalApiDecisionProvider? = decisionProviders.firstOrNull { it.supports(model) }
 
+    /** 이 모델로 TTS 를 할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
+    fun findAudio(model: String): ExternalApiAudioProvider? = audioProviders.firstOrNull { it.supports(model) }
+
     /** 모델 이름이 겹치면 실제 호출과 같이 첫 번째 어댑터만 반환한다. */
     val imageModels: List<ProviderModel>
         get() = providers.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
@@ -49,13 +53,17 @@ class ProviderRegistry(
     val decisionModels: List<ProviderModel>
         get() = decisionProviders.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
 
+    val audioModels: List<ProviderModel>
+        get() = audioProviders.flatMap { p -> p.models.map { ProviderModel(it, p.name) } }.distinctBy { it.id }
+
     /**
      * 지금 쓸 수 있는 어댑터 이름들. 진단·로그용이다.
      *
      * 한 Provider 가 여러 종류를 하면 이름이 여러 번 나오므로 한 번만 남긴다.
      */
     val availableNames: List<String>
-        get() = (providers.map { it.name } + textProviders.map { it.name } + decisionProviders.map { it.name }).distinct()
+        get() = (providers.map { it.name } + textProviders.map { it.name } + decisionProviders.map { it.name } + audioProviders.map { it.name })
+            .distinct()
 }
 
 data class ProviderModel(val id: String, val provider: String)

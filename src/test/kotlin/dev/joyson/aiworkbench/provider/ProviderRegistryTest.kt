@@ -33,6 +33,15 @@ class ProviderRegistryTest {
             ExternalApiDecisionResponse(answers = emptyList())
     }
 
+    private class FakeAudioProvider(
+        override val name: String,
+        override val models: Set<String>,
+    ) : ExternalApiAudioProvider {
+        override fun voices(model: String) = setOf("Kore")
+        override fun generateAudio(model: String, request: ExternalApiAudioRequest) =
+            ExternalApiAudioResponse(audio = byteArrayOf(1), mimeType = "audio/wav", durationSeconds = 1.0)
+    }
+
     private val openai = FakeProvider("openai", setOf("gpt-image-2"))
     private val gemini = FakeProvider("gemini", setOf("gemini-image"))
     private val openaiText = FakeTextProvider("openai", setOf("gpt-6-luna"))
@@ -104,6 +113,20 @@ class ProviderRegistryTest {
         assertSame(openaiText, registry.findText("gpt-6-luna"))
         assertNull(registry.findDecision("gpt-image-2"))
         assertEquals(listOf("openai"), registry.availableNames)
+    }
+
+    @Test
+    fun `소리를 만드는 모델은 음성 어댑터에서만 찾는다`() {
+        val geminiText = FakeTextProvider("gemini", setOf("gemini-3.6-flash"))
+        val geminiAudio = FakeAudioProvider("gemini", setOf("gemini-3.8-flash-tts"))
+        val registry = ProviderRegistry(emptyList(), listOf(geminiText), audioProviders = listOf(geminiAudio))
+
+        assertSame(geminiAudio, registry.findAudio("gemini-3.8-flash-tts"))
+        assertNull(registry.findText("gemini-3.8-flash-tts"))
+        // 글 모델로 소리를 요청하면 접수에서 걸러져야 한다.
+        assertNull(registry.findAudio("gemini-3.6-flash"))
+        assertEquals(listOf(ProviderModel("gemini-3.8-flash-tts", "gemini")), registry.audioModels)
+        assertEquals(listOf("gemini"), registry.availableNames)
     }
 
     @Test
