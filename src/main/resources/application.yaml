@@ -45,6 +45,15 @@ spring:
               - openid
               - profile
               - email
+      authorizationserver:
+        # 인가 서버의 발급자. 메타데이터와 토큰의 iss 가 이 값이다.
+        # 환경변수가 아니라 아래 값을 가리킨다 — 프로필이 그 값을 바꿔도 두 발급자가 갈라지지 않는다.
+        issuer: "${workbench.auth.issuer}"
+
+# 인가 서버 모듈의 설정. workbench 아래가 아니라 최상위다 — 별도 Gradle 모듈이라, 떼어 낼 때 이 블록이 그대로 따라간다.
+authserver:
+  # 토큰에 서명하는 RSA 개인키(PEM)의 위치. 기본값이 없다 — 있으면 저장소에 공개된 키로 서명하게 된다.
+  signing-key: "${AUTH_SIGNING_KEY}"
 
 # 내가 발급하는 토큰 설정. Google 의 issuer 와 다른 것이다 — 이건 내 서비스다.
 workbench:

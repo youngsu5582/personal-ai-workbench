@@ -47,6 +47,13 @@ spring:
               - openid
               - profile
               - email
+      authorizationserver:
+        issuer: "${workbench.auth.issuer}"
+
+authserver:
+  # 진짜 값은 TestSigningKey 가 테스트를 시작할 때 키를 만들어 시스템 프로퍼티로 넣는다. 저장소에 개인키를 두지 않는다.
+  # 그 값이 들어오지 않으면 없는 파일을 가리켜 시끄럽게 실패한다.
+  signing-key: "file:tests-must-generate-the-signing-key.pem"
 
 workbench:
   generation:
