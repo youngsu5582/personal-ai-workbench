@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, ChevronDown, ChevronUp, FileImage, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
-import { AuthenticatedImage } from "../../shared/authenticated-image";
+import { AuthenticatedAudio, AuthenticatedImage } from "../../shared/authenticated-media";
 import { CopyButton } from "../../shared/copy-button";
 import { duration, TaskTiming } from "./task-timing";
 import { Button } from "../../shared/ui/button";
@@ -11,26 +11,31 @@ import { PageHeader } from "../../shared/ui/page-header";
 import { Badge, Card, CardTitle } from "../../shared/ui/surface";
 
 type Props = { token: string; workspace: string };
-const labels: Record<string, string> = { "image-generate": "이미지", "text-generate": "텍스트", decision: "판정" };
+const labels: Record<string, string> = { "image-generate": "이미지", "text-generate": "텍스트", decision: "판정", "audio-generate": "음성" };
 const statusLabel: Record<string, string> = { PENDING: "접수됨", DISPATCHED: "처리 중", CLOSED: "처리 종료", SUCCEEDED: "성공", FAILED: "실패", RUNNING: "진행 중" };
 const TYPE_TILE: Record<string, string> = {
   "image-generate": "bg-tone-image-soft text-tone-image",
   "text-generate": "bg-tone-text-soft text-tone-text",
   decision: "bg-tone-decision-soft text-tone-decision",
+  "audio-generate": "bg-tone-audio-soft text-tone-audio",
 };
-const TYPE_ICON: Record<string, typeof FileText> = { "image-generate": FileImage, "text-generate": FileText, decision: ListChecks };
+const TYPE_ICON: Record<string, typeof FileText> = { "image-generate": FileImage, "text-generate": FileText, decision: ListChecks, "audio-generate": AudioLines };
 const message = (e: unknown) => e instanceof Error ? e.message : "요청을 처리하지 못했어요.";
 function date(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString("ko-KR");
 }
-const sourceLabel: Record<string, string> = { generated: "생성한 이미지", uploaded: "올린 이미지" };
-/** 올린 파일이 오디오면 이미지라고 부르지 않는다. 생성한 결과물은 아직 이미지뿐이다. */
-const captionOf = (input: { source: { type: string }; mimeType: string | null }) =>
-  input.source.type === "uploaded" && input.mimeType?.startsWith("audio/") ? "올린 오디오" : sourceLabel[input.source.type] || input.source.type;
-/** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로 대신한다. */
+const sourceLabel: Record<string, string> = { generated: "생성한", uploaded: "올린" };
+/** 오디오면 이미지라고 부르지 않는다. 올린 파일도, 생성한 결과물(읽기)도 오디오일 수 있다. */
+const captionOf = (input: { source: { type: string }; mimeType: string | null }) => {
+  const origin = sourceLabel[input.source.type];
+  if (!origin) return input.source.type;
+  return `${origin} ${input.mimeType?.startsWith("audio/") ? "오디오" : "이미지"}`;
+};
+/** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로, 읽기는 읽을 글로 대신한다. */
 function summary(job: Job) {
   if (job.option.prompt) return job.option.prompt;
+  if (job.option.text) return job.option.text;
   const questions = job.option.questions ?? [];
   if (questions.length) return questions.map(q => q.instructions).join(" · ");
   return `${labels[job.type] || job.type} 작업`;
@@ -45,6 +50,8 @@ const inputHeading = (type: string) => type === "decision" ? "근거 이미지" 
 /** 글 생성의 첨부는 이미지가 아닐 수 있어 장이 아니라 개로 센다. */
 const inputCount = (type: string, count: number) => type === "text-generate" ? `${count}개` : `${count}장`;
 const isAudio = (mimeType: string | null) => mimeType?.startsWith("audio/") === true;
+/** 재생 길이. 소수 첫째 자리까지 보인다 — 서버는 바이트로 센 값을 그대로 준다. */
+const seconds = (value: number) => `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}초`;
 /** 모든 결과가 끝났을 때만 답한다. 하나라도 끝난 시각이 없으면 작업이 끝났다고 말할 수 없다. */
 function finishedAtOf(job: Job) {
   const ends = job.tasks.map(task => task.finishedAt);
@@ -106,10 +113,10 @@ function ResultBlock({ text, mono = false }: { text: string; mono?: boolean }) {
   </div>;
 }
 
-/** 서명 주소가 있으면 첫 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. */
+/** 서명 주소가 있는 첫 이미지 결과를 작게 보이고, 없거나 못 그리면 종류 아이콘으로 돌아간다. 오디오는 그릴 수 없어 아이콘이다. */
 function JobThumb({ job }: { job: Job }) {
   const [broken, setBroken] = useState(false);
-  const src = job.tasks.flatMap(t => t.files).find(f => f.previewUrl)?.previewUrl;
+  const src = job.tasks.flatMap(t => t.files).find(f => f.previewUrl && !isAudio(f.mimeType))?.previewUrl;
   if (src && !broken) return <img src={src} alt="" className="size-8 shrink-0 rounded-md border border-border bg-background object-cover" onError={() => setBroken(true)} />;
   const Icon = TYPE_ICON[job.type] ?? FileText;
   return <span className={cn("grid size-8 shrink-0 place-items-center rounded-md", TYPE_TILE[job.type] ?? "bg-muted text-muted-foreground")}><Icon className="size-4" aria-hidden="true" /></span>;
@@ -122,6 +129,9 @@ function JobRequest({ job }: { job: Job }) {
   return <>
     {job.option.prompt && <div className={section}><h3 className={headingClass}>요청 내용</h3><LongText text={job.option.prompt} /></div>}
     {job.option.instructions && <div className={section}><h3 className={headingClass}>지침</h3><LongText text={job.option.instructions} /></div>}
+    {job.option.text && <div className={section}><h3 className={headingClass}>읽을 글</h3><LongText text={job.option.text} /></div>}
+    {job.option.voice && <div className={section}><h3 className={headingClass}>목소리</h3><p className="m-0 font-mono text-xs text-foreground">{job.option.voice}</p></div>}
+    {job.option.style && <div className={section}><h3 className={headingClass}>말투</h3><LongText text={job.option.style} /></div>}
     {evidence.length > 0 && <div className={section}><h3 className={headingClass}>근거</h3>{evidence.map((text, i) => <LongText key={i} text={text} />)}</div>}
     {questions.length > 0 && <div className={section}><h3 className={headingClass}>질문</h3>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{questions.map(q => <li key={q.name} className="text-[13px] leading-relaxed text-foreground [overflow-wrap:anywhere]"><span className="mr-1.5 font-mono text-xs text-muted-foreground">{q.name}</span>{q.instructions}</li>)}</ul>
@@ -136,8 +146,11 @@ function JobInputs({ job, token, workspace, onRefresh }: Props & { job: Job; onR
     <h3 className={headingClass}>{heading}</h3>
     <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">{job.inputs.map((input, i) => <figure key={`${i}-${input.source.sha256}`} className={`m-0 flex min-w-0 flex-col gap-1.5 ${isAudio(input.mimeType) ? "col-span-full" : ""}`}>
       {isAudio(input.mimeType)
-        // 오디오는 서명 주소로만 재생한다. 우리가 내려보내는 경로가 없는 올린 파일이라, 서명할 수 없는 보관소에서는 들을 수 없다.
-        ? input.previewUrl
+        // 생성한 오디오는 우리 경로로 받아 재생한다. 올린 파일은 우리가 내려보내는 경로가 없어 서명 주소로만 재생하고,
+        // 서명할 수 없는 보관소에서는 들을 수 없다.
+        ? input.url
+          ? <AuthenticatedAudio token={token} workspace={workspace} url={input.url} previewUrl={input.previewUrl} onRefresh={onRefresh} label={`${heading} 오디오`} />
+          : input.previewUrl
           ? <audio controls preload="metadata" src={input.previewUrl} aria-label={`${heading} 오디오`} className="w-full" />
           : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />이 보관소에서는 미리 들을 수 없어요.</p>
         : input.url || input.previewUrl
@@ -190,7 +203,12 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
             {task.texts.map((t, j) => typeof t.content === "string" ? <ResultBlock key={j} text={t.content} /> : <ResultBlock key={j} mono text={JSON.stringify(t.content, null, 2)} />)}
             {task.decisions.map((d, j) => <ResultBlock key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
-            {task.files.map(f => <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
+            {task.files.map(f => isAudio(f.mimeType)
+              ? <div key={f.sha256} className="flex flex-col gap-1">
+                <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} label={`결과 ${i + 1} 오디오`} />
+                {f.durationSeconds != null && <span className="text-xs text-muted-foreground">{seconds(f.durationSeconds)}</span>}
+              </div>
+              : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
           </div>)}
         </Card>
         <Card className="flex min-w-0 flex-col gap-4 p-4 sm:p-6">

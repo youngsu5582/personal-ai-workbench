@@ -29,6 +29,8 @@
   --ds-tone-image-soft: #fff1ec;
   --ds-tone-decision: #6d3fc4;
   --ds-tone-decision-soft: #f3eeff;
+  --ds-tone-audio: #0f766e;
+  --ds-tone-audio-soft: #e6f5f3;
   --ds-success: #2f7a57;
   --ds-success-soft: #e7f5ee;
   --ds-danger: #c42b2b;
@@ -56,6 +58,8 @@ html[data-theme="dark"] {
   --ds-tone-image-soft: #3a2620;
   --ds-tone-decision: #cdb4fb;
   --ds-tone-decision-soft: #2f2645;
+  --ds-tone-audio: #7fd6cb;
+  --ds-tone-audio-soft: #18332f;
   --ds-success: #86d7b0;
   --ds-success-soft: #173528;
   --ds-danger: #f8a3a3;
@@ -83,6 +87,8 @@ html[data-theme="dark"] {
   --color-tone-image-soft: var(--ds-tone-image-soft);
   --color-tone-decision: var(--ds-tone-decision);
   --color-tone-decision-soft: var(--ds-tone-decision-soft);
+  --color-tone-audio: var(--ds-tone-audio);
+  --color-tone-audio-soft: var(--ds-tone-audio-soft);
   --color-success: var(--ds-success);
   --color-success-soft: var(--ds-success-soft);
   --color-danger: var(--ds-danger);

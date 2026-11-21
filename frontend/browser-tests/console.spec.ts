@@ -20,6 +20,8 @@ const job = {
   tasks: [{ status: "SUCCEEDED", failureReason: null, files: [], texts: [{ content: "첫 서비스의 결과" }], decisions: [] }],
 };
 const summary = job;
+/** 재생할 수 있는 가장 작은 WAV(24kHz 모노 16bit, 0.01초). 깨진 바이트를 주면 재생 칸이 "불러오지 못했어요" 로 바뀐다. */
+const PLAYABLE_WAV = "data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAwF0AAIC7AAACABAAZGF0YeABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 async function prepare(page: Page) {
   await page.route("**/auth/handoff", route => route.fulfill({ json: { accessToken: "test-token" } }));
@@ -185,6 +187,62 @@ test("글 생성에 오디오를 첨부하면 서버가 받는 형식으로 올�
     option: { type: "text-generate", prompt: "받아 써", attachments: [{ type: "uploaded", sha256: "e".repeat(64) }] },
     model: "example-model", taskCount: 1,
   }]);
+});
+
+test("음성 작업은 모델이 받는 목소리로 읽을 글과 말투를 보낸다", async ({ page }) => {
+  await prepare(page);
+  await page.route("**/api/models?**", route => route.fulfill({ json: { models: route.request().url().includes("type=audio-generate")
+    ? [{ id: "tts-model", provider: "example", voices: ["Achernar", "Kore", "Puck"] }]
+    : [{ id: "example-model", provider: "example" }] } }));
+  const submitted: unknown[] = [];
+  await page.route("**/api/jobs", route => {
+    submitted.push(route.request().postDataJSON());
+    return route.fulfill({ status: 202, json: { uuid: "job-s" } });
+  });
+  await page.route("**/api/jobs/job-s", route => route.fulfill({ json: {
+    ...job, uuid: "job-s", type: "audio-generate",
+    option: { type: "audio-generate", text: "질문", voice: "Kore" },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, texts: [], decisions: [],
+      files: [{ sha256: "a".repeat(64), url: `/api/files/${"a".repeat(64)}`, previewUrl: PLAYABLE_WAV, mimeType: "audio/wav", durationSeconds: 8.48 }] }],
+  } }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "음성" }).click();
+  // 목소리는 모델에 딸려 온다. 목록에 있으면 Kore 를 먼저 고른다.
+  await expect(page.getByRole("combobox", { name: "목소리" })).toHaveText("Kore");
+  await page.getByRole("combobox", { name: "목소리" }).click();
+  await page.getByRole("option", { name: "Puck" }).click();
+  await page.getByLabel("읽을 글").fill("동시성 문제는 어떻게 막으셨나요?");
+  await page.getByLabel("말투").fill("  차분하게  ");
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByLabel("결과 1 오디오")).toHaveAttribute("src", /^data:audio/);
+  await expect(page.getByAltText("생성된 이미지")).toHaveCount(0);
+  expect(submitted).toEqual([{
+    option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Puck", style: "차분하게" },
+    model: "tts-model", taskCount: 1,
+  }]);
+});
+
+test("작업 내역은 음성 결과를 재생 칸과 길이로 보이고 읽을 글로 알아본다", async ({ page }) => {
+  await prepare(page);
+  const spoken = {
+    ...job, uuid: "job-v", type: "audio-generate", model: "tts-model",
+    option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Kore", style: "차분하게" },
+    tasks: [{ status: "SUCCEEDED", failureReason: null, texts: [], decisions: [],
+      files: [{ sha256: "a".repeat(64), url: `/api/files/${"a".repeat(64)}`, previewUrl: PLAYABLE_WAV, mimeType: "audio/wav", durationSeconds: 8.48 }] }],
+  };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [spoken], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: spoken }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  const row = page.getByRole("button", { name: /동시성 문제는 어떻게 막으셨나요\?.*음성/ });
+  await expect(row).toBeVisible();
+  // 오디오는 썸네일로 그리지 않는다.
+  await expect(row.locator("img")).toHaveCount(0);
+  await row.click();
+  await expect(page.getByLabel("결과 1 오디오")).toHaveAttribute("src", /^data:audio/);
+  await expect(page.getByText("8.5초")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "읽을 글" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "목소리" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "말투" })).toBeVisible();
 });
 
 test("이미지 작업에서는 첨부 파일 칸이 없다", async ({ page }) => {
