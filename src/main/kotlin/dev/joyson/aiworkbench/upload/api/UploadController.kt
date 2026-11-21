@@ -51,7 +51,7 @@ class UploadController(
 
 data class UploadRequest(
     @field:NotNull
-    @field:Pattern(regexp = "image/(png|jpeg|webp)")
+    @field:Pattern(regexp = "image/(png|jpeg|webp)|audio/(wav|mpeg|ogg|flac|mp4|aac)")
     val contentType: String?,
     @field:NotNull
     @field:Min(1)

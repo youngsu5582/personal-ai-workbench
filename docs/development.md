@@ -507,7 +507,7 @@ Content-Type: application/json
 반환된 URL로 파일 바이트를 PUT한다. 앱의 Bearer 토큰은 보관소에 보내지 않는다.
 형식·크기·SHA-256은 서명에 포함돼 실제 요청과 같아야 한다. 체크섬 헤더 두 개도 응답 그대로 보낸다. 브라우저에서는 `Content-Length`를
 직접 설정하지 않고 `File`/`Blob`을 본문으로 보내 브라우저가 계산하게 한다.
-PNG·JPEG·WebP, 최대 20MiB를 허용하며, 잘못된 요청은 400, 미인증은 401,
+이미지(PNG·JPEG·WebP)와 오디오(WAV·MP3·OGG·FLAC·M4A·AAC)를 형식 구분 없이 최대 15MiB까지 허용하며, 잘못된 요청은 400, 미인증은 401,
 직접 업로드를 지원하지 않는 로컬 보관소는 501이다. 중복 확인 중 보관소에 닿지 못하면 503이며 상태를 바꾸지 않는다.
 수명은 `workbench.storage.presigned-url-ttl`을 따른다.
 

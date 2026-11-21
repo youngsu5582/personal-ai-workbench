@@ -4,7 +4,7 @@ import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.upload.UploadedFiles
 import dev.joyson.aiworkbench.upload.UsableUpload
-import dev.joyson.aiworkbench.upload.domain.ImageContentType
+import dev.joyson.aiworkbench.upload.domain.FileContentType
 import dev.joyson.aiworkbench.upload.domain.UploadStatus
 import dev.joyson.aiworkbench.upload.domain.UploadedFile
 import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
@@ -63,10 +63,10 @@ class DefaultUploadedFiles(
      */
     fun verify(file: UploadedFile): UploadStatus {
         if (file.status.isFinal) return file.status
-        val leading = fileStorage.readRange(file.storageKey, 0L until ImageContentType.SIGNATURE_LENGTH)
+        val leading = fileStorage.readRange(file.storageKey, 0L until FileContentType.SIGNATURE_LENGTH)
             ?: return UploadStatus.PENDING
 
-        val detected = ImageContentType.detect(leading.bytes)
+        val detected = FileContentType.detect(leading.bytes)
         val matches = leading.totalSize == file.metadata.fileSize && detected == file.metadata.mimeType
         val next = if (matches) UploadStatus.READY else UploadStatus.REJECTED
 
@@ -89,6 +89,6 @@ class DefaultUploadedFiles(
 
     private fun UploadedFile.toUsable() = UsableUpload(mimeType = metadata.mimeType)
 
-    /** 형식은 PNG·JPEG·WebP 뿐이라 하위 타입이 곧 확장자다. */
+    /** 하위 타입을 확장자로 쓴다 — 사람이 보관소를 열어볼 때 알아보는 용도라 `audio/mpeg` 도 `mpeg` 다. */
     private fun UploadedFile.downloadFileName() = "$sha256.${metadata.mimeType.substringAfterLast('/')}"
 }

@@ -33,15 +33,16 @@ class FileSourceResolver(
 ) {
 
     /**
-     * 참조가 가리키는 파일을 **소유자와 함께** 확인한다. 남의 것은 없는 것과 같게 `false` 다.
+     * 참조가 가리키는 파일의 형식을 **소유자와 함께** 확인해 답한다. 없는 것 · 남의 것 · 쓸 수 없는 것은 모두 `null` 이다.
      *
+     * 받는 형식인지는 여기서 정하지 않는다 — 사실만 답하고 정책은 부르는 쪽이 정한다.
      * 결과물은 메타 행만 본다. 올린 파일은 처음 참조될 때 보관소에서 앞부분을 읽어 검증한다 —
-     * 그래서 이것을 부르는 접수는 트랜잭션 밖이다. 찾지 못한 것을 어떻게 할지는 부르는 쪽이 정한다.
+     * 그래서 이것을 부르는 접수는 트랜잭션 밖이다. 찾지 못한 것을 어떻게 할지도 부르는 쪽이 정한다.
      */
-    fun isUsable(source: FileSource, workspaceUuid: UUID): Boolean = when (source) {
+    fun mimeTypeOf(source: FileSource, workspaceUuid: UUID): String? = when (source) {
         // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
-        is FileSource.Generated -> generatedFileFinder.findOwned(source.sha256, workspaceUuid) != null
-        is FileSource.Uploaded -> uploadedFiles.findUsable(source.sha256, workspaceUuid) != null
+        is FileSource.Generated -> generatedFileFinder.findOwned(source.sha256, workspaceUuid)?.mimeType
+        is FileSource.Uploaded -> uploadedFiles.findUsable(source.sha256, workspaceUuid)?.mimeType
     }
 
     /**

@@ -164,7 +164,9 @@ class GenerationJobService(
     }
 
     /**
-     * 참조로 지목한 이미지가 실제로 있고 내 것인지 본다. 참조가 없으면 볼 것이 없다.
+     * 참조로 지목한 이미지가 실제로 있고 내 것인지, 그리고 이미지인지 본다. 참조가 없으면 볼 것이 없다.
+     *
+     * 지금 참조를 받는 작업은 이미지 편집 · 판정뿐이라 받는 형식이 이미지다. 업로드가 오디오까지 넓어졌으므로 형식을 본다.
      *
      * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
@@ -175,7 +177,12 @@ class GenerationJobService(
      * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
      */
     private fun requireOwnedSources(workspaceUuid: UUID, option: GenerationOption) {
-        option.fileSources().firstOrNull { !fileSourceResolver.isUsable(it, workspaceUuid) }
+        option.fileSources().firstOrNull { fileSourceResolver.mimeTypeOf(it, workspaceUuid) !in IMAGE_TYPES }
             ?.let { throw UnknownFileSourceException(it.sha256) }
+    }
+
+    private companion object {
+        /** 이미지 편집 · 판정이 참조로 받는 형식. 업로드가 허용하는 이미지와 같다. */
+        val IMAGE_TYPES = setOf("image/png", "image/jpeg", "image/webp")
     }
 }

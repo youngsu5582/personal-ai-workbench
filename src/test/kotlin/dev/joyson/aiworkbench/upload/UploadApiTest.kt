@@ -177,9 +177,18 @@ class UploadApiTest @Autowired constructor(
             .andExpect { status { isOk() } }
     }
 
+    /** 허용 목록의 모든 형식이 컨트롤러의 형식 검사도 통과해야 한다 — 두 곳이 어긋나면 한쪽에서만 막힌다. */
+    @Test
+    fun `허용 목록의 모든 형식은 발급할 수 있다`() {
+        // 같은 해시를 다른 형식으로 선언하면 400 이다. 형식마다 다른 내용으로 본다.
+        UploadSpec.ALLOWED_CONTENT_TYPES.forEach {
+            request(payload(type = it, hash = Sha256.of(it.toByteArray()).hex)).andExpect { status { isOk() } }
+        }
+    }
+
     @Test
     fun `허용하지 않는 형식은 400 이다`() {
-        listOf("text/html", "image/svg+xml", "image/gif", "", "image/png; charset=utf-8").forEach {
+        listOf("text/html", "image/svg+xml", "image/gif", "audio/midi", "video/mp4", "", "image/png; charset=utf-8").forEach {
             request(payload(type = it)).andExpect { status { isBadRequest() } }
         }
     }
