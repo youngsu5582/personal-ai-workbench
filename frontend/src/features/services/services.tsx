@@ -59,14 +59,14 @@ export function ServicePicker({
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="text-[11px] text-subtle-foreground">현재 서비스</span>
             <SelectValue placeholder={value ? "서비스 선택" : "불러오는 중"}>
-              <span className="truncate text-[13px] font-medium text-foreground">{current?.name}{current?.isDefault ? " (기본)" : ""}</span>
+              <span className="truncate text-[13px] font-medium text-foreground">{current?.name}</span>
             </SelectValue>
           </span>
         </SelectTrigger>
         <SelectContent>
           {value?.map((s) => (
             <SelectItem key={s.uuid} value={s.uuid} className="h-9">
-              <span className="flex items-center gap-2"><Avatar label={s.name} seed={s.uuid} size="sm" />{s.name}{s.isDefault ? " (기본)" : ""}</span>
+              <span className="flex items-center gap-2"><Avatar label={s.name} seed={s.uuid} size="sm" />{s.name}</span>
             </SelectItem>
           ))}
         </SelectContent>
@@ -111,15 +111,19 @@ export function ServicesPanel({
       setFail(errorText(e));
     }
   };
-  const rename = async (s: Service) => {
-    const next = window.prompt("새 서비스 이름을 입력하세요.", s.name);
-    if (next === null || !next.trim() || next === s.name) return;
+  const [draft, setDraft] = useState<string | null>(null);
+  useEffect(() => setDraft(null), [detail]);
+  const rename = async (e: React.FormEvent, s: Service) => {
+    e.preventDefault();
+    const next = draft?.trim();
+    if (!next || next === s.name) return setDraft(null);
     setFail("");
     try {
       await request(token, `/api/services/${s.uuid}`, undefined, {
         method: "PUT",
         body: JSON.stringify({ name: next }),
       });
+      setDraft(null);
       reload();
       onChange();
     } catch (e) {
@@ -138,13 +142,24 @@ export function ServicesPanel({
             <ServiceAvatar service={current} size="large" />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">Service overview</span>
-              <h2 className="m-0 truncate text-lg font-semibold tracking-[-0.01em] text-foreground">{current.name}</h2>
+              {draft === null ? (
+                <h2 className="m-0 truncate text-lg font-semibold tracking-[-0.01em] text-foreground">{current.name}</h2>
+              ) : (
+                <form onSubmit={(e) => rename(e, current)} className="flex flex-wrap items-center gap-2">
+                  <Label htmlFor="service-name" className="sr-only">서비스 이름</Label>
+                  <Input id="service-name" value={draft} onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Escape") setDraft(null); }}
+                    maxLength={255} required autoFocus className="sm:w-64" />
+                  <Button type="submit" variant="primary">저장</Button>
+                  <Button type="button" variant="ghost" onClick={() => setDraft(null)}>취소</Button>
+                </form>
+              )}
               <p className="m-0 text-[13px] text-muted-foreground">
-                {current.isDefault ? "기본 서비스" : "서비스 작업 공간"} · ID <span className="font-mono text-xs">{current.uuid.slice(0, 8)}</span>
+                서비스 작업 공간 · ID <span className="font-mono text-xs">{current.uuid.slice(0, 8)}</span>
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => rename(current)}>이름 변경</Button>
+              {draft === null && <Button onClick={() => setDraft(current.name)}>이름 변경</Button>}
               {selected === current.uuid
                 ? <Badge tone="success" shape="pill" className="h-7 px-3 text-xs"><Check className="size-3.5" aria-hidden="true" />선택된 서비스</Badge>
                 : <Button variant="primary" onClick={() => onSelect(current.uuid)}>이 서비스 선택</Button>}
@@ -175,7 +190,7 @@ export function ServicesPanel({
                   </span>
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <strong className="truncate text-sm font-semibold">{s.name}</strong>
-                    <span className="text-xs text-muted-foreground">{s.isDefault ? "기본 서비스" : "서비스 작업 공간"}</span>
+                    <span className="text-xs text-muted-foreground">서비스 작업 공간</span>
                   </span>
                   <span className="flex w-full items-center justify-between border-t border-border pt-3 text-xs text-subtle-foreground">
                     <span className="font-mono">{s.uuid.slice(0, 8)}</span>

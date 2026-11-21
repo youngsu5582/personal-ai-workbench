@@ -13,10 +13,11 @@ class WorkspaceService(private val repository: WorkspaceRepository) : WorkspaceR
     /**
      * 호출자의 트랜잭션이 없으면 실패한다. 사용자 등록과 기본 서비스 생성이 함께 롤백되도록 한다.
      * 사용자당 기본 서비스의 중복은 DB 의 부분 유니크 인덱스가 막는다.
+     * 이름에 "기본" 을 넣지 않는다. 사용자에게는 기본 지정이 아니라 자기 첫 서비스로 보여야 한다(ADR 0004).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     override fun createDefault(ownerUuid: UUID) {
-        repository.save(Workspace(ownerUserUuid = ownerUuid, name = "기본 서비스", isDefault = true))
+        repository.save(Workspace(ownerUserUuid = ownerUuid, name = "내 서비스", isDefault = true))
     }
 
     @Transactional(readOnly = true)
