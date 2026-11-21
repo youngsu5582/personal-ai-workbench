@@ -19,9 +19,10 @@ STT(받아 적기)는 이미 `text-generate` + 첨부로 끝났다(PR #118~#121)
 | F7 | 단가(Standard): `gemini-3.8-flash-tts` 입력 $0.50 · 출력 $9.00 /1M 토큰(2026-12-31 까지), 2027-01-01 부터 $1.00 · $18.00. `flash-lite-tts` 출력 $6.00 → $12.00. 오디오 25토큰/초 | 문서(pricing 원문) |
 | F8 | 목소리 기본 30개, 한국어 지원, 언어 자동 감지. 입력 토큰 한도 8,192, 출력 16,384. 한영 혼용 기술 용어의 품질은 문서에 없다 | 문서 |
 | F9 | 연속 호출에서 **429 가 한 번** 나왔다(성공 2회 뒤). 본문: "limit: 3 requests per minute on **Free Tier**". 키의 프로젝트가 Free Tier 다. 문서의 한도 표에는 TTS 가 없다 | live 본문 · 문서 |
+| F10 | OpenAI `tts-1` · `tts-1-hd` · `gpt-4o-mini-tts` 는 2027-01-06 종료가 문서에 있다 → Gemini 만 | 문서 |
 | F11 | Interactions 의 오류 본문은 `{"error": {"message", "code": "too_many_requests"}}` 로 `code` 가 문자열이다(`generateContent` 는 숫자 + `status`) | live |
 | F12 | 모델 ID 는 `gemini-3.8-flash-tts` · `gemini-3.8-flash-lite-tts`(접미사 없음). 목소리 30개 이름, 응답의 소리는 `steps[type=model_output].content[type=audio].data`, `response_format.mime_type` 으로 `audio/wav` 를 고를 수 있다 | 문서 |
-| F10 | OpenAI `tts-1` · `tts-1-hd` · `gpt-4o-mini-tts` 는 2027-01-06 종료가 문서에 있다 → Gemini 만 | 문서 |
+| F13 | live 2건 + 로컬 스모크 1건(2026-11-22): `data` 청크로 잰 길이 × 25 가 출력 토큰과 1개 안쪽으로 맞는다(8.72초 ↔ 219, 8.48초 ↔ 212, 7.92초 ↔ 198). `response_format.mime_type: audio/wav` 와 주석 없는 단계 목록을 받는다. 접수 → 워커 → 저장 → 내려받기(`audio/wav`, 해시 일치) → 원장(`AudioRequest`)까지 돈다 | live · 스모크 |
 
 요구 문서와 달라진 것: ① "L16 이면 WAV 헤더로 감싼다"는 필요 없다(F4) ② 사용량은 새 모양이다(F6) ③ 말투는 단계 목록이다(F3).
 
@@ -36,7 +37,7 @@ STT(받아 적기)는 이미 `text-generate` + 첨부로 끝났다(PR #118~#121)
 | D5 | 길이(초) | **서버가 WAV 의 `data` 청크로** 계산한다(F5). 저쪽이 말해 주는 값이 아니라 바이트에서 나오는 값이다 |
 | D6 | 단가 | 입력 `total_input_tokens` · 출력 `total_output_tokens` 에 값을 매기는 행을 모델 둘 × 기간 둘(2026-12-31 경계)로 넣는다. 새 단가 경로 문법은 필요 없다 |
 | D7 | 기본 모델 | `gemini-3.8-flash-tts`(품질), `…flash-lite-tts` 도 받는다. 질문 한 건의 비용 차이는 $0.002 안팎이다 |
-| D8 | 조회 응답의 파일 | 공통 칸(`sha256` · `url` · `previewUrl` · `mimeType` · `fileSize`) + 종류의 사실(이미지 `width` · `height`, 오디오 `durationSeconds`). **종류에 없는 칸은 싣지 않는다**(`null` 이 아니라 칸째 없음 — `previewUrl: null` 의 "할 수 없음" 과 섞이지 않게). 받는 쪽은 `mimeType` 으로 가른다(입력 파일과 같은 기준). PR A 에서 정함 |
+| D8 | 조회 응답의 파일 | 공통 칸(`sha256` · `url` · `previewUrl` · `mimeType` · `fileSize`) + 종류의 사실(이미지 `width` · `height`, 오디오 `durationSeconds`). 응답 타입도 sealed(`FileResponse.Image` · `Audio`)로 가르고 **판별자는 싣지 않는다** — 받는 쪽은 `mimeType` 으로 가른다(입력 파일과 같은 기준). JSON 에는 종류에 없는 칸이 아예 없다. 2026-11-22 사용자 확인 |
 | D9 | 길이를 못 구하는 바이트 | WAV 가 아니거나 `data` 청크가 없으면 길이 없이 저장하지 않고 Task 실패로 남긴다(사유에 형식). PR A 의 ADR 에서 정함, 구현은 PR B |
 
 남은 결정: 아래 §6.
