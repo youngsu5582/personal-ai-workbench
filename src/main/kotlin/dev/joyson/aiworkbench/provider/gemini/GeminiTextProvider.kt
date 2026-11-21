@@ -31,6 +31,9 @@ class GeminiTextProvider(
     /** `thinkingLevel` 이 표현하는 넷이다([EXPRESSIBLE]). 모델마다 좁히지 않는다. */
     override fun efforts(model: String): Set<ReasoningEffort> = if (supports(model)) EXPRESSIBLE else emptySet()
 
+    /** 파일 파트를 아직 싣지 않아 받는 형식이 없다. */
+    override fun inputTypes(model: String): Set<String> = emptySet()
+
     override fun generateText(
         model: String,
         request: ExternalApiTextRequest,

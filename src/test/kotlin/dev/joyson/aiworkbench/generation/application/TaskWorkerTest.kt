@@ -923,6 +923,7 @@ class TaskWorkerTest @Autowired constructor(
         override val name = PROVIDER
         override val models = setOf(TEXT_MODEL)
         override fun efforts(model: String) = ReasoningEffort.entries.toSet()
+        override fun inputTypes(model: String) = emptySet<String>()
         override fun generateText(model: String, request: ExternalApiTextRequest) = behavior(request)
     }
 

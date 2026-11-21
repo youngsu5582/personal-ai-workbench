@@ -20,6 +20,7 @@ class ProviderRegistryTest {
         override val models: Set<String>,
     ) : ExternalApiTextProvider {
         override fun efforts(model: String) = ReasoningEffort.entries.toSet()
+        override fun inputTypes(model: String) = emptySet<String>()
         override fun generateText(model: String, request: ExternalApiTextRequest) =
             ExternalApiTextResponse(text = "", stopReason = StopReason.COMPLETED)
     }

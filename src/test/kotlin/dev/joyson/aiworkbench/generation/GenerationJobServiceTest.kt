@@ -14,6 +14,7 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
+import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
@@ -157,6 +158,43 @@ class GenerationJobServiceTest @Autowired constructor(
         }
     }
 
+    /** 글 생성의 첨부는 모델을 다루는 Provider 가 받는다고 밝힌 형식만 통과한다. */
+    @Test
+    fun `모델이 받는 형식의 첨부는 접수된다`() {
+        val me = UUID.randomUUID()
+        val wav = "RIFF".toByteArray() + byteArrayOf(0x24, 0, 0, 0) + "WAVE".toByteArray()
+        val upload = uploadOwnedBy(me, content = wav, mimeType = "audio/wav")
+
+        val view = service.submit(ownerUuid = me, workspaceUuid = me, command = attachCommand(upload.sha256))
+
+        assertEquals(1, view.progress.total)
+        // 입력 파일은 조회에서 채워진다. 첨부가 입력으로 드러나는지 그쪽에서 본다.
+        assertEquals(listOf<FileSource>(FileSource.Uploaded(upload.sha256)), service.findOwned(view.uuid, me)?.inputs?.map { it.source })
+    }
+
+    @Test
+    fun `모델이 받지 않는 형식의 첨부는 접수되지 않는다`() {
+        val me = UUID.randomUUID()
+        // 올린 것은 멀쩡한 FLAC 이지만, 이 모델의 Provider 는 PNG · WAV 만 받는다고 밝혔다.
+        val flac = "fLaC".toByteArray() + ByteArray(8)
+        val upload = uploadOwnedBy(me, content = flac, mimeType = "audio/flac")
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = me, workspaceUuid = me, command = attachCommand(upload.sha256))
+        }
+        assertEquals(0, jobRepository.count())
+    }
+
+    @Test
+    fun `남이 올린 파일은 첨부로도 없는 것과 같은 실패다`() {
+        val wav = "RIFF".toByteArray() + byteArrayOf(0x24, 0, 0, 0) + "WAVE".toByteArray()
+        val upload = uploadOwnedBy(UUID.randomUUID(), content = wav, mimeType = "audio/wav")
+
+        assertFailsWith<UnknownFileSourceException> {
+            service.submit(ownerUuid = UUID.randomUUID(), workspaceUuid = UUID.randomUUID(), command = attachCommand(upload.sha256))
+        }
+    }
+
     /** 업로드가 오디오까지 넓어졌다. 이미지 자리에 오디오를 가리키면, 멀쩡히 올라와 있어도 쓸 수 없다. */
     @Test
     fun `올린 오디오를 이미지 자리에 가리키면 접수되지 않는다`() {
@@ -207,6 +245,12 @@ class GenerationJobServiceTest @Autowired constructor(
             ),
         ).sha256
     }
+
+    private fun attachCommand(sha256: String) = GenerationCommand(
+        option = TextGenerateOption(prompt = "받아 써", attachments = listOf(FileSource.Uploaded(sha256))),
+        model = SharedTestConfig.FAKE_TEXT_MODEL,
+        taskCount = 1,
+    )
 
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13)
 

@@ -70,7 +70,7 @@ class GenerationJobService(
      */
     fun submit(ownerUuid: UUID, workspaceUuid: UUID, command: GenerationCommand): GenerationJobView {
         requireSupported(command.option, command.model)
-        requireOwnedSources(workspaceUuid, command.option)
+        requireOwnedSources(workspaceUuid, command.option, command.model)
 
         return generationJobWriter.create(ownerUuid, workspaceUuid, command)
     }
@@ -164,9 +164,10 @@ class GenerationJobService(
     }
 
     /**
-     * 참조로 지목한 이미지가 실제로 있고 내 것인지, 그리고 이미지인지 본다. 참조가 없으면 볼 것이 없다.
+     * 참조로 지목한 파일이 실제로 있고 내 것인지, 그리고 이 요청이 받는 형식인지 본다. 참조가 없으면 볼 것이 없다.
      *
-     * 지금 참조를 받는 작업은 이미지 편집 · 판정뿐이라 받는 형식이 이미지다. 업로드가 오디오까지 넓어졌으므로 형식을 본다.
+     * 받는 형식은 작업 종류가 정한다. 이미지 편집 · 판정은 이미지고, 글 생성은 모델을 다루는 Provider 가 답한다.
+     * [requireSupported] 를 먼저 통과했으므로 글 생성의 Provider 는 있다.
      *
      * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
@@ -176,9 +177,15 @@ class GenerationJobService(
      *
      * 장수 제한은 여기서 다시 보지 않는다 — 옵션 생성자가 이미 막았고, 거기서 걸리면 400 이다.
      */
-    private fun requireOwnedSources(workspaceUuid: UUID, option: GenerationOption) {
-        option.fileSources().firstOrNull { fileSourceResolver.mimeTypeOf(it, workspaceUuid) !in IMAGE_TYPES }
+    private fun requireOwnedSources(workspaceUuid: UUID, option: GenerationOption, model: String) {
+        val accepted = acceptedTypes(option, model)
+        option.fileSources().firstOrNull { fileSourceResolver.mimeTypeOf(it, workspaceUuid) !in accepted }
             ?.let { throw UnknownFileSourceException(it.sha256) }
+    }
+
+    private fun acceptedTypes(option: GenerationOption, model: String): Set<String> = when (option) {
+        is ImageOption, is DecisionOption -> IMAGE_TYPES
+        is TextGenerateOption -> requireNotNull(providerRegistry.findText(model)) { "requireSupported 가 먼저 걸러야 한다" }.inputTypes(model)
     }
 
     private companion object {

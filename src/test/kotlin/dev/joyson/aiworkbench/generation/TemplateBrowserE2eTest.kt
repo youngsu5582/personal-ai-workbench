@@ -78,6 +78,7 @@ class TemplateBrowserE2eProvider {
         override val name = "browser-e2e"
         override val models = setOf("browser-e2e-text")
         override fun efforts(model: String) = ReasoningEffort.entries.toSet()
+        override fun inputTypes(model: String) = emptySet<String>()
         override fun generateText(model: String, request: ExternalApiTextRequest): ExternalApiTextResponse {
             check(request.instructions == "당신은 편집자입니다. 친근한 말투로 답하세요.")
             check(request.prompt == "핵심을 알려줘")

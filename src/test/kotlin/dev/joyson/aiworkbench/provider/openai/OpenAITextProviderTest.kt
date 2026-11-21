@@ -61,6 +61,13 @@ class OpenAITextProviderTest {
         assertFalse(provider.supports(""))
     }
 
+    /** 파일 파트를 싣지 않는 동안은 받는다고 밝히지 않는다 — 밝히면 접수된 첨부가 조용히 빠진다. */
+    @Test
+    fun `파일을 아직 싣지 않으므로 받는 입력 형식이 없다고 밝힌다`() {
+        assertEquals(emptySet(), provider.inputTypes("gpt-6-luna"))
+        assertEquals(emptySet(), provider.inputTypes("gpt-image-2"))
+    }
+
     @Test
     fun `다루는 모델엔 눈금 전부를, 모르는 모델엔 아무것도 보낼 수 없다고 답한다`() {
         assertEquals(ReasoningEffort.entries.toSet(), provider.efforts("gpt-6-luna"))
