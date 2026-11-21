@@ -17,10 +17,10 @@ Status: active
   minimal 이면 `thoughtsTokenCount` 가 **실제로 빠진다**(`zeroIfAbsent` 근거), high 면 그 이름으로 온다.
   usageMetadata 에 문서에 없던 `serviceTier: "standard"` 가 온다 — Free Tier 인지는 응답에 드러나지 않는다
 - [x] main(#106) 위로 다시 rebase · 단가표를 V20 으로 옮김 · 전체 테스트 556개 통과 (2026-11-21)
-- [x] PR #114 · roadmap "걸어온 길" 행
+- [x] 관심사 셋으로 스택 PR — #115(effort) → #116(zeroIfAbsent) → #114(Gemini) · roadmap "걸어온 길" 행
 
 ## Resume Point
-PR #114 리뷰 · 머지 대기. 다음은 `text-generate` 에 이미지 · 오디오 입력(`attachments`). 막힌 프롬프트(`blockReason`)의 실제 응답은 아직 못 봤다.
+스택 #115 → #116 → #114 리뷰 · 머지 대기 (아래부터). 다음은 `text-generate` 에 이미지 · 오디오 입력(`attachments`). 막힌 프롬프트(`blockReason`)의 실제 응답은 아직 못 봤다.
 콘솔은 모델 선택이 `/api/models` 로 저절로 반영된다. 사용량 화면의 `gemini` 표기와 effort 칸은 정하지 않았다.
 
 ## 남은 결정 (뒤로 미룸)
