@@ -110,6 +110,23 @@ class PriceRatesTest {
         assertNull(omitting.price(mapOf("promptTokenCount" to 100, "thoughtsTokenCount" to mapOf("text" to 5))))
     }
 
+    /** 명시적인 null 도 칸이 와 있는 것이다. 키가 없는 것과 같게 보면 모양이 바뀐 사용량이 0 으로 적힌다. */
+    @Test
+    fun `0 으로 볼 경로라도 null 이 와 있으면 모른다`() {
+        assertNull(omitting.price(mapOf("promptTokenCount" to 100, "thoughtsTokenCount" to null)))
+    }
+
+    @Test
+    fun `0 으로 볼 경로의 중간이 통째로 없으면 0, null 로 와 있으면 모른다`() {
+        val nested = PriceRates(
+            usdPerMillion = mapOf("input" to BigDecimal("1"), "details.thoughts" to BigDecimal("10")),
+            zeroIfAbsent = setOf("details.thoughts"),
+        )
+
+        assertEquals(0, BigDecimal("0.0001").compareTo(nested.price(mapOf("input" to 100))))
+        assertNull(nested.price(mapOf("input" to 100, "details" to null)))
+    }
+
     @Test
     fun `단가가 없는 경로를 0 으로 보거나 모든 경로를 0 으로 보는 표는 만들 수 없다`() {
         assertFailsWith<IllegalArgumentException> {

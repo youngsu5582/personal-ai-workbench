@@ -57,14 +57,16 @@ data class PriceRates(
     }
 
     /**
-     * 경로 끝의 칸이 **없는** 것인가. 숫자가 아닌 값이 와 있는 것은 없는 것이 아니다 — 모양이 달라진 것이라 0 으로 보지 않는다.
-     * 중간 단계가 통째로 없는 것은 없는 것으로 본다. 그 아래 칸이 모두 0 이면 Provider 가 묶음째 뺄 수 있다.
+     * 경로 끝의 칸이 **없는** 것인가. 키가 아예 없는 것만 없는 것이다.
+     * 값이 와 있으면 — 숫자가 아니든 명시적인 `null` 이든 — 모양이 달라진 것이라 0 으로 보지 않는다.
+     * 중간 단계의 키가 통째로 없는 것은 없는 것으로 본다. 그 아래 칸이 모두 0 이면 Provider 가 묶음째 뺄 수 있다.
      */
     private fun Map<String, Any?>.isAbsentAt(path: String): Boolean {
         var node: Any? = this
         for (key in path.split('.')) {
-            val map = node as? Map<*, *> ?: return node == null
-            node = map[key] ?: return true
+            val map = node as? Map<*, *> ?: return false
+            if (!map.containsKey(key)) return true
+            node = map[key]
         }
         return false
     }
