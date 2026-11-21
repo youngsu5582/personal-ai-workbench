@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
@@ -12,6 +13,7 @@ import dev.joyson.aiworkbench.generation.domain.option.ImageSize
 import dev.joyson.aiworkbench.generation.domain.option.Quality
 import dev.joyson.aiworkbench.generation.domain.option.Resolution
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
+import dev.joyson.aiworkbench.provider.ExternalApiAudioRequest
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiFileInput
@@ -79,6 +81,13 @@ object ProviderRequestMapper {
             files = files.map { inputOf(it) },
         )
     }
+
+    /** 읽기는 참조를 받지 않아 준비할 파일이 없다. */
+    fun from(option: AudioGenerateOption): ExternalApiAudioRequest = ExternalApiAudioRequest(
+        text = option.text,
+        voice = option.voice,
+        style = option.style,
+    )
 
     /**
      * 근거를 받은 순서대로 옮긴다. 이미지 근거는 [images] 에서 같은 순서로 하나씩 꺼낸다.

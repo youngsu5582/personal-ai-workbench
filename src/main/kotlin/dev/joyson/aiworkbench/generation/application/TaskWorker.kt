@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
 import dev.joyson.aiworkbench.generation.domain.ProviderInfo
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
@@ -12,6 +13,8 @@ import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.storage.BlobKey
+import dev.joyson.aiworkbench.provider.ExternalApiAudioProvider
+import dev.joyson.aiworkbench.provider.ExternalApiAudioResponse
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiException
@@ -92,6 +95,7 @@ class TaskWorker(
             is ImageOption -> processImage(taskId, task, job, option)
             is TextGenerateOption -> processText(taskId, task, job, option)
             is DecisionOption -> processDecision(taskId, task, job, option)
+            is AudioGenerateOption -> processAudio(taskId, task, job, option)
         }
     }
 
@@ -181,6 +185,68 @@ class TaskWorker(
         val callMark = TimeSource.Monotonic.markNow()
         val response = try {
             activeCalls(provider.name, job.model).record(Supplier { provider.generateText(job.model, request) })
+        } catch (e: ExternalApiException) {
+            record(
+                ProviderCallMapper.failed(
+                    job, task, provider.name, request,
+                    callMark.elapsedMillis(), calledAt, e.message ?: CALL_FAILED, e.kind,
+                ),
+            )
+            throw e
+        }
+        record(ProviderCallMapper.succeeded(job, task, provider.name, request, callMark.elapsedMillis(), calledAt, response.usage))
+        return response
+    }
+
+    /**
+     * 글 한 편을 소리로 읽어 파일 하나로 남긴다. 참조를 받지 않아 입력을 준비하지 않는다.
+     *
+     * 보관이 상태 기록보다 먼저인 이유는 이미지 경로와 같다([store]).
+     */
+    private fun processAudio(taskId: Long, task: GenerationJobTask, job: GenerationJob, option: AudioGenerateOption) {
+        // 접수 때 확인했더라도 그 사이 설정이 바뀌어 Provider 가 사라졌을 수 있다.
+        val provider = providerRegistry.findAudio(job.model) ?: run {
+            stateWriter.fail(taskId, "다룰 수 있는 Provider 가 없다: ${job.model}", retryable = false)
+            return
+        }
+
+        log.info("task 를 처리한다. uuid={} jobUuid={} workspaceUuid={} model={} 시도={}", task.uuid, job.uuid, job.workspaceUuid, job.model, task.attemptCount)
+
+        val processMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            callAudio(job, task, provider, option)
+        } catch (e: ExternalApiException) {
+            failCall(taskId, e)
+            return
+        }
+
+        val stored = try {
+            storeAudio(job, response)
+        } catch (e: FileStorageException) {
+            stateWriter.fail(taskId, e.message ?: "결과를 보관하지 못했다", e.retryable)
+            return
+        }
+
+        stateWriter.succeed(taskId, listOf(stored))
+        log.info(
+            "task 처리를 완료했다. uuid={} 소요={}ms 길이={}초 파일={}",
+            task.uuid, processMark.elapsedMillis(), response.durationSeconds, stored.storageKey,
+        )
+    }
+
+    /** 글 경로의 [callText] 와 같은 순서다 — 벽시계로 시각을, 단조 시계로 길이를 재고, 실패한 호출도 적는다. */
+    private fun callAudio(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        provider: ExternalApiAudioProvider,
+        option: AudioGenerateOption,
+    ): ExternalApiAudioResponse {
+        val request = ProviderRequestMapper.from(option)
+
+        val calledAt = Instant.now()
+        val callMark = TimeSource.Monotonic.markNow()
+        val response = try {
+            activeCalls(provider.name, job.model).record(Supplier { provider.generateAudio(job.model, request) })
         } catch (e: ExternalApiException) {
             record(
                 ProviderCallMapper.failed(
@@ -410,17 +476,10 @@ class TaskWorker(
         job: GenerationJob,
         response: ExternalApiGenerateResponse,
     ): List<StoredFile> = response.result.map { result ->
-        // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
-        val digest = Sha256.of(result.image)
-        val key = BlobKey.of(
-            workspaceUuid = job.workspaceUuid,
-            digest = digest,
-            mimeType = result.metadata.mimeType,
-        ).value
-        write(key, result.image, result.metadata.mimeType)
+        val (sha256, key) = put(job, result.image, result.metadata.mimeType)
 
         StoredFile(
-            sha256 = digest.hex,
+            sha256 = sha256,
             storageKey = key,
             metadata = FileMetadata.Image(
                 width = result.metadata.width,
@@ -435,6 +494,30 @@ class TaskWorker(
                 providerId = result.providerId,
             ).takeIf { !it.isEmpty },
         )
+    }
+
+    /** 소리 한 편을 보관한다. 바이트는 받은 그대로다 — 내용 주소라 고치면 공개 식별자가 달라진다. */
+    private fun storeAudio(job: GenerationJob, response: ExternalApiAudioResponse): StoredFile {
+        val (sha256, key) = put(job, response.audio, response.mimeType)
+        return StoredFile(
+            sha256 = sha256,
+            storageKey = key,
+            metadata = FileMetadata.Audio(
+                durationSeconds = response.durationSeconds,
+                mimeType = response.mimeType,
+                fileSize = response.audio.size,
+            ),
+            providerInfo = ProviderInfo(providerId = response.providerId).takeIf { !it.isEmpty },
+        )
+    }
+
+    /** 바이트를 내용 주소에 쓰고 (공개 해시, 보관소 키) 를 돌려준다. */
+    private fun put(job: GenerationJob, content: ByteArray, mimeType: String): Pair<String, String> {
+        // 자리는 내용이 정한다 — 같은 바이트면 같은 키라 이 보관이 멱등하다. 다시 돌려도 고아가 안 생긴다.
+        val digest = Sha256.of(content)
+        val key = BlobKey.of(workspaceUuid = job.workspaceUuid, digest = digest, mimeType = mimeType).value
+        write(key, content, mimeType)
+        return digest.hex to key
     }
 
     private fun write(key: String, content: ByteArray, contentType: String) {

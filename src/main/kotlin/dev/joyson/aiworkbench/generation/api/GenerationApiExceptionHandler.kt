@@ -4,6 +4,7 @@ import dev.joyson.aiworkbench.generation.application.UnknownFileSourceException
 import dev.joyson.aiworkbench.generation.application.InvalidTemplateException
 import dev.joyson.aiworkbench.generation.application.UnsupportedEffortException
 import dev.joyson.aiworkbench.generation.application.UnsupportedModelException
+import dev.joyson.aiworkbench.generation.application.UnsupportedVoiceException
 import dev.joyson.aiworkbench.storage.FileStorageException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -46,6 +47,16 @@ class GenerationApiExceptionHandler {
             setProperty("model", e.model)
             setProperty("effort", e.effort)
             setProperty("availableEfforts", e.available)
+        }
+
+    /** 같은 모델로는 다시 보내도 같으므로 4xx 다. 받는 목소리를 함께 준다. */
+    @ExceptionHandler(UnsupportedVoiceException::class)
+    fun handleUnsupportedVoice(e: UnsupportedVoiceException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.message).apply {
+            title = "모르는 목소리"
+            setProperty("model", e.model)
+            setProperty("voice", e.voice)
+            setProperty("availableVoices", e.available)
         }
 
     /**

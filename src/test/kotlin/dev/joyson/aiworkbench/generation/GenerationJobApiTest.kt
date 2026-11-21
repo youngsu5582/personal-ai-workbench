@@ -64,7 +64,12 @@ class GenerationJobApiTest @Autowired constructor(
 
     @Test
     fun `작업 종류에 맞는 모델을 인증된 사용자에게 반환한다`() {
-        listOf("image-generate" to FAKE_MODEL, "text-generate" to FAKE_TEXT_MODEL, "decision" to FAKE_DECISION_MODEL)
+        listOf(
+            "image-generate" to FAKE_MODEL,
+            "text-generate" to FAKE_TEXT_MODEL,
+            "decision" to FAKE_DECISION_MODEL,
+            "audio-generate" to SharedTestConfig.FAKE_AUDIO_MODEL,
+        )
             .forEach { (type, model) ->
                 mockMvc.get("/api/models") {
                     header("Authorization", "Bearer $token")
@@ -230,6 +235,39 @@ class GenerationJobApiTest @Autowired constructor(
     fun `빈 instructions 는 400 이다`() {
         val option = """{"type":"text-generate","prompt":"요약해","instructions":" "}"""
         request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `읽기는 음성 모델로 접수되고 다른 종류의 모델은 400 이다`() {
+        val option = """{"type":"audio-generate","text":"동시성은 어떻게 막으셨나요?","voice":"Kore","style":"차분하게"}"""
+
+        request(body(1, option, model = SharedTestConfig.FAKE_AUDIO_MODEL)).andExpect { status { isAccepted() } }
+        request(body(1, option, model = FAKE_TEXT_MODEL)).andExpect { status { isBadRequest() } }
+        request(body(1, TEXT_OPTION, model = SharedTestConfig.FAKE_AUDIO_MODEL)).andExpect { status { isBadRequest() } }
+    }
+
+    /** 접수하면 Task 마다 부르기도 전에 같은 이유로 실패한다. effort 와 같이 무엇을 보내면 되는지와 함께 바로 돌려준다. */
+    @Test
+    fun `모르는 목소리는 400 이고 받는 목소리를 알려준다`() {
+        val option = """{"type":"audio-generate","text":"질문","voice":"kore"}"""
+
+        request(body(1, option, model = SharedTestConfig.FAKE_AUDIO_MODEL)).andExpect {
+            status { isBadRequest() }
+            jsonPath("$.voice") { value("kore") }
+            jsonPath("$.availableVoices[0]") { value(SharedTestConfig.FAKE_VOICE) }
+        }
+    }
+
+    @Test
+    fun `읽을 글이나 목소리가 비었거나 빈 말투를 보내면 400 이다`() {
+        listOf(
+            """{"type":"audio-generate","text":" ","voice":"Kore"}""",
+            """{"type":"audio-generate","text":"질문","voice":""}""",
+            """{"type":"audio-generate","text":"질문","voice":"Kore","style":" "}""",
+            """{"type":"audio-generate","voice":"Kore"}""",
+        ).forEach { option ->
+            request(body(1, option, model = SharedTestConfig.FAKE_AUDIO_MODEL)).andExpect { status { isBadRequest() } }
+        }
     }
 
     @Test

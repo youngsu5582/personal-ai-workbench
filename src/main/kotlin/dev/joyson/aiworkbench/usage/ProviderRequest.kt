@@ -26,6 +26,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo
     JsonSubTypes.Type(value = ImageRequest::class, name = "image"),
     JsonSubTypes.Type(value = TextRequest::class, name = "text"),
     JsonSubTypes.Type(value = DecisionRequest::class, name = "decision"),
+    JsonSubTypes.Type(value = AudioRequest::class, name = "audio"),
 )
 sealed interface ProviderRequest
 
@@ -89,4 +90,17 @@ data class TextRequest(
 data class DecisionRequest(
     val questions: Int,
     val images: Int = 0,
+) : ProviderRequest
+
+/**
+ * 글을 소리로 읽으라고 보냈다.
+ *
+ * 입력 글과 출력 소리가 모두 토큰이라 계산 근거는 `usageRaw` 에 있다. 여기 적는 것은 같은 모델의 호출을 가를 축이다 —
+ * 어떤 목소리였는지, 말투 지시를 함께 보냈는지(그만큼 입력 토큰이 는다).
+ *
+ * 읽은 글과 말투 본문은 적지 않는다. 사용자의 글이고, 원장은 돈의 기록이다.
+ */
+data class AudioRequest(
+    val voice: String,
+    val styled: Boolean = false,
 ) : ProviderRequest

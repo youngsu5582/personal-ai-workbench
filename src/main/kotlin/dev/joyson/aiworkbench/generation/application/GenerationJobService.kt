@@ -7,12 +7,14 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
 import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.fileSources
+import dev.joyson.aiworkbench.provider.ExternalApiAudioProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
@@ -132,7 +134,7 @@ class GenerationJobService(
 
     /**
      * 이 모델이 이 옵션을 다룰 수 있는지 본다. 종류를 못 하면 [UnsupportedModelException],
-     * 글의 effort 를 Provider 가 표현하지 못하면 [UnsupportedEffortException] 이다.
+     * 글의 effort 를 Provider 가 표현하지 못하면 [UnsupportedEffortException], 읽기의 목소리를 모르면 [UnsupportedVoiceException] 이다.
      *
      * 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
      * 템플릿이 기본 모델을 저장할 때도 같은 규칙으로 묻는다.
@@ -143,6 +145,8 @@ class GenerationJobService(
             is TextGenerateOption -> providerRegistry.findText(model)
                 ?.also { requireExpressibleEffort(it, model, option) } != null
             is DecisionOption -> providerRegistry.findDecision(model) != null
+            is AudioGenerateOption -> providerRegistry.findAudio(model)
+                ?.also { requireKnownVoice(it, model, option) } != null
         }
         if (!supported) throw UnsupportedModelException(model, providerRegistry.availableNames)
     }
@@ -163,6 +167,17 @@ class GenerationJobService(
             effort = effort.value,
             available = Effort.entries.filter { ProviderRequestMapper.effortOf(it) in efforts }.map { it.value },
         )
+    }
+
+    /**
+     * 이 모델이 이 목소리로 읽을 수 있는지 Provider 에게 묻는다. [requireExpressibleEffort] 와 같은 이유로 접수에서 막는다.
+     * 받는 이름을 정렬해 담는다 — 응답이 매번 같은 순서여야 받는 쪽이 비교할 수 있다.
+     */
+    private fun requireKnownVoice(provider: ExternalApiAudioProvider, model: String, option: AudioGenerateOption) {
+        val voices = provider.voices(model)
+        if (option.voice in voices) return
+
+        throw UnsupportedVoiceException(model = model, voice = option.voice, available = voices.sorted())
     }
 
     /**
@@ -192,6 +207,8 @@ class GenerationJobService(
     private fun acceptedTypes(option: GenerationOption, model: String): Set<String> = when (option) {
         is ImageOption, is DecisionOption -> IMAGE_TYPES
         is TextGenerateOption -> providerRegistry.findText(model)?.inputTypes(model).orEmpty()
+        // 참조를 받지 않는다. 볼 파일이 없어 이 집합은 쓰이지 않는다.
+        is AudioGenerateOption -> emptySet()
     }
 
     private companion object {

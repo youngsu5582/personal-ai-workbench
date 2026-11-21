@@ -27,6 +27,7 @@ class ModelController(private val registry: ProviderRegistry) {
                 GenerationJobType.IMAGE_GENERATE -> registry.imageModels
                 GenerationJobType.TEXT_GENERATE -> registry.textModels
                 GenerationJobType.DECISION -> registry.decisionModels
+                GenerationJobType.AUDIO_GENERATE -> registry.audioModels
             },
         )
     }

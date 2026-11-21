@@ -1,5 +1,8 @@
 package dev.joyson.aiworkbench
 
+import dev.joyson.aiworkbench.provider.ExternalApiAudioProvider
+import dev.joyson.aiworkbench.provider.ExternalApiAudioRequest
+import dev.joyson.aiworkbench.provider.ExternalApiAudioResponse
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
@@ -67,6 +70,16 @@ class SharedTestConfig {
             ExternalApiDecisionResponse(answers = emptyList())
     }
 
+    /** 읽기도 같은 이유로 하나 둔다. 목소리는 [FAKE_VOICE] 하나만 안다. */
+    @Bean
+    fun fakeAudioProvider(): ExternalApiAudioProvider = object : ExternalApiAudioProvider {
+        override val name = FAKE_PROVIDER
+        override val models = setOf(FAKE_AUDIO_MODEL)
+        override fun voices(model: String) = if (supports(model)) setOf(FAKE_VOICE) else emptySet()
+        override fun generateAudio(model: String, request: ExternalApiAudioRequest) =
+            ExternalApiAudioResponse(audio = byteArrayOf(1, 2, 3), mimeType = "audio/wav", durationSeconds = 1.0)
+    }
+
     /** 테스트가 실제 디스크에 파일을 남기지 않게 한다. */
     @Bean
     @Primary
@@ -98,5 +111,7 @@ class SharedTestConfig {
         /** [fakeTextProvider] 가 표현하지 못하는 effort. */
         val UNEXPRESSIBLE_EFFORT = ReasoningEffort.MAX
         const val FAKE_DECISION_MODEL = "fake-decision-model"
+        const val FAKE_AUDIO_MODEL = "fake-audio-model"
+        const val FAKE_VOICE = "Kore"
     }
 }

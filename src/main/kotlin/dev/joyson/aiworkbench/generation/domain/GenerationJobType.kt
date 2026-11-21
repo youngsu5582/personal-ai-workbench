@@ -8,4 +8,6 @@ enum class GenerationJobType(@get:JsonValue val value: String) {
     TEXT_GENERATE("text-generate"),
 
     DECISION("decision"),
+
+    AUDIO_GENERATE("audio-generate"),
 }
