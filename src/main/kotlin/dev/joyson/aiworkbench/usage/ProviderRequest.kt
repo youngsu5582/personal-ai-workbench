@@ -70,6 +70,12 @@ data class TextRequest(
      * 추론 토큰은 출력으로 과금돼 같은 모델에서도 이 값이 비용을 가른다. 비용 차이를 설명하는 축이라 적는다.
      */
     val effort: String? = null,
+
+    /**
+     * 함께 보낸 첨부 수. 같은 모델 · 같은 글이어도 파일이 입력 토큰을 크게 바꾸므로 비용 차이를 설명하는 축이다.
+     * 형식별 수는 적지 않는다 — 어느 입력이 얼마였는지는 `usageRaw` 가 말한다.
+     */
+    val attachments: Int = 0,
 ) : ProviderRequest
 
 /**

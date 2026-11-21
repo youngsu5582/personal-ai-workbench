@@ -105,6 +105,73 @@ class GeminiTextProviderLiveTest {
         assertTrue(response.usage?.raw?.containsKey("thoughtsTokenCount") == true, "thinking 칸이 없다: ${response.usage?.raw}")
     }
 
+    /** 오디오가 섞인 요청의 `usageMetadata` — `promptTokensDetails` 에 AUDIO 항목이 어떻게 오는지가 단가표 경로의 근거다. */
+    @Test
+    fun `오디오를 inlineData 로 보내면 usage 에 AUDIO 항목이 온다`() {
+        val wav = toneWav(seconds = 2)
+        val response = client.generateContent(
+            model,
+            GeminiGenerateContentRequest(
+                contents = listOf(
+                    GeminiContent(
+                        role = "user",
+                        parts = listOf(
+                            GeminiPart(text = "Describe this audio in one short sentence."),
+                            GeminiPart(inlineData = GeminiInlineData("audio/wav", java.util.Base64.getEncoder().encodeToString(wav))),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        record("live-gemini-audio-inline.json", response)
+    }
+
+    /** `fileData.fileUri` 가 File API 밖의 https 주소를 받는지. 받지 않으면 Gemini 는 늘 바이트로 보내야 한다. */
+    @Test
+    fun `fileUri 에 임의의 https 주소를 보내 본다`() {
+        val result = runCatching {
+            client.generateContent(
+                model,
+                GeminiGenerateContentRequest(
+                    contents = listOf(
+                        GeminiContent(
+                            role = "user",
+                            parts = listOf(
+                                GeminiPart(text = "What is in this image? One short sentence."),
+                                GeminiPart(fileData = GeminiFileData("image/png", "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png")),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        // 어느 쪽이든 결과를 남긴다 — 거절이 이 테스트가 알아내려는 답일 수 있다.
+        result.onSuccess { record("live-gemini-fileuri-https.json", it) }
+        result.onFailure { println("fileUri https 거절: $it"); Path.of("build/live-test/live-gemini-fileuri-https.json").createParentDirectories().writeText("REJECTED: $it") }
+    }
+
+    private val client: GeminiTextClient by lazy {
+        val httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
+        val factory = JdkClientHttpRequestFactory(httpClient).apply { setReadTimeout(Duration.ofMinutes(3)) }
+        GeminiTextClient(
+            RestClient.builder()
+                .baseUrl("https://generativelanguage.googleapis.com")
+                .defaultHeader(GeminiTextClient.API_KEY_HEADER, apiKey()!!)
+                .requestFactory(factory)
+                .build(),
+        )
+    }
+
+    private fun record(fileName: String, response: GeminiGenerateContentResponse) {
+        val text = response.candidates?.firstOrNull()?.content?.parts.orEmpty().mapNotNull { it.text }.joinToString("")
+        Path.of("build/live-test/$fileName").createParentDirectories().writeText(
+            JsonMapper.shared().writerWithDefaultPrettyPrinter().writeValueAsString(
+                mapOf("model" to model, "text" to text, "usage" to response.usageMetadata),
+            ),
+        )
+        println("model=$model usage=${response.usageMetadata} text=$text")
+    }
+
     private fun generate(request: ExternalApiTextRequest, fileName: String): ExternalApiTextResponse {
         val response = provider.generateText(model, request)
 
@@ -124,6 +191,18 @@ class GeminiTextProviderLiveTest {
     }
 
     companion object {
+        /** 16kHz 모노 16bit 440Hz 사인파. 헤더를 직접 쓴다 — 인코더 의존성 없이 유효한 WAV 면 된다. */
+        private fun toneWav(seconds: Int): ByteArray {
+            val rate = 16_000
+            val samples = rate * seconds
+            val buffer = java.nio.ByteBuffer.allocate(44 + samples * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            buffer.put("RIFF".toByteArray()).putInt(36 + samples * 2).put("WAVEfmt ".toByteArray())
+                .putInt(16).putShort(1).putShort(1).putInt(rate).putInt(rate * 2).putShort(2).putShort(16)
+                .put("data".toByteArray()).putInt(samples * 2)
+            repeat(samples) { buffer.putShort((8000 * kotlin.math.sin(2 * Math.PI * 440 * it / rate)).toInt().toShort()) }
+            return buffer.array()
+        }
+
         @JvmStatic
         fun apiKey(): String? =
             System.getenv("WORKBENCH_PROVIDER_GEMINI_API_KEY")

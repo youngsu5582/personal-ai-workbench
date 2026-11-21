@@ -58,16 +58,27 @@ object ProviderRequestMapper {
         )
     }
 
-    /** 형식 없는 글이면 스키마를 싣지 않는다 — 포트에서 스키마가 없다는 것이 곧 형식 없는 글이다. */
-    fun from(option: TextGenerateOption): ExternalApiTextRequest = ExternalApiTextRequest(
-        prompt = option.prompt,
-        instructions = option.instructions,
-        jsonSchema = when (val output = option.output) {
-            TextFormat.Text -> null
-            is TextFormat.JsonSchema -> output.schema
-        },
-        effort = option.effort?.let(::effortOf),
-    )
+    /**
+     * 형식 없는 글이면 스키마를 싣지 않는다 — 포트에서 스키마가 없다는 것이 곧 형식 없는 글이다.
+     *
+     * @param files [TextGenerateOption.attachments] 를 같은 순서로 준비한 것.
+     */
+    fun from(option: TextGenerateOption, files: List<ResolvedFile> = emptyList()): ExternalApiTextRequest {
+        // 여기서 걸리면 우리 코드의 버그다. 첨부가 빠진 채 보내면 글만 만들어지고 과금된다.
+        require(files.size == option.attachments.size) {
+            "읽어 넘긴 첨부 수가 옵션과 다르다: 첨부 ${option.attachments.size}개, 넘긴 것 ${files.size}개"
+        }
+        return ExternalApiTextRequest(
+            prompt = option.prompt,
+            instructions = option.instructions,
+            jsonSchema = when (val output = option.output) {
+                TextFormat.Text -> null
+                is TextFormat.JsonSchema -> output.schema
+            },
+            effort = option.effort?.let(::effortOf),
+            files = files.map { inputOf(it) },
+        )
+    }
 
     /**
      * 근거를 받은 순서대로 옮긴다. 이미지 근거는 [images] 에서 같은 순서로 하나씩 꺼낸다.

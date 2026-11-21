@@ -21,6 +21,14 @@ data class ExternalApiTextRequest(
      * 생각한 만큼이 출력 토큰으로 과금되므로 비용과 지연을 가장 크게 바꾸는 값이다.
      */
     val effort: ReasoningEffort? = null,
+
+    /**
+     * 모델이 함께 읽을 파일. 순서가 곧 읽는 순서다. 비어 있으면 글만으로 만든다.
+     *
+     * 어떤 형식을 실을 수 있는지는 어댑터가 밝힌다([ExternalApiTextProvider.inputTypes]).
+     * 접수가 그 형식을 걸러서 보내므로, 어댑터가 모르는 형식을 받았다면 걸러진 뒤 설정이 바뀐 것이다.
+     */
+    val files: List<ExternalApiFileInput> = emptyList(),
 ) {
     init {
         require(prompt.isNotBlank()) { "prompt 는 비어 있을 수 없다" }
