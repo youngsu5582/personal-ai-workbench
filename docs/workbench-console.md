@@ -29,6 +29,7 @@ npm run test:browser
 - 빌드는 타입을 확인하고 배포할 프론트 파일을 만든다.
 - 의존성 검사는 공통 코드에서 기능 코드를 참조하는 경우와 순환 참조를 거절한다. 예를 들어 작업실 화면이 공통 이미지 컴포넌트를 사용하는 것은 가능하지만, 공통 이미지 컴포넌트가 작업실 화면을 참조하는 것은 불가능하다.
 - 규칙 테스트는 잘못된 참조와 순환 참조를 임시 예제로 만들어 검사기가 실제로 거절하는지 확인한다.
+- 브라우저 저장소는 [저장소 모듈](../frontend/src/shared/browser-storage.ts)만 부른다. 키는 그 파일의 목록 한 곳에서 정하고, 다른 파일에서 저장소를 직접 부르면 [저장소 검사](../frontend/architecture-tests/browser-storage.test.mjs)가 거절한다.
 
 현재 규칙의 정본은 [의존성 설정](../frontend/.dependency-cruiser.cjs)이고, 위반 예제는 [구조 규칙 테스트](../frontend/architecture-tests/rules.test.mjs)에 있다. 현재 규칙은 기능 간 참조 전체를 금지하지 않는다.
 

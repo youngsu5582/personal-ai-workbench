@@ -25,6 +25,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
+import { browserStorage } from "./shared/browser-storage";
 import { Avatar } from "./shared/ui/avatar";
 import { Button } from "./shared/ui/button";
 import { cn } from "./shared/ui/cn";
@@ -50,7 +51,7 @@ const sections: { id: Page; title: string; icon: typeof Sparkles }[] = [
 function App() {
   const [page, setPage] = useState<Page>("home");
   const [dark, setDark] = useState(
-    () => localStorage.getItem("workbench-theme") === "dark",
+    () => browserStorage.get("theme") === "dark",
   );
   const [menu, setMenu] = useState(false);
   const [token, setToken] = useState("");
@@ -73,7 +74,7 @@ function App() {
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("workbench-theme", dark ? "dark" : "light");
+    browserStorage.set("theme", dark ? "dark" : "light");
   }, [dark]);
   const go = (next: Page, jobId?: string) => {
     setSelectedJob(next === "jobs" ? jobId ?? null : null);
