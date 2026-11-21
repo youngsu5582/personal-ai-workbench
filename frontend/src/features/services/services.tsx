@@ -21,7 +21,32 @@ function ServiceAvatar({
   return <Avatar label={service?.name?.trim() || "서비스"} seed={service?.uuid || "default"} size={size === "large" ? "lg" : "md"} />;
 }
 
-/** 사이드바의 서비스 전환. 고른 서비스가 목록에 없으면(삭제 · 첫 진입) 기본 서비스로 옮긴다. */
+const lastServiceKey = "workbench-last-service";
+
+/**
+ * 처음 여는 서비스는 화면 취향이라 브라우저에만 둔다. 기기 사이에는 맞추지 않는다.
+ * 저장된 값은 내 서비스 목록과 대조한 뒤에만 쓰므로, 다른 계정의 값이 남아 있어도 열리지 않는다.
+ */
+function lastService(): string | null {
+  try {
+    return localStorage.getItem(lastServiceKey);
+  } catch {
+    return null;
+  }
+}
+
+function rememberService(uuid: string) {
+  try {
+    localStorage.setItem(lastServiceKey, uuid);
+  } catch {
+    // 저장소를 못 쓰는 브라우저에서도 고른 서비스는 그대로 쓴다. 다음 진입이 기본 서비스로 열릴 뿐이다.
+  }
+}
+
+/**
+ * 사이드바의 서비스 전환. 고른 서비스가 목록에 없으면(첫 진입 · 삭제)
+ * 이 브라우저에서 마지막으로 고른 서비스, 그것도 없으면 기본 서비스로 옮긴다.
+ */
 export function ServicePicker({
   token,
   selected,
@@ -36,8 +61,13 @@ export function ServicePicker({
     [token],
   );
   useEffect(() => {
-    if (value?.length && !value.some((s) => s.uuid === selected))
-      onSelect((value.find((s) => s.isDefault) || value[0]).uuid);
+    if (!value?.length) return;
+    if (value.some((s) => s.uuid === selected)) {
+      rememberService(selected);
+      return;
+    }
+    const last = lastService();
+    onSelect((value.find((s) => s.uuid === last) || value.find((s) => s.isDefault) || value[0]).uuid);
   }, [value, selected, onSelect]);
   const current = value?.find((s) => s.uuid === selected);
   return (
