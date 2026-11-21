@@ -282,6 +282,23 @@ class GeminiTextProviderTest {
         }
     }
 
+    /** 실제 응답의 문구다(live 로 확인). 상태 코드는 400 과 404 가 모두 온다 — 그래서 문구로 가른다. */
+    @Test
+    fun `주소를 받아가지 못한 4xx 는 바이트로 다시 보낼 수 있도록 따로 가른다`() {
+        for (status in listOf(HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND)) {
+            server.reset()
+            server.expect(requestTo(URL)).andRespond(
+                withStatus(status)
+                    .body("""{"error":{"code":${status.value()},"message":"Cannot fetch content from the provided URL. The URL could not be found.","status":"X"}}""")
+                    .contentType(MediaType.APPLICATION_JSON),
+            )
+
+            val ex = assertFailsWith<ExternalApiException> { provider.generateText(MODEL, ExternalApiTextRequest("질문")) }
+
+            assertEquals(FailureKind.INPUT_UNREACHABLE, ex.kind, status.toString())
+        }
+    }
+
     @Test
     fun `모르는 모델은 보내기 전에 거절한다`() {
         val ex = assertFailsWith<ExternalApiException> { provider.generateText("gemini-3.1-flash-image", ExternalApiTextRequest("질문")) }

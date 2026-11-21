@@ -1,5 +1,7 @@
 package dev.joyson.aiworkbench.provider.gemini
 
+import dev.joyson.aiworkbench.provider.ExternalApiException
+import dev.joyson.aiworkbench.provider.ExternalApiFileInput
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextResponse
 import dev.joyson.aiworkbench.provider.ReasoningEffort
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.condition.EnabledIf
 import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.web.client.RestClient
 import tools.jackson.databind.json.JsonMapper
+import dev.joyson.aiworkbench.upload.domain.FileContentType
 import java.net.http.HttpClient
 import java.nio.file.Path
 import java.time.Duration
@@ -148,6 +151,61 @@ class GeminiTextProviderLiveTest {
         // 어느 쪽이든 결과를 남긴다 — 거절이 이 테스트가 알아내려는 답일 수 있다.
         result.onSuccess { record("live-gemini-fileuri-https.json", it) }
         result.onFailure { println("fileUri https 거절: $it"); Path.of("build/live-test/live-gemini-fileuri-https.json").createParentDirectories().writeText("REJECTED: $it") }
+    }
+
+    /**
+     * Gemini 가 받아가지 못하는 주소를 받으면 어떤 오류가 오는지 남긴다 — 바이트로 다시 보낼지 가르는 근거다([GeminiFailures.kindOf]).
+     * 닿지 않는 이름과 접근이 거절되는 주소(만료된 서명 주소와 같은 모양) 둘을 본다.
+     */
+    @Test
+    fun `받아가지 못하는 주소의 오류 모양을 남긴다`() {
+        val urls = mapOf(
+            "unresolvable" to "https://this-host-does-not-exist.invalid/a.png",
+            "forbidden" to "https://storage.googleapis.com/gemini-private-test-does-not-exist/a.png",
+        )
+        val report = urls.map { (label, url) ->
+            val error = runCatching {
+                provider.generateText(
+                    model,
+                    ExternalApiTextRequest(
+                        "What is in this image?",
+                        files = listOf(ExternalApiFileInput.Url(java.net.URI.create(url), "image/png", "a.png")),
+                    ),
+                )
+            }.exceptionOrNull()
+            "$label: ${error?.let { "${(it as? ExternalApiException)?.kind} ${it.message}" } ?: "받아 갔다"}"
+        }
+        Path.of("build/live-test/live-gemini-unreachable-url.txt").createParentDirectories().writeText(report.joinToString("\n"))
+        println(report.joinToString("\n"))
+    }
+
+    /**
+     * `GEMINI_LIVE_AUDIO` 로 준 파일을 어댑터 경로 그대로 보내 받아 쓰게 한다. 형식은 접수와 같은 판별로 정한다 —
+     * 실제 업로드가 선언할 MIME 을 Gemini 가 받는지 본다. 파일이 없으면 건너뛴다.
+     * 한국어 음성 · m4a 같은 실제 녹음으로 돌려야 의미가 있다.
+     */
+    @Test
+    fun `준 오디오 파일을 받아 쓴다`() {
+        val path = System.getenv("GEMINI_LIVE_AUDIO") ?: return
+        val bytes = Path.of(path).toFile().readBytes()
+        val mime = requireNotNull(FileContentType.detect(bytes.copyOf(FileContentType.SIGNATURE_LENGTH))) { "업로드가 받는 형식이 아니다: $path" }
+
+        val response = provider.generateText(
+            model,
+            ExternalApiTextRequest(
+                prompt = "Transcribe this audio exactly as spoken. Output only the transcript.",
+                files = listOf(ExternalApiFileInput.Bytes(bytes, mime, Path.of(path).fileName.toString())),
+            ),
+        )
+
+        Path.of("build/live-test/live-gemini-audio-transcript.json").createParentDirectories().writeText(
+            JsonMapper.shared().writerWithDefaultPrettyPrinter().writeValueAsString(
+                mapOf("model" to model, "mime" to mime, "text" to response.text, "usage" to response.usage?.raw),
+            ),
+        )
+        println("mime=$mime usage=${response.usage?.raw} text=${response.text}")
+        assertEquals(StopReason.COMPLETED, response.stopReason)
+        assertTrue(response.text.isNotBlank())
     }
 
     private val client: GeminiTextClient by lazy {
