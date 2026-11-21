@@ -6,16 +6,19 @@ import com.nimbusds.jose.jwk.source.JWKSource
 import com.nimbusds.jose.proc.SecurityContext
 import dev.joyson.aiworkbench.authserver.AuthorizationServerPaths
 import dev.joyson.aiworkbench.authserver.AuthserverProperties
+import dev.joyson.aiworkbench.authserver.authorization.JdbcAuthorizationService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.JdbcOperations
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.crypto.factory.PasswordEncoderFactories
 import org.springframework.security.oauth2.core.AuthorizationGrantType
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod
 import org.springframework.security.oauth2.core.OAuth2Token
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationServerMetadata
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationServerMetadataClaimNames
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType
@@ -120,6 +123,11 @@ class AuthorizationServerConfig {
             .build()
         return InMemoryRegisteredClientRepository(console)
     }
+
+    /** 발급한 인가를 DB 에 둔다. 재기동해도 남는다. 무엇을 어떻게 두는지는 [JdbcAuthorizationService]. */
+    @Bean
+    fun oAuth2AuthorizationService(jdbc: JdbcOperations, registeredClients: RegisteredClientRepository): OAuth2AuthorizationService =
+        JdbcAuthorizationService(jdbc, registeredClients)
 
     /**
      * 메타데이터가 내주기로 한 것만 알리게 한다.
