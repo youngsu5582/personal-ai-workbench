@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.provider
 
 /**
- * 소리로 읽을 글 한 편.
+ * TTS 로 음성을 만들 글 한 편.
  *
  * 글의 길이 상한은 여기서 보지 않는다. 모델마다 다르고, 넘으면 저쪽이 4xx 로 거절한다.
  */
@@ -16,7 +16,7 @@ data class ExternalApiAudioRequest(
     val style: String? = null,
 ) {
     init {
-        require(text.isNotBlank()) { "읽을 글이 비어 있다" }
+        require(text.isNotBlank()) { "음성으로 만들 글이 비어 있다" }
         require(voice.isNotBlank()) { "목소리가 비어 있다" }
     }
 }

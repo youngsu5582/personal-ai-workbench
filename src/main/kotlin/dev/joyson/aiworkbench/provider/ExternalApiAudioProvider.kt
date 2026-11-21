@@ -1,7 +1,7 @@
 package dev.joyson.aiworkbench.provider
 
 /**
- * 글을 소리로 읽는 외부 API 한 곳을 감싸는 어댑터.
+ * TTS(글 → 음성) 외부 API 한 곳을 감싸는 어댑터.
  *
  * 이미지 · 텍스트 · 판정 포트와 나눠 둔 이유는 같다 — 음성 모델은 이미지도 글도 만들지 않는다.
  * 포트가 갈려 있어야 찾는 일 자체가 종류를 묻는다.
@@ -20,7 +20,7 @@ interface ExternalApiAudioProvider {
     fun supports(model: String): Boolean = model in models
 
     /**
-     * 이 모델이 읽을 수 있는 목소리 이름. 여기 없는 목소리는 부르지 않고 거절한다. 모르는 모델이면 빈 집합이다.
+     * 이 모델이 쓸 수 있는 목소리 이름. 여기 없는 목소리는 부르지 않고 거절한다. 모르는 모델이면 빈 집합이다.
      *
      * 이름 목록의 정본은 어댑터다. 저쪽이 목록을 조회하는 API 를 주지 않아 저쪽 문서를 옮겨 적는다.
      * 기본값을 두지 않는 이유는 [ExternalApiTextProvider.efforts] 와 같다 — 어댑터를 더할 때마다 이 질문에 답하게 한다.

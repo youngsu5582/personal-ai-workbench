@@ -40,7 +40,7 @@ class ProviderRegistry(
     /** 이 모델로 판정할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
     fun findDecision(model: String): ExternalApiDecisionProvider? = decisionProviders.firstOrNull { it.supports(model) }
 
-    /** 이 모델로 글을 소리로 읽을 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
+    /** 이 모델로 TTS 를 할 수 있는 어댑터. 없으면 `null`. [findText] 와 같은 이유로 따로 묻는다. */
     fun findAudio(model: String): ExternalApiAudioProvider? = audioProviders.firstOrNull { it.supports(model) }
 
     /** 모델 이름이 겹치면 실제 호출과 같이 첫 번째 어댑터만 반환한다. */

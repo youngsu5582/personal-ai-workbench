@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import java.util.Base64
 
 /**
- * 표준 읽기 요청을 Gemini Interactions 의 어휘로 옮기는 어댑터.
+ * 표준 TTS 요청을 Gemini Interactions 의 어휘로 옮기는 어댑터.
  *
  * 하는 일은 글 어댑터([GeminiTextProvider])와 같은 갈래다 — 모델 확인, 요청 번역, 실패 번역([GeminiFailures]),
  * 사용량을 해석하지 않고 싣기. 더해서 받은 소리의 길이를 바이트에서 읽는다.

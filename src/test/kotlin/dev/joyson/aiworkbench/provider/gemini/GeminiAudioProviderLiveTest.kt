@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
  *
  * ```
  * GEMINI_LIVE=1 ./gradlew test --tests '*GeminiAudioProviderLiveTest*'
- * GEMINI_LIVE=1 GEMINI_TTS_MODEL=gemini-3.8-flash-lite-tts ./gradlew test --tests '*GeminiAudioProviderLiveTest.글을*'
+ * GEMINI_LIVE=1 GEMINI_TTS_MODEL=gemini-3.8-flash-lite-tts ./gradlew test --tests '*GeminiAudioProviderLiveTest.TTS*'
  * ```
  *
  * 문서로만 아는 것을 확인한다 — 단계 목록 · 주석 · `mime_type` 의 표기, 응답에서 소리가 있는 자리,
@@ -54,7 +54,7 @@ class GeminiAudioProviderLiveTest {
     private val question = "그 쿠폰 발급 로직에서 동시성 문제는 어떻게 막으셨나요? Redis 분산 락과 비교해서 설명해 주세요."
 
     @Test
-    fun `글을 소리로 읽고 길이는 출력 토큰과 맞는다`() {
+    fun `TTS 결과의 길이는 출력 토큰과 맞는다`() {
         val response = generate(ExternalApiAudioRequest(text = question, voice = "Kore"), "plain")
 
         assertEquals("audio/wav", response.mimeType)
