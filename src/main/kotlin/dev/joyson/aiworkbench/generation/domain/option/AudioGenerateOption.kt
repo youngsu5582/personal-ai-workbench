@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 
 /**
- * 글을 소리로 읽는다. 결과물은 오디오 파일 하나다.
+ * 글을 음성으로 바꾼다(TTS). 결과물은 오디오 파일 하나다.
  *
  * [TextGenerateOption] 의 `prompt` 와 이름을 나누는 이유는 [text] 가 지시가 아니라 **그대로 읽히는 글**이라서다.
  * 말투를 글 속에 쓰면 그 지시까지 소리 내어 읽히므로 [style] 로 따로 받는다.

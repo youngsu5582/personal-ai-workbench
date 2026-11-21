@@ -110,7 +110,7 @@ object ProviderCallMapper {
     ): RecordProviderCallCommand = base(job, task, providerName, decisionRequestOf(request), latencyMs, calledAt)
         .failedWith(failureReason, failureKind)
 
-    /** 읽기 호출. 소리를 받았으면 성공한 호출이다 — 글과 같은 이유다. */
+    /** TTS 호출. 소리를 받았으면 성공한 호출이다 — 글과 같은 이유다. */
     fun succeeded(
         job: GenerationJob,
         task: GenerationJobTask,

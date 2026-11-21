@@ -70,7 +70,7 @@ class SharedTestConfig {
             ExternalApiDecisionResponse(answers = emptyList())
     }
 
-    /** 읽기도 같은 이유로 하나 둔다. 목소리는 [FAKE_VOICE] 하나만 안다. */
+    /** TTS 도 같은 이유로 하나 둔다. 목소리는 [FAKE_VOICE] 하나만 안다. */
     @Bean
     fun fakeAudioProvider(): ExternalApiAudioProvider = object : ExternalApiAudioProvider {
         override val name = FAKE_PROVIDER

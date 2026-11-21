@@ -9,7 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * 읽기 옵션의 저장 표기를 고정한다. [TextGenerateOptionTest] 와 같은 이유로 애플리케이션이 구성한 매퍼를 쓴다.
+ * TTS 옵션의 저장 표기를 고정한다. [TextGenerateOptionTest] 와 같은 이유로 애플리케이션이 구성한 매퍼를 쓴다.
  *
  * 여기 적힌 JSON 문자열이 곧 DB 계약이다. 바꾸려면 기존 행을 고쳐야 한다.
  */

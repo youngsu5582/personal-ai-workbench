@@ -102,7 +102,7 @@ private fun DecisionQuestion.mapText(transform: (String) -> String): DecisionQue
  * 실행 때 [count] 장의 이미지를 더 받을 수 있는가.
  *
  * 이미지 생성은 고정 참조와 입력을 합쳐 [ImageOption.MAX_SOURCES] 장까지다. 글 생성은 이미지를 받지 않는다.
- * 판정은 근거 수에 상한이 없다. 읽기는 이미지를 받지 않는다.
+ * 판정은 근거 수에 상한이 없다. TTS 는 이미지를 받지 않는다.
  */
 private fun GenerationOption.acceptsInputImages(count: Int): Boolean = count >= 0 && when (this) {
     is TextGenerateOption -> count == 0
@@ -114,12 +114,12 @@ private fun GenerationOption.acceptsInputImages(count: Int): Boolean = count >= 
 /**
  * 실행 때 받은 이미지를 옵션에 붙인다. 이미지 생성은 참조 뒤에, 판정은 근거 뒤에 둔다.
  *
- * 글 생성 · 읽기에 이미지를 주면 [IllegalArgumentException] 이다. 받을 자리가 없는데 조용히 버리면
+ * 글 생성 · TTS 에 이미지를 주면 [IllegalArgumentException] 이다. 받을 자리가 없는데 조용히 버리면
  * 사용자는 이미지가 쓰였다고 믿는다.
  */
 private fun GenerationOption.withInputImages(images: List<FileSource>): GenerationOption = when (this) {
     is TextGenerateOption -> apply { require(images.isEmpty()) { "글 생성은 입력 이미지를 받지 않는다" } }
     is ImageOption -> copy(sources = sources + images)
     is DecisionOption -> copy(input = input + images.map { DecisionEvidence.Image(it) })
-    is AudioGenerateOption -> apply { require(images.isEmpty()) { "읽기는 입력 이미지를 받지 않는다" } }
+    is AudioGenerateOption -> apply { require(images.isEmpty()) { "TTS 는 입력 이미지를 받지 않는다" } }
 }

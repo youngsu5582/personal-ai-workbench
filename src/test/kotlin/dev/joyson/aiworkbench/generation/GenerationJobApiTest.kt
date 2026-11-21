@@ -238,7 +238,7 @@ class GenerationJobApiTest @Autowired constructor(
     }
 
     @Test
-    fun `읽기는 음성 모델로 접수되고 다른 종류의 모델은 400 이다`() {
+    fun `TTS 는 음성 모델로 접수되고 다른 종류의 모델은 400 이다`() {
         val option = """{"type":"audio-generate","text":"동시성은 어떻게 막으셨나요?","voice":"Kore","style":"차분하게"}"""
 
         request(body(1, option, model = SharedTestConfig.FAKE_AUDIO_MODEL)).andExpect { status { isAccepted() } }
@@ -259,7 +259,7 @@ class GenerationJobApiTest @Autowired constructor(
     }
 
     @Test
-    fun `읽을 글이나 목소리가 비었거나 빈 말투를 보내면 400 이다`() {
+    fun `글이나 목소리가 비었거나 빈 말투를 보내면 400 이다`() {
         listOf(
             """{"type":"audio-generate","text":" ","voice":"Kore"}""",
             """{"type":"audio-generate","text":"질문","voice":""}""",

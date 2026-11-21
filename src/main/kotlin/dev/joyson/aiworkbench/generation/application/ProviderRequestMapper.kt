@@ -82,7 +82,7 @@ object ProviderRequestMapper {
         )
     }
 
-    /** 읽기는 참조를 받지 않아 준비할 파일이 없다. */
+    /** TTS 는 참조를 받지 않아 준비할 파일이 없다. */
     fun from(option: AudioGenerateOption): ExternalApiAudioRequest = ExternalApiAudioRequest(
         text = option.text,
         voice = option.voice,

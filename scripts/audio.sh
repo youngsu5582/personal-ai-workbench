@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 글을 소리로 읽는 요청을 보낸다.
+# TTS(글 → 음성) 요청을 보낸다.
 #
 #   ./scripts/audio.sh "동시성 문제는 어떻게 막으셨나요?"
 #   ./scripts/audio.sh "질문" Puck                              # 목소리 지정

@@ -1239,7 +1239,7 @@ class TaskWorkerTest @Autowired constructor(
     )
 
     @Test
-    fun `읽으면 소리 파일 하나가 길이와 함께 남고 Job 이 닫힌다`() {
+    fun `TTS 가 끝나면 오디오 파일 하나가 길이와 함께 남고 Job 이 닫힌다`() {
         val (job, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore", style = "차분하게"))
         var sent: ExternalApiAudioRequest? = null
 
@@ -1256,7 +1256,7 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     @Test
-    fun `읽기 호출의 지출은 목소리 · 말투 여부와 사용량으로 적힌다`() {
+    fun `TTS 호출의 지출은 목소리 · 말투 여부와 사용량으로 적힌다`() {
         val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
 
         audioWorker { spoken() }.process(task.id!!)
@@ -1283,7 +1283,7 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     @Test
-    fun `한도에 걸린 읽기는 큐로 돌아간다`() {
+    fun `한도에 걸린 TTS 는 큐로 돌아간다`() {
         val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
 
         audioWorker { throw ExternalApiException(FailureKind.THROTTLED, "429") }.process(task.id!!)
@@ -1293,7 +1293,7 @@ class TaskWorkerTest @Autowired constructor(
     }
 
     @Test
-    fun `읽을 Provider 가 사라졌으면 닫는다`() {
+    fun `TTS Provider 가 사라졌으면 닫는다`() {
         val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
 
         workerWith(provider { error("이미지 경로를 타면 안 된다") }).process(task.id!!)
