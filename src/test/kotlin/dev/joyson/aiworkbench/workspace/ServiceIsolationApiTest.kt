@@ -81,7 +81,7 @@ class ServiceIsolationApiTest @Autowired constructor(
         val task = tasks.findAllByJobIdOrderBySequence(requireNotNull(job.id)).single()
         storage.put("legacy-path", png, "image/png")
         files.saveAndFlush(GeneratedFile(sha256 = hash, taskId = requireNotNull(task.id), storageKey = "legacy-path",
-            metadata = FileMetadata(width = 1, height = 1, mimeType = "image/png", fileSize = png.size)))
+            metadata = FileMetadata.Image(width = 1, height = 1, mimeType = "image/png", fileSize = png.size)))
         mvc.get("/api/files/$hash") { header("Authorization", "Bearer $token") }.andExpect { status { isOk() } }
         mvc.get("/api/files/$hash") { header("Authorization", "Bearer $token"); header("X-Workspace-Id", b.toString()) }
             .andExpect { status { isNotFound() } }

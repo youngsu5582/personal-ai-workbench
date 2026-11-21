@@ -23,7 +23,7 @@ class GenerationJobViewsTest {
         sha256 = fileUuid,
         taskId = 1L,
         storageKey = "users/o/blobs/ab/cd/abcd.png",
-        metadata = FileMetadata(width = 1024, height = 1024, mimeType = "image/png", fileSize = 100),
+        metadata = FileMetadata.Image(width = 1024, height = 1024, mimeType = "image/png", fileSize = 100),
     )
 
     @Test

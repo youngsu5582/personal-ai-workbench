@@ -422,7 +422,7 @@ class TaskWorker(
         StoredFile(
             sha256 = digest.hex,
             storageKey = key,
-            metadata = FileMetadata(
+            metadata = FileMetadata.Image(
                 width = result.metadata.width,
                 height = result.metadata.height,
                 mimeType = result.metadata.mimeType,

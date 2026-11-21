@@ -241,7 +241,7 @@ class GenerationJobServiceTest @Autowired constructor(
                 sha256 = Sha256.of(UUID.randomUUID().toString().toByteArray()).hex,
                 taskId = task.id!!,
                 storageKey = "users/$ownerUuid/blobs/aa/bb/deadbeef.png",
-                metadata = FileMetadata(width = 1024, height = 1024, mimeType = "image/png", fileSize = 10),
+                metadata = FileMetadata.Image(width = 1024, height = 1024, mimeType = "image/png", fileSize = 10),
             ),
         ).sha256
     }

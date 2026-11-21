@@ -1,10 +1,12 @@
 package dev.joyson.aiworkbench.generation.api
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import dev.joyson.aiworkbench.generation.application.GeneratedFileView
 import dev.joyson.aiworkbench.generation.application.GenerationJobTaskView
 import dev.joyson.aiworkbench.generation.application.GenerationJobView
 import dev.joyson.aiworkbench.generation.application.InputFileView
 import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
+import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.generation.domain.JobLifecycle
@@ -117,10 +119,20 @@ data class FileResponse(
      * **수명이 짧다.** 캐시하거나 오래 들고 있으면 만료된다 — 그때는 [url] 을 쓴다.
      */
     val previewUrl: String?,
-    val width: Int,
-    val height: Int,
+    /**
+     * 이미지일 때만 있다. 종류에 없는 사실은 `null` 이 아니라 **칸째 빠진다** —
+     * `previewUrl` 의 `null` 은 "서명할 수 없다" 는 상태지만, 오디오의 가로·세로는 해당이 없는 것이다.
+     */
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    val width: Int? = null,
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    val height: Int? = null,
+    /** 이미지로 그릴지 오디오로 재생할지 가르는 근거다. [InputFileResponse.mimeType] 과 같다. */
     val mimeType: String,
     val fileSize: Int,
+    /** 오디오일 때만 있는 재생 길이(초). */
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    val durationSeconds: Double? = null,
 )
 
 fun GenerationJobView.toResponse(): GenerationJobDetailResponse {
@@ -167,12 +179,17 @@ private fun contentOf(content: String, format: TextFormat): JsonNode = when (for
     is TextFormat.JsonSchema -> JsonMapper.shared().readTree(content)
 }
 
-private fun GeneratedFileView.toResponse(): FileResponse = FileResponse(
-    sha256 = sha256,
-    url = GeneratedFileController.pathOf(sha256),
-    previewUrl = previewUrl,
-    width = metadata.width,
-    height = metadata.height,
-    mimeType = metadata.mimeType,
-    fileSize = metadata.fileSize,
-)
+private fun GeneratedFileView.toResponse(): FileResponse {
+    val common = FileResponse(
+        sha256 = sha256,
+        url = GeneratedFileController.pathOf(sha256),
+        previewUrl = previewUrl,
+        mimeType = metadata.mimeType,
+        fileSize = metadata.fileSize,
+    )
+    // 종류가 늘면 여기서 컴파일이 멈춘다 — 새 종류의 사실이 말없이 응답에서 빠지지 않게.
+    return when (val metadata = metadata) {
+        is FileMetadata.Image -> common.copy(width = metadata.width, height = metadata.height)
+        is FileMetadata.Audio -> common.copy(durationSeconds = metadata.durationSeconds)
+    }
+}
