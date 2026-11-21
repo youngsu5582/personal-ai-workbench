@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { Field } from "./ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "./ui/select";
 
-/** 읽기 모델은 받는 목소리를 함께 준다. 다른 종류에는 없다. */
+/** TTS 모델은 받는 목소리를 함께 준다. 다른 종류에는 없다. */
 export type Model = { id: string; provider: string; voices?: string[] };
 type Props = {
   id: string;

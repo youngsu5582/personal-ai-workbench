@@ -44,7 +44,7 @@ data class ModelsResponse(val models: List<ModelResponse>)
 data class ModelResponse(
     val id: String,
     val provider: String,
-    /** 읽기 모델이 받는 목소리. 다른 종류의 모델에는 칸째 없다 — 해당이 없는 것이지 모르는 것이 아니다. */
+    /** TTS 모델이 받는 목소리. 다른 종류의 모델에는 칸째 없다 — 해당이 없는 것이지 모르는 것이 아니다. */
     @field:JsonInclude(JsonInclude.Include.NON_NULL)
     val voices: List<String>? = null,
 )

@@ -87,7 +87,7 @@ class GenerationJobApiTest @Autowired constructor(
 
     /** 받는 목소리의 정본은 어댑터다. 받는 쪽이 따로 목록을 들지 않게 모델과 함께 주고, 다른 종류에는 칸이 없다. */
     @Test
-    fun `읽기 모델은 받는 목소리를 함께 준다`() {
+    fun `TTS 모델은 받는 목소리를 함께 준다`() {
         mockMvc.get("/api/models") {
             header("Authorization", "Bearer $token")
             param("type", "audio-generate")

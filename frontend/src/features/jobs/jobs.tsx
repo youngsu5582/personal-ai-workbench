@@ -26,13 +26,13 @@ function date(value: string) {
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString("ko-KR");
 }
 const sourceLabel: Record<string, string> = { generated: "생성한", uploaded: "올린" };
-/** 오디오면 이미지라고 부르지 않는다. 올린 파일도, 생성한 결과물(읽기)도 오디오일 수 있다. */
+/** 오디오면 이미지라고 부르지 않는다. 올린 파일도, 생성한 결과물(TTS)도 오디오일 수 있다. */
 const captionOf = (input: { source: { type: string }; mimeType: string | null }) => {
   const origin = sourceLabel[input.source.type];
   if (!origin) return input.source.type;
   return `${origin} ${input.mimeType?.startsWith("audio/") ? "오디오" : "이미지"}`;
 };
-/** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로, 읽기는 읽을 글로 대신한다. */
+/** 목록에서 요청을 알아볼 한 줄. 판정은 prompt 가 없어 질문으로, TTS 는 글로 대신한다. */
 function summary(job: Job) {
   if (job.option.prompt) return job.option.prompt;
   if (job.option.text) return job.option.text;

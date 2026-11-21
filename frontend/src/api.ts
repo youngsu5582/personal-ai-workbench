@@ -48,7 +48,7 @@ export type Job = {
     output?: { type: string; schema?: string };
     input?: DecisionEvidence[];
     questions?: { name: string; instructions: string }[];
-    /** 읽기(`audio-generate`)의 읽을 글 · 목소리 · 말투. */
+    /** TTS(`audio-generate`)의 글 · 목소리 · 말투. */
     text?: string;
     voice?: string;
     style?: string;
