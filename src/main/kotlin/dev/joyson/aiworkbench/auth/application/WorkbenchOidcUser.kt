@@ -11,10 +11,15 @@ import java.util.UUID
  *
  * domain 이 아니라 application 에 있는 이유: 이건 도메인 개념이 아니라
  * Spring Security 의 principal 타입을 감싼 것이다. domain 은 프레임워크를 몰라야 한다.
+ *
+ * 이름은 Google 의 subject 가 아니라 워크벤치 사용자 UUID 다. 인가 서버는 로그인한 주체의 이름을
+ * 토큰의 `sub` 로 쓰므로, 이름이 곧 밖으로 나가는 사용자 식별자다.
  */
 class WorkbenchOidcUser(
     private val delegate: OidcUser,
     val userId: Long,
     val userUuid: UUID,
     val workbenchDisplayName: String,
-) : OidcUser by delegate
+) : OidcUser by delegate {
+    override fun getName(): String = userUuid.toString()
+}

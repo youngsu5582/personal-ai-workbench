@@ -56,15 +56,37 @@ Status: active
 - 라이브러리가 기본으로 켜는 엔드포인트는 여섯이다 — 메타데이터 · JWKS · 인가 · 토큰 · 폐기 · 토큰 조회. 인가 요청 밀어 넣기(PAR) · 기기 인가 · 클라이언트 등록 · OpenID Connect 는 따로 설정해야 켜진다.
 - DPoP 는 메타데이터에서만 뺐다. 기능 자체를 끄는 방법은 찾지 못했다. 2단계에서 CLI · MCP 클라이언트를 받기 전에 정리한다.
 
-## PR 2 에서 주의할 것
+## PR 2 에서 정한 것
+
+- 콘솔 클라이언트의 `client_id` 는 `workbench-console`, 인증은 `client_secret_basic`, grant 는 `authorization_code` 뿐이다(리프레시는 PR 3). 기밀 클라이언트지만 PKCE 를 요구한다.
+- 콜백 주소는 `{발급자}/auth/session/callback` 이다. 로컬은 `http://localhost:8080/auth/session/callback`. 받는 엔드포인트는 PR 5 가 만든다 — 그때까지는 404 다.
+- 접근 토큰의 `sub` 는 워크벤치 사용자 UUID 다. `WorkbenchOidcUser` 의 이름을 UUID 로 바꿔, 인가 서버가 `auth` 모듈의 타입을 모른 채 그 이름을 쓴다.
+- `aud` 와 수명은 `workbench.auth.audience` · `workbench.auth.access-token-ttl` 을 가리킨다. 어느 쪽이 발급해도 토큰의 모양이 같다.
+- 서명 방식과 `kid` 는 따로 정하지 않는다. 라이브러리의 기본이 RS256 이고, 인코더가 서명 키의 `kid` 를 토큰 머리말에 넣는다.
+- 로그인 성공 처리(`OAuth2LoginSuccessHandler`)는 인가 엔드포인트로 가다가 온 로그인이면 그 요청으로 돌려보내고 세션을 남긴다. 그 밖에는 지금처럼 handoff 로 간다.
+  - `auth` 모듈은 인가 서버 라이브러리를 볼 수 없다. 인가 엔드포인트의 경로는 `authserver` 가 공개한 `AuthorizationServerPaths` 로 안다.
+  - Google 로그인(`OidcUserService` · 성공 처리)은 인가 서버의 로그인 단계라 `authserver` 쪽이 제자리다. handoff 가 없어지는 PR 6 에서 옮긴다. 그때 `user` 모듈의 포트는 `authserver` 가 선언한 인터페이스를 앱이 구현하는 방향으로 뒤집는다.
+- 콘솔 백엔드(PR 5)는 인가 서버의 클라이언트라 `authserver` 에도 `auth` 에도 넣지 않는다. 새 모듈로 만든다(이름 미정 — 제안 `console`).
+- 인가 서버의 발급 기록은 메모리에 있다(라이브러리 기본). 재기동하면 사라진다. PR 3 에서 DB 로 옮긴다.
+
+## PR 2 에서 드러난 것
+
+- 인가 서버는 GET 인가 요청의 파라미터를 쿼리 문자열에서만 읽는다. MockMvc 의 `param()` 은 쿼리 문자열을 만들지 않아 `response_type` 이 없다고 거절된다 — 테스트는 주소에 직접 싣는다.
+- `redirect_uri` 의 `localhost` 는 거절되지 않는다(Spring Security 7.1.1, 일회용 테스트로 확인).
+- 기존 토큰의 `name` 클레임(표시 이름)은 인가 서버가 발급한 토큰에 없다. 전환(PR 6) 전에 이 클레임을 읽는 곳이 있는지 본다.
+- 인가 흐름에서는 로그인 세션이 남는다. 세션이 살아 있는 동안에는 Google 을 다시 거치지 않고 인가 코드가 나온다.
+
+## PR 2 에서 주의했던 것 (해결)
 
 - `auth` 모듈의 `JwtEncoder` 빈(HS256)이 이미 있다. 인가 서버는 빈으로 등록된 `JwtEncoder` 를 찾아 토큰 서명에 쓰므로, 그대로 두면 접근 토큰이 HS256 으로 나간다. 토큰 인코더를 인가 서버가 직접 만들어야 한다.
 - 로그인하지 않은 사람이 인가 엔드포인트에 오면 Google 로그인으로 보내는 진입점이 인가 서버 체인에 없다.
 - 등록된 클라이언트가 없는 PR 1 의 메타데이터는 `authorization_code` 와 `client_secret_basic` 을 알린다. PR 2 가 등록하는 콘솔 클라이언트가 이 둘만 쓰게 한다.
+- 로그인하지 않은 요청을 Google 로그인으로 보내는 것은 인가 엔드포인트뿐이다. 나머지는 401 로 답한다.
 
 ## 배포 전에 할 것
 
 - 서명 키 파일을 홈서버 Secret 으로 만들어 파드에 파일로 붙이고, `AUTH_SIGNING_KEY` 에 그 위치를 적는다. 지금 배포 설정은 비밀을 환경변수로만 넣으므로 `deploy/` 에 파일을 붙이는 설정을 더해야 한다(인프라 변경 — 사용자 확인 뒤). 없으면 기동이 실패한다.
+- 홈서버 Secret(`runtime.env`)에 `AUTH_CONSOLE_CLIENT_SECRET` 을 넣는다. 없으면 기동이 실패한다.
 
 ## Progress
 
@@ -73,14 +95,17 @@ Status: active
 - [x] PR 1 준비 — 의존성 한 줄, 확인 스크립트 `scripts/oauth-metadata.sh`
 - [x] PR 1 구현 — `authserver` 모듈 뼈대 · RSA 서명 키 · 메타데이터 · JWKS
 - [x] PR 1 직접 확인 — 서버를 띄워 `./scripts/oauth-metadata.sh` 로 메타데이터와 공개키를 봤다 (2026-11-16). `response_types_supported` 는 `code` 뿐이고 `code_challenge_methods_supported` 는 `S256` 뿐이다. JWKS 에 `d` 는 없다
-- [ ] PR 1 커밋 · 푸시 · PR 열기
-- [ ] PR 2 ~ 6
+- [x] PR 1 머지 — #106, merge `b184ca0` (2026-11-21). Codex P1 한 건은 "plan 의 진행 목록은 세션 메모" 라는 이유로 반영하지 않고 답글을 남긴 뒤 resolve 했다
+- [x] PR 2 구현 — 콘솔 클라이언트 등록 · 접근 토큰 발급 · Google 로그인 뒤 인가 요청으로 복귀. 전체 테스트 통과 (2026-11-21)
+- [ ] PR 2 직접 확인 — `.env` 에 `AUTH_CONSOLE_CLIENT_SECRET` 을 넣고 서버를 다시 띄워 `./scripts/oauth-code.sh`
+- [ ] PR 3 ~ 6
+- [ ] `docs/roadmap.md` 의 "OAuth 인가 서버 … 구현은 아직" 을 PR 6(전환)에서 고친다 — 사용자가 보는 동작이 바뀌는 것은 그때다
 
 ## Resume Point
 
-PR 1 은 구현과 직접 확인이 끝났다. 워크트리 `authserver-metadata` (브랜치 `feat/authserver-metadata`, base `origin/main`).
-남은 것은 푸시와 PR 열기다. 그 뒤 PR 2(`feat/authserver-code-pkce`)를 이 브랜치 위에 쌓는다.
-PR 2 를 시작하기 전에 "PR 2 에서 주의할 것" 세 가지를 먼저 읽는다.
+PR 1 은 머지됐다(#106). PR 2 는 워크트리 `authserver-code-pkce` (브랜치 `feat/authserver-code-pkce`, base `main`)에서 구현이 끝났고 draft PR 로 열려 있다.
+영수님이 직접 확인할 차례다 — `.env` 에 `AUTH_CONSOLE_CLIENT_SECRET=$(openssl rand -base64 48)` 을 넣고 서버를 다시 띄운 뒤 `./scripts/oauth-code.sh`.
+확인한 뒤 PR 본문의 "내 말로 정리" 를 쓰고 ready 로 바꾼다(그때 Codex 리뷰가 돈다). PR 3 전에 숫자(리프레시 토큰 수명 · 겹침 시간)를 정해야 한다.
 
 ## Files
 
