@@ -13,6 +13,7 @@ class GeminiClientConfigTest {
     fun `키가 없으면 Provider 빈이 없다`() {
         runner.run { context ->
             assertThat(context).doesNotHaveBean(GeminiTextProvider::class.java)
+            assertThat(context).doesNotHaveBean(GeminiAudioProvider::class.java)
         }
     }
 
@@ -27,6 +28,7 @@ class GeminiClientConfigTest {
     fun `키가 있으면 Provider 빈이 생긴다`() {
         runner.withPropertyValues("workbench.provider.gemini.api-key=gm-test").run { context ->
             assertThat(context).hasSingleBean(GeminiTextProvider::class.java)
+            assertThat(context).hasSingleBean(GeminiAudioProvider::class.java)
         }
     }
 }

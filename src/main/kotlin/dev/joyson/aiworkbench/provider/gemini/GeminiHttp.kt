@@ -21,13 +21,14 @@ internal fun <T : Any> RestClient.RequestHeadersSpec<*>.readOrThrow(type: Class<
         } else {
             val raw = runCatching { response.bodyTo(String::class.java) }.getOrNull()
             val error = raw?.let {
-                // 실패 본문은 {"error": {"code": 429, "message": …, "status": "RESOURCE_EXHAUSTED"}} 다.
+                // generateContent 는 {"error": {"code": 429, "message": …, "status": "RESOURCE_EXHAUSTED"}},
+                // Interactions 는 {"error": {"code": "too_many_requests", "message": …}} 다.
                 runCatching { errorMapper.readValue(it, GeminiErrorEnvelope::class.java).error }.getOrNull()
             }
             throw GeminiException(
                 status = status,
                 detail = error?.message ?: raw?.take(500)?.ifBlank { null } ?: "본문이 비어 있다",
-                reason = error?.status,
+                reason = error?.status ?: error?.code?.takeUnless { it.all(Char::isDigit) },
             )
         }
     }
@@ -46,10 +47,15 @@ class GeminiException(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GeminiErrorEnvelope(val error: GeminiError? = null)
 
-/** `details` 에 재시도 시각 같은 것이 오지만 쓰지 않는다. 언제 다시 할지는 워커의 재시도 정책이 정한다. */
+/**
+ * `details` 에 재시도 시각 같은 것이 오지만 쓰지 않는다. 언제 다시 할지는 워커의 재시도 정책이 정한다.
+ *
+ * [code] 는 API 마다 다르다 — `generateContent` 는 상태 코드 숫자, Interactions 는 오류 이름(`too_many_requests`)이다.
+ * 둘 다 받으려고 문자열로 읽는다. 오류 이름은 Interactions 에서만 이 칸에 온다.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GeminiError(
-    val code: Int? = null,
+    val code: String? = null,
     val message: String? = null,
     val status: String? = null,
 )

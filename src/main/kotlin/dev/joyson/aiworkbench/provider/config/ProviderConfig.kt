@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.provider.config
 
 import dev.joyson.aiworkbench.StartupSummary
+import dev.joyson.aiworkbench.provider.ExternalApiAudioProvider
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
@@ -21,10 +22,12 @@ class ProviderConfig {
         providers: ObjectProvider<ExternalApiProvider>,
         textProviders: ObjectProvider<ExternalApiTextProvider>,
         decisionProviders: ObjectProvider<ExternalApiDecisionProvider>,
+        audioProviders: ObjectProvider<ExternalApiAudioProvider>,
     ): ProviderRegistry = ProviderRegistry(
         providers.orderedStream().toList(),
         textProviders.orderedStream().toList(),
         decisionProviders.orderedStream().toList(),
+        audioProviders.orderedStream().toList(),
     )
 
     /**
