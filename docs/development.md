@@ -409,6 +409,8 @@ Content-Type: application/json
 
 Gemini 모델은 `.env` 의 `WORKBENCH_PROVIDER_GEMINI_API_KEY` 가 있어야 나타난다. 공용 이름 `GEMINI_API_KEY` 는 읽지 않는다.
 키를 만든 프로젝트에 결제가 연결돼 있지 않으면 Free Tier 로 불리는데, 그때 입력과 출력은 Google 제품 개선에 쓰인다.
+결제를 연결한 프로젝트가 2026-10-26 이후에 만들어졌으면 Google 이 요청을 기본으로 로그에 남긴다(55일).
+`GeminiTextClient` 는 `store` 를 보내지 않으므로, 끄려면 AI Studio 의 프로젝트 Logs 설정에서 끈다.
 비용은 Free Tier 여도 유료 단가로 잡힌다 — 이 서비스 관점에선 토큰을 쓴 것이 맞다(`V20__gemini_text_prices.sql`).
 
 URL은 **Provider에서 접근할 수 있는 보관소 주소**여야 한다. 로컬 Garage의 `localhost:3900`은

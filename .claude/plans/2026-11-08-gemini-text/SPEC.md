@@ -44,7 +44,7 @@ D3 의 "밝힌다" 는 **API 의 어휘**까지다. 모델마다 받는 값이 �
 |---|---|---|
 | 문서상 위치 | legacy, "remains fully supported" | 새 프로젝트 권장 |
 | 멈춘 이유 | `finishReason` (STOP · MAX_TOKENS · SAFETY …) · `promptFeedback.blockReason` | `status: incomplete` 뿐, 이유 칸이 문서에 없다 |
-| 저장 | 저장하지 않는다 | 기본 저장 → `store: false` 를 꼭 보내야 한다 |
+| 저장 | 2026-10-26 이후 만든 **유료** 프로젝트는 기본 저장(로그 55일), 그 전 프로젝트 · Free Tier 는 저장하지 않는다. 요청의 `store` 가 프로젝트 설정보다 우선한다 | 기본 저장 → `store: false` 를 꼭 보내야 한다 |
 | 버전 헤더 | 없음 | 예제마다 `Api-Revision` 이 붙는데 필수인지 문서에 없다 |
 
 포트의 `StopReason` 을 채울 근거가 generateContent 에만 있다. 바꿀 일이 생기면 `GeminiTextClient` · DTO 안에서 끝난다.
@@ -135,3 +135,8 @@ db/migration/V20__gemini_text_prices.sql
 - Free Tier 키로 부른 호출을 0 달러로 볼지 → 대사 · 추적과 함께 정한다
 - Google 이 새 가격 변경을 발표한다 → 알려 주는 장치가 없다. 발표를 본 사람이 표를 닫고 새 표를 더하는 마이그레이션을 쓴다
 - 응답에 `finishReason` 이 없거나 우리가 모르는 값이 자주 온다 → INCOMPLETE WARN 로그로 본다
+- 결제를 연결한 키로 바꾼다 → 그 프로젝트가 2026-10-26 이후 것이면 요청이 Google 로그에 55일 남는다.
+  요청에 `store: false` 를 실을지(REST 위치는 live 로 확인), AI Studio 의 프로젝트 Logs 설정을 끌지 정한다.
+  지금 `store` 를 보내지 않는 이유는 Free Tier · 이전 프로젝트에선 효과가 없어서다
+- generateContent 종료가 공지되거나, Interactions 에만 있는 기능이 필요하거나, Interactions 가 멈춘 이유를 알려 주게 된다 → 옮긴다.
+  바뀌는 곳은 `GeminiTextClient` · DTO 안이다
