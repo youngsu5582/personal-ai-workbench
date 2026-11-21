@@ -57,6 +57,8 @@ authserver:
   # 접근 토큰의 aud 와 수명. 지금의 자체 토큰과 같은 값을 가리킨다 — 어느 쪽이 발급해도 API 가 받는 토큰의 모양이 같다.
   audience: "${workbench.auth.audience}"
   access-token-ttl: "${workbench.auth.access-token-ttl}"
+  # 리프레시 토큰은 쓸 때마다 새로 발급되어 수명이 다시 시작한다. 이 기간 동안 한 번도 쓰지 않으면 다시 로그인한다.
+  refresh-token-ttl: "${AUTH_REFRESH_TOKEN_TTL:14d}"
   console:
     # 콘솔 백엔드가 토큰 엔드포인트에 내는 비밀값. 기본값이 없다.
     client-secret: "${AUTH_CONSOLE_CLIENT_SECRET}"

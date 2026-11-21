@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.googleLogin
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultActionsDsl
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.web.util.UriComponentsBuilder
@@ -71,4 +72,18 @@ class ConsoleClient(private val mockMvc: MockMvc, private val properties: Authse
 
     /** 인가 요청부터 코드 교환까지. */
     fun login(): JsonNode = exchange(authorizationCode())
+
+    fun refresh(refreshToken: String): ResultActionsDsl = mockMvc.post("/oauth2/token") {
+        header("Authorization", basic())
+        contentType = MediaType.APPLICATION_FORM_URLENCODED
+        param("grant_type", "refresh_token")
+        param("refresh_token", refreshToken)
+    }
+
+    /** 갱신이 성공해야 하는 곳에서 쓴다. 응답의 JSON 을 돌려준다. */
+    fun refreshOk(refreshToken: String): JsonNode {
+        val response = refresh(refreshToken).andReturn().response
+        assertEquals(200, response.status, response.contentAsString)
+        return json.readTree(response.contentAsString)
+    }
 }
