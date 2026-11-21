@@ -60,6 +60,7 @@ spring:
 authserver:
   audience: "${workbench.auth.audience}"
   access-token-ttl: "${workbench.auth.access-token-ttl}"
+  refresh-token-ttl: 14d
   console:
     client-secret: "test-console-client-secret-at-least-32-chars"
     redirect-uri: "https://workbench.test/auth/session/callback"
