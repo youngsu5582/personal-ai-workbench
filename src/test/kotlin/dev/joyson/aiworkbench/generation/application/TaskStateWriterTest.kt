@@ -63,7 +63,7 @@ class TaskStateWriterTest @Autowired constructor(
         return job.id!! to tasks.mapNotNull { it.id }
     }
 
-    private fun metadata() = FileMetadata(1024, 1024, "image/png", 2048)
+    private fun metadata() = FileMetadata.Image(1024, 1024, "image/png", 2048)
 
     @Test
     fun `집어든 Task 는 RUNNING 이 되고 다시 집히지 않는다`() {

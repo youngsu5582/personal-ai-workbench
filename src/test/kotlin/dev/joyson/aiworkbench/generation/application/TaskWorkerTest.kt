@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import java.util.UUID
 import dev.joyson.aiworkbench.IntegrationTest
+import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
@@ -190,8 +191,9 @@ class TaskWorkerTest @Autowired constructor(
             file.storageKey,
         )
         assertContentEquals(image, storage.read(file.storageKey))
-        assertEquals(1024, file.metadata.width)
-        assertEquals(image.size, file.metadata.fileSize)
+        val metadata = assertIs<FileMetadata.Image>(file.metadata, "이미지 작업의 결과물은 이미지 메타로 적힌다")
+        assertEquals(1024, metadata.width)
+        assertEquals(image.size, metadata.fileSize)
 
         assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
         assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)

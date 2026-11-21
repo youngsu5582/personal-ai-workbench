@@ -60,7 +60,7 @@ class FileSourceResolverTest @Autowired constructor(
                 sha256 = sha256,
                 taskId = task.id!!,
                 storageKey = "users/$workspaceUuid/blobs/$sha256.png",
-                metadata = FileMetadata(width = 1024, height = 1024, mimeType = "image/png", fileSize = 4),
+                metadata = FileMetadata.Image(width = 1024, height = 1024, mimeType = "image/png", fileSize = 4),
             ),
         )
     }

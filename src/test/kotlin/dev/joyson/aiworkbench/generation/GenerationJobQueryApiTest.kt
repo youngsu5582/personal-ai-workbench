@@ -20,6 +20,8 @@ import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import org.hamcrest.Matchers.hasKey
+import org.hamcrest.Matchers.not
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -226,7 +228,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
                 sha256 = fileUuid,
                 taskId = tasks[0].id!!,
                 storageKey = key,
-                metadata = FileMetadata(width = 1024, height = 1024, mimeType = MIME, fileSize = bytes.size),
+                metadata = FileMetadata.Image(width = 1024, height = 1024, mimeType = MIME, fileSize = bytes.size),
             ),
         )
         fail(tasks[1], "rate limit")
@@ -265,6 +267,7 @@ class GenerationJobQueryApiTest @Autowired constructor(
             // "받는 쪽은 url 로 폴백해야 한다" 는 계약이다.
             jsonPath("$.tasks[0].files[0].previewUrl") { doesNotExist() }
             jsonPath("$.tasks[0].files[0].width") { value(1024) }
+            jsonPath("$.tasks[0].files[0]") { value(not(hasKey("durationSeconds"))) }
 
             // 실패한 자리가 목록에서 사라지지 않는다 — 이것이 파일만 평평하게 담지 않는 이유다.
             jsonPath("$.tasks[1].status") { value("FAILED") }
@@ -272,6 +275,38 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.tasks[1].files.length()") { value(0) }
             // 글 결과물은 null 이 아니라 빈 목록이다. "해당 없음" 과 "아직 없음" 을 가를 필요가 없다.
             jsonPath("$.tasks[0].texts.length()") { value(0) }
+        }
+    }
+
+    /**
+     * 결과물은 자기 종류의 사실만 싣는다. 응답은 작업 종류가 아니라 결과 행의 메타로 그린다.
+     *
+     * 가로·세로가 `null` 로 남으면 "서명할 수 없다" 는 뜻의 `previewUrl: null` 과 같은 모양이 되어
+     * 해당 없음과 모름이 섞인다. 그래서 값이 아니라 칸이 없는 것을 본다.
+     */
+    @Test
+    fun `오디오 결과물은 재생 길이를 주고 가로·세로 칸은 싣지 않는다`() {
+        val token = tokenOf("audio-file-owner")
+        val jobUuid = submit(token, taskCount = 1)
+        val job = jobRepository.findByUuid(UUID.fromString(jobUuid))!!
+        val task = taskRepository.findAllByJobIdOrderBySequence(job.id!!).single()
+        succeed(task)
+        fileRepository.save(
+            GeneratedFile(
+                sha256 = Sha256.of("소리".toByteArray()).hex,
+                taskId = task.id!!,
+                storageKey = "audio-key",
+                metadata = FileMetadata.Audio(durationSeconds = 8.48, mimeType = "audio/wav", fileSize = 414_764),
+            ),
+        )
+
+        query(jobUuid, token).andExpect {
+            status { isOk() }
+            jsonPath("$.tasks[0].files[0].mimeType") { value("audio/wav") }
+            jsonPath("$.tasks[0].files[0].fileSize") { value(414_764) }
+            jsonPath("$.tasks[0].files[0].durationSeconds") { value(8.48) }
+            jsonPath("$.tasks[0].files[0]") { value(not(hasKey("width"))) }
+            jsonPath("$.tasks[0].files[0]") { value(not(hasKey("height"))) }
         }
     }
 
