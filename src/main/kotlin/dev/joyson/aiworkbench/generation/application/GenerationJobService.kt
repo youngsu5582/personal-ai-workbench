@@ -8,10 +8,12 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobProgress
 import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTaskRepository
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
+import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.GenerationOption
 import dev.joyson.aiworkbench.generation.domain.option.ImageOption
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.fileSources
+import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
 import dev.joyson.aiworkbench.provider.ProviderRegistry
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.springframework.stereotype.Service
@@ -127,7 +129,8 @@ class GenerationJobService(
     }
 
     /**
-     * 이 모델이 이 옵션의 종류를 다룰 수 있는지 본다. 못 하면 [UnsupportedModelException] 이다.
+     * 이 모델이 이 옵션을 다룰 수 있는지 본다. 종류를 못 하면 [UnsupportedModelException],
+     * 글의 effort 를 Provider 가 표현하지 못하면 [UnsupportedEffortException] 이다.
      *
      * 종류마다 따로 묻는다. 모델을 아는 Provider 가 있어도 그 모델이 이 종류의 일을 못 하면 다룰 곳이 없는 것이다.
      * 템플릿이 기본 모델을 저장할 때도 같은 규칙으로 묻는다.
@@ -135,10 +138,29 @@ class GenerationJobService(
     fun requireSupported(option: GenerationOption, model: String) {
         val supported = when (option) {
             is ImageOption -> providerRegistry.find(model) != null
-            is TextGenerateOption -> providerRegistry.findText(model) != null
+            is TextGenerateOption -> providerRegistry.findText(model)
+                ?.also { requireExpressibleEffort(it, model, option) } != null
             is DecisionOption -> providerRegistry.findDecision(model) != null
         }
         if (!supported) throw UnsupportedModelException(model, providerRegistry.availableNames)
+    }
+
+    /**
+     * 이 모델에 이 effort 를 보낼 수 있는지 Provider 에게 묻는다. 주지 않았으면 볼 것이 없다.
+     *
+     * 접수하면 Task 마다 부르기도 전에 같은 이유로 실패한다. 결정적인 실패라 공짜로 막을 수 있을 때 막는다.
+     * Provider 가 좁히지 않은 값을 모델이 거절하는 것은 여기서 보지 않는다([dev.joyson.aiworkbench.generation.domain.option.Effort]).
+     */
+    private fun requireExpressibleEffort(provider: ExternalApiTextProvider, model: String, option: TextGenerateOption) {
+        val effort = option.effort ?: return
+        val efforts = provider.efforts(model)
+        if (ProviderRequestMapper.effortOf(effort) in efforts) return
+
+        throw UnsupportedEffortException(
+            model = model,
+            effort = effort.value,
+            available = Effort.entries.filter { ProviderRequestMapper.effortOf(it) in efforts }.map { it.value },
+        )
     }
 
     /**

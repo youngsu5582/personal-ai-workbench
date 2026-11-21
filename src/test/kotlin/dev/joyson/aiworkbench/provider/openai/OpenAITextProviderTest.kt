@@ -62,6 +62,12 @@ class OpenAITextProviderTest {
     }
 
     @Test
+    fun `다루는 모델엔 눈금 전부를, 모르는 모델엔 아무것도 보낼 수 없다고 답한다`() {
+        assertEquals(ReasoningEffort.entries.toSet(), provider.efforts("gpt-6-luna"))
+        assertEquals(emptySet(), provider.efforts("gpt-image-2"))
+    }
+
+    @Test
     fun `형식이 없으면 text 를 싣지 않고 저쪽에 남기지 않는다`() {
         server.expect(requestTo("$BASE_URL${OpenAITextClient.RESPONSES_PATH}"))
             .andExpect(method(HttpMethod.POST))

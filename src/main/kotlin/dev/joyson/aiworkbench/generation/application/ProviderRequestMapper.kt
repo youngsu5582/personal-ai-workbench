@@ -142,9 +142,14 @@ object ProviderRequestMapper {
         }
     }
 
-    /** [qualityOf] 와 같이 `when` 으로 옮긴다 — 한쪽에 값이 늘면 컴파일러가 알려준다. */
-    private fun effortOf(effort: Effort): ReasoningEffort = when (effort) {
+    /**
+     * [qualityOf] 와 같이 `when` 으로 옮긴다 — 한쪽에 값이 늘면 컴파일러가 알려준다.
+     *
+     * 접수도 이 번역을 쓴다. Provider 가 표현할 수 있는지는 포트 어휘로 답하므로, 같은 번역을 거쳐야 묻고 보내는 값이 같다.
+     */
+    fun effortOf(effort: Effort): ReasoningEffort = when (effort) {
         Effort.NONE -> ReasoningEffort.NONE
+        Effort.MINIMAL -> ReasoningEffort.MINIMAL
         Effort.LOW -> ReasoningEffort.LOW
         Effort.MEDIUM -> ReasoningEffort.MEDIUM
         Effort.HIGH -> ReasoningEffort.HIGH
