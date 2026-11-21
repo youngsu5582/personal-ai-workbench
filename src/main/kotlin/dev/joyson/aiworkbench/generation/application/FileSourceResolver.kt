@@ -77,6 +77,25 @@ class FileSourceResolver(
         }.toMap()
     }
 
+    /**
+     * 참조가 가리키는 파일의 형식. 찾지 못했거나 쓸 수 없는 참조는 담기지 않는다.
+     *
+     * [issuePreviewUrls] 와 같이 종류마다 한 번씩만 묻는다. 보관소를 읽지 않으므로 트랜잭션 안에서 불러도 된다.
+     */
+    fun mimeTypesOf(sources: Collection<FileSource>, workspaceUuid: UUID): Map<FileSource, String> {
+        val distinct = sources.toSet()
+        val generated = generatedFileFinder.findOwned(distinct.filterIsInstance<FileSource.Generated>().map { it.sha256 }, workspaceUuid)
+        val uploaded = uploadedFiles.mimeTypes(distinct.filterIsInstance<FileSource.Uploaded>().map { it.sha256 }, workspaceUuid)
+        return distinct.mapNotNull { source ->
+            // sealed 라 참조의 종류가 늘면 여기가 컴파일 에러로 드러난다.
+            val mimeType = when (source) {
+                is FileSource.Generated -> generated[source.sha256]?.mimeType
+                is FileSource.Uploaded -> uploaded[source.sha256]
+            }
+            mimeType?.let { source to it }
+        }.toMap()
+    }
+
     private fun generatedPreviewUrls(sources: List<FileSource.Generated>, workspaceUuid: UUID): Map<String, URI> {
         val issuer = presignedUrlIssuer ?: return emptyMap()
         return generatedFileFinder.findOwned(sources.map { it.sha256 }, workspaceUuid)

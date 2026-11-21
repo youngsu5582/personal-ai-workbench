@@ -312,6 +312,8 @@ class GenerationJobQueryApiTest @Autowired constructor(
             jsonPath("$.inputs[0].url") { value("/api/files/$sha256") }
             // 테스트 보관소는 서명할 수 없다. 받는 쪽은 url 로 그린다.
             jsonPath("$.inputs[0].previewUrl") { doesNotExist() }
+            // 화면이 이미지로 그릴지 오디오로 그릴지 가르는 근거다.
+            jsonPath("$.inputs[0].mimeType") { value("image/png") }
         }
         mockMvc.get("/api/jobs") { header("Authorization", "Bearer $token") }.andExpect {
             jsonPath("$.items[0].uuid") { value(jobUuid) }

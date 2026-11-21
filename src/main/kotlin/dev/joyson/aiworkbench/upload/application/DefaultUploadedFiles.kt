@@ -47,6 +47,13 @@ class DefaultUploadedFiles(
             .associate { it.sha256 to issuer.issue(it.storageKey, it.downloadFileName()) }
     }
 
+    override fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, String> {
+        if (sha256s.isEmpty()) return emptyMap()
+        return uploadedFileRepository.findAllByWorkspaceUuidAndSha256In(workspaceUuid, sha256s)
+            .filter { it.status == UploadStatus.READY }
+            .associate { it.sha256 to it.metadata.mimeType }
+    }
+
     override fun readContent(sha256: String, workspaceUuid: UUID): ByteArray? =
         findReady(sha256, workspaceUuid)?.let { fileStorage.read(it.storageKey) }
 

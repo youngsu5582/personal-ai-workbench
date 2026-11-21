@@ -48,6 +48,8 @@ data class InputFileView(
     val source: FileSource,
     /** 바로 그릴 주소. 서명할 수 없거나 찾지 못하면 `null`. 수명이 짧다. */
     val previewUrl: String?,
+    /** 파일의 형식. 이미지로 그릴지 오디오로 그릴지 가른다. 찾지 못한 참조는 `null`. */
+    val mimeType: String? = null,
 )
 
 /**

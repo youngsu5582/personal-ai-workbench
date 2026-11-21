@@ -41,6 +41,14 @@ interface UploadedFiles {
     fun issueReadUrls(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, URI>
 
     /**
+     * 입력으로 쓸 수 있다고 검증된 업로드들의 형식. 검증 전이거나 불합격이거나 남의 것이면 키로 담기지 않는다.
+     *
+     * 조회 화면이 입력을 이미지로 그릴지 오디오로 그릴지 가르는 근거다. 여기서는 검증하지 않는다 —
+     * [issueReadUrls] 와 같이 이미 검증을 통과한 것만 본다. 보관소를 읽지 않아 트랜잭션 안에서 불러도 된다.
+     */
+    fun mimeTypes(sha256s: Collection<String>, workspaceUuid: UUID): Map<String, String>
+
+    /**
      * 입력으로 쓸 수 있다고 검증된 업로드의 바이트. 검증 전이거나 불합격이면, 또는 객체가 없으면 `null` 이다.
      *
      * 받는 쪽이 [issueReadUrl] 의 주소를 받아가지 못할 때 대신 싣는다. 보관소를 읽으므로 트랜잭션 밖에서 부른다.
