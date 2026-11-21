@@ -69,12 +69,17 @@ export class ApiError extends Error {
     super(message);
   }
 }
+/**
+ * `workspace` 를 넘기지 않으면 계정 범위 요청이다.
+ * 넘겼는데 비어 있으면 거절한다 — 헤더 없이 나가면 서버가 기본 서비스로 처리해, 고르지 않은 서비스의 데이터가 보인다.
+ */
 export async function request<T>(
   token: string,
   path: string,
   workspace?: string,
   options: RequestInit = {},
 ): Promise<T> {
+  if (workspace === "") throw new Error("서비스를 고르기 전에는 이 요청을 보낼 수 없어요.");
   const headers = new Headers(options.headers);
   headers.set("Authorization", `Bearer ${token}`);
   if (workspace) headers.set("X-Workspace-Id", workspace);

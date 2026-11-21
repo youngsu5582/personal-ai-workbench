@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Box, Check, Layers3, Plus } from "lucide-react";
 import { request, type Service } from "../../api";
+import { browserStorage } from "../../shared/browser-storage";
 import { errorText, useLoad } from "../../shared/console-utils";
 import { Avatar } from "../../shared/ui/avatar";
 import { Button } from "../../shared/ui/button";
@@ -21,7 +22,12 @@ function ServiceAvatar({
   return <Avatar label={service?.name?.trim() || "서비스"} seed={service?.uuid || "default"} size={size === "large" ? "lg" : "md"} />;
 }
 
-/** 사이드바의 서비스 전환. 고른 서비스가 목록에 없으면(삭제 · 첫 진입) 기본 서비스로 옮긴다. */
+/**
+ * 사이드바의 서비스 전환. 고른 서비스가 목록에 없으면(첫 진입 · 삭제)
+ * 이 브라우저에서 마지막으로 고른 서비스, 그것도 없으면 기본 서비스로 옮긴다.
+ * 처음 여는 서비스는 화면 취향이라 서버에 두지 않는다. 저장된 값은 내 서비스 목록과 대조한 뒤에만 쓰므로,
+ * 다른 계정의 값이 남아 있어도 열리지 않는다.
+ */
 export function ServicePicker({
   token,
   selected,
@@ -36,8 +42,13 @@ export function ServicePicker({
     [token],
   );
   useEffect(() => {
-    if (value?.length && !value.some((s) => s.uuid === selected))
-      onSelect((value.find((s) => s.isDefault) || value[0]).uuid);
+    if (!value?.length) return;
+    if (value.some((s) => s.uuid === selected)) {
+      browserStorage.set("lastService", selected);
+      return;
+    }
+    const last = browserStorage.get("lastService");
+    onSelect((value.find((s) => s.uuid === last) || value.find((s) => s.isDefault) || value[0]).uuid);
   }, [value, selected, onSelect]);
   const current = value?.find((s) => s.uuid === selected);
   return (
