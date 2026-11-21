@@ -1,6 +1,5 @@
 package dev.joyson.aiworkbench.generation.api
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import dev.joyson.aiworkbench.generation.application.GeneratedFileView
 import dev.joyson.aiworkbench.generation.application.GenerationJobTaskView
 import dev.joyson.aiworkbench.generation.application.GenerationJobView
@@ -101,39 +100,59 @@ data class TextResponse(
     val content: JsonNode,
 )
 
-data class FileResponse(
-    val sha256: String,
+/**
+ * 결과물 파일 하나. 종류마다 아는 사실이 달라 **종류로 가른다** — [FileMetadata] 와 같은 이유다.
+ * 칸을 nullable 로 두면 "가로·세로가 있는 오디오" 같은 조합을 만들 수 있다.
+ *
+ * 판별자(`type`)는 싣지 않는다. 받는 쪽은 [mimeType] 으로 그릴지 재생할지 가른다 — 입력 파일과 같은 기준이다.
+ * 내보내기만 하는 타입이라 판별자 없이도 구현체의 칸이 그대로 직렬화된다.
+ */
+sealed interface FileResponse {
+    val sha256: String
+
     /**
      * **오래 사는** 주소. 받는 쪽은 이 값을 불투명하게 다룬다.
      *
      * 저장·북마크·스크립트처럼 나중에 눌러도 동작해야 하는 길이다.
      * 보관소가 서명할 수 있으면 이 주소가 302 로 서명 주소에 넘긴다.
      */
-    val url: String,
+    val url: String
+
     /**
      * **바로 그릴** 주소. 보관소가 서명할 수 없으면 `null`.
      *
-     * `<img src>` 는 `Authorization` 헤더를 실을 수 없어서 [url] 로는 못 그린다.
+     * `<img src>` · `<audio src>` 는 `Authorization` 헤더를 실을 수 없어서 [url] 로는 못 쓴다.
      * 이 값은 서명이 통행증이라 헤더가 필요 없고, 요청이 우리 앱이 아니라 보관소로 바로 간다.
      *
      * **수명이 짧다.** 캐시하거나 오래 들고 있으면 만료된다 — 그때는 [url] 을 쓴다.
      */
-    val previewUrl: String?,
-    /**
-     * 이미지일 때만 있다. 종류에 없는 사실은 `null` 이 아니라 **칸째 빠진다** —
-     * `previewUrl` 의 `null` 은 "서명할 수 없다" 는 상태지만, 오디오의 가로·세로는 해당이 없는 것이다.
-     */
-    @field:JsonInclude(JsonInclude.Include.NON_NULL)
-    val width: Int? = null,
-    @field:JsonInclude(JsonInclude.Include.NON_NULL)
-    val height: Int? = null,
+    val previewUrl: String?
+
     /** 이미지로 그릴지 오디오로 재생할지 가르는 근거다. [InputFileResponse.mimeType] 과 같다. */
-    val mimeType: String,
-    val fileSize: Int,
-    /** 오디오일 때만 있는 재생 길이(초). */
-    @field:JsonInclude(JsonInclude.Include.NON_NULL)
-    val durationSeconds: Double? = null,
-)
+    val mimeType: String
+
+    val fileSize: Int
+
+    data class Image(
+        override val sha256: String,
+        override val url: String,
+        override val previewUrl: String?,
+        val width: Int,
+        val height: Int,
+        override val mimeType: String,
+        override val fileSize: Int,
+    ) : FileResponse
+
+    data class Audio(
+        override val sha256: String,
+        override val url: String,
+        override val previewUrl: String?,
+        override val mimeType: String,
+        override val fileSize: Int,
+        /** 재생 길이(초). 바이트에서 계산한 값이다. */
+        val durationSeconds: Double,
+    ) : FileResponse
+}
 
 fun GenerationJobView.toResponse(): GenerationJobDetailResponse {
     // 글의 모양은 Task 마다가 아니라 요청 하나에 정해진다.
@@ -180,16 +199,16 @@ private fun contentOf(content: String, format: TextFormat): JsonNode = when (for
 }
 
 private fun GeneratedFileView.toResponse(): FileResponse {
-    val common = FileResponse(
-        sha256 = sha256,
-        url = GeneratedFileController.pathOf(sha256),
-        previewUrl = previewUrl,
-        mimeType = metadata.mimeType,
-        fileSize = metadata.fileSize,
-    )
+    val url = GeneratedFileController.pathOf(sha256)
     // 종류가 늘면 여기서 컴파일이 멈춘다 — 새 종류의 사실이 말없이 응답에서 빠지지 않게.
     return when (val metadata = metadata) {
-        is FileMetadata.Image -> common.copy(width = metadata.width, height = metadata.height)
-        is FileMetadata.Audio -> common.copy(durationSeconds = metadata.durationSeconds)
+        is FileMetadata.Image -> FileResponse.Image(
+            sha256 = sha256, url = url, previewUrl = previewUrl,
+            width = metadata.width, height = metadata.height, mimeType = metadata.mimeType, fileSize = metadata.fileSize,
+        )
+        is FileMetadata.Audio -> FileResponse.Audio(
+            sha256 = sha256, url = url, previewUrl = previewUrl,
+            mimeType = metadata.mimeType, fileSize = metadata.fileSize, durationSeconds = metadata.durationSeconds,
+        )
     }
 }
