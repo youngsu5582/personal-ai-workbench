@@ -35,6 +35,7 @@ class WorkspaceApiTest @Autowired constructor(
             status { isOk() }
             jsonPath("$.length()") { value(1) }
             jsonPath("$[0].isDefault") { value(true) }
+            jsonPath("$[0].name") { value("내 서비스") }
         }
         val response = mockMvc.post("/api/services") {
             header("Authorization", "Bearer $owner")
