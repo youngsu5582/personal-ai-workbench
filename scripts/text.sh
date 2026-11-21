@@ -8,6 +8,7 @@
 #   EFFORT=low ./scripts/text.sh "태그 다섯 개"                # none · minimal · low · medium · high · xhigh · max
 #   SCHEMA='{"type":"object","properties":{"tags":{"type":"array","items":{"type":"string"}}},"required":["tags"],"additionalProperties":false}' \
 #     ./scripts/text.sh "이 글의 태그를 골라: ..."
+#   ATTACH=<업로드 SHA-256> ./scripts/text.sh "이 오디오를 들리는 그대로 받아 써" 1 gemini-3.5-flash-lite
 #   BASE_URL=http://localhost:8099 ./scripts/text.sh "안녕"
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -19,9 +20,9 @@ BASE_URL="${BASE_URL:-http://localhost:8080}"
 
 TOKEN="$(./scripts/dev-token.sh "${USER_UUID:-}")"
 
-BODY=$(python3 - "$PROMPT" "$TASK_COUNT" "$MODEL" "${INSTRUCTIONS:-}" "${SCHEMA:-}" "${EFFORT:-}" <<'JSON'
+BODY=$(python3 - "$PROMPT" "$TASK_COUNT" "$MODEL" "${INSTRUCTIONS:-}" "${SCHEMA:-}" "${EFFORT:-}" "${ATTACH:-}" <<'JSON'
 import json, sys
-prompt, count, model, instructions, schema, effort = sys.argv[1:7]
+prompt, count, model, instructions, schema, effort, attach = sys.argv[1:8]
 
 option = {"type": "text-generate", "prompt": prompt}
 if instructions:
@@ -29,6 +30,9 @@ if instructions:
 # 주지 않으면 보내지 않는다 — 모델 기본값을 따른다.
 if effort:
     option["effort"] = effort
+# 올린 파일(이미지 · 오디오) 하나를 함께 읽힌다. 먼저 ./scripts/upload.sh 로 올려 SHA-256 을 얻는다.
+if attach:
+    option["attachments"] = [{"type": "uploaded", "sha256": attach}]
 # 스키마가 있으면 JSON 객체로 답을 받는다. 키 순서가 답의 키 순서라 받은 순서 그대로 싣는다 —
 # json.loads 는 순서를 지킨다.
 if schema:
