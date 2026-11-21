@@ -167,7 +167,7 @@ class GenerationJobService(
      * 참조로 지목한 파일이 실제로 있고 내 것인지, 그리고 이 요청이 받는 형식인지 본다. 참조가 없으면 볼 것이 없다.
      *
      * 받는 형식은 작업 종류가 정한다. 이미지 편집 · 판정은 이미지고, 글 생성은 모델을 다루는 Provider 가 답한다.
-     * [requireSupported] 를 먼저 통과했으므로 글 생성의 Provider 는 있다.
+     * [requireSupported] 를 먼저 통과하므로 보통 글 생성의 Provider 는 있다([acceptedTypes] 참고).
      *
      * 여기서 막지 않으면 202 로 접수된 뒤 몇 분 지나 Task 실패로만 드러난다.
      * 그 실패는 결정적이라 다시 해도 같고, 큐 자리만 태운다.
@@ -183,9 +183,13 @@ class GenerationJobService(
             ?.let { throw UnknownFileSourceException(it.sha256) }
     }
 
+    /**
+     * Provider 가 그 사이 사라졌으면 받는 형식이 없는 것으로 본다. 첨부가 있으면 같은 400 이고, 없으면 거를 것이 없다.
+     * [requireSupported] 가 바로 앞에서 확인하므로 거의 없는 일이지만, 설정이 바뀌는 순간에 500 이 되게 두지 않는다.
+     */
     private fun acceptedTypes(option: GenerationOption, model: String): Set<String> = when (option) {
         is ImageOption, is DecisionOption -> IMAGE_TYPES
-        is TextGenerateOption -> requireNotNull(providerRegistry.findText(model)) { "requireSupported 가 먼저 걸러야 한다" }.inputTypes(model)
+        is TextGenerateOption -> providerRegistry.findText(model)?.inputTypes(model).orEmpty()
     }
 
     private companion object {
