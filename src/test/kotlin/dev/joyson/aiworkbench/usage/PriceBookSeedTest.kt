@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.usage
 
 import dev.joyson.aiworkbench.TestcontainersConfiguration
+import dev.joyson.aiworkbench.provider.gemini.GeminiAudioModel
 import dev.joyson.aiworkbench.provider.gemini.GeminiTextModel
 import dev.joyson.aiworkbench.provider.openai.OpenAIImageModel
 import dev.joyson.aiworkbench.provider.openai.OpenAITextModel
@@ -148,10 +149,37 @@ class PriceBookSeedTest @Autowired constructor(
         assertEquals(0, BigDecimal("0.0021").compareTo(geminiPriceOf("gemini-3.5-flash-lite", usage = noThinking)))
     }
 
+    /** Interactions 응답의 usage 모양이다. 입력은 글, 출력은 소리이고 생각 토큰은 0 이다. */
+    private val ttsUsage = mapOf(
+        "total_tokens" to 257,
+        "total_input_tokens" to 32,
+        "input_tokens_by_modality" to listOf(mapOf("modality" to "text", "tokens" to 32)),
+        "total_output_tokens" to 225,
+        "output_tokens_by_modality" to listOf(mapOf("modality" to "audio", "tokens" to 225)),
+        "total_thought_tokens" to 0,
+    )
+
+    private val afterTtsSeed = Instant.parse("2026-11-23T00:00:00Z")
+
+    @Test
+    fun `Gemini 음성은 입력 글과 출력 소리에 값을 매기고 2027년부터 두 배다`() {
+        val firstCall = Instant.parse("2027-01-01T00:00:00Z")
+        fun priceOf(model: String, at: Instant) = repository.findEffective("gemini", model, at).single().price(ttsUsage)
+
+        // 32 × 0.50 + 225 × 9.00 = 2,041
+        assertEquals(0, BigDecimal("0.002041").compareTo(priceOf("gemini-3.8-flash-tts", afterTtsSeed)))
+        // 32 × 1.00 + 225 × 18.00 = 4,082
+        assertEquals(0, BigDecimal("0.004082").compareTo(priceOf("gemini-3.8-flash-tts", firstCall)))
+        // 32 × 0.50 + 225 × 6.00 = 1,366
+        assertEquals(0, BigDecimal("0.001366").compareTo(priceOf("gemini-3.8-flash-lite-tts", afterTtsSeed)))
+        // 32 × 1.00 + 225 × 12.00 = 2,732
+        assertEquals(0, BigDecimal("0.002732").compareTo(priceOf("gemini-3.8-flash-lite-tts", firstCall)))
+    }
+
     @Test
     fun `어댑터가 다루는 Gemini 모델은 모두 단가표가 있다`() {
-        val missing = GeminiTextModel.entries.map { it.modelName }
-            .filter { repository.findEffective("gemini", it, afterGeminiSeed).isEmpty() }
+        val missing = (GeminiTextModel.entries.map { it.modelName } + GeminiAudioModel.entries.map { it.modelName })
+            .filter { repository.findEffective("gemini", it, afterTtsSeed).isEmpty() }
 
         assertTrue(missing.isEmpty(), "단가표가 없는 모델: $missing")
     }
