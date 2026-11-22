@@ -64,13 +64,15 @@ function Retry({ fail, onRetry }: { fail: string; onRetry: () => void }) {
 export const fileNameOf = (sha256: string, mimeType: string) => `${sha256}.${mimeType.split("/")[1] || "bin"}`;
 
 /**
- * 결과 파일의 동작 — 내려받기와 API 주소 복사.
+ * 결과 파일의 동작 — 내려받기와 링크 복사.
  *
  * 보관소가 서명할 수 있으면 서버가 준 `downloadUrl` 로 받는다 — 응답이 저장하라고 말한다. 서명할 수 없는 보관소면
  * 이미 받아 둔 브라우저 안 주소(`blob:`)에 이름을 붙여 저장한다. 둘 다 아니면(서명 주소만 있음) 새 탭에서 연다.
- * 복사하는 것은 오래 사는 API 주소(`url`)다 — 서명 주소는 곧 만료된다.
+ *
+ * 복사하는 것은 **로그인 없이 열리는** 서명 주소(`previewUrl`)다. API 주소(`url`)는 토큰 헤더가 있어야 열려서
+ * 주소창에 붙이면 401 이다. 서명 주소는 잠시 뒤 만료되므로 그렇다고 알리고, 서명할 수 없는 보관소면 버튼을 두지 않는다.
  */
-function FileActions({ src, url, downloadUrl, fileName, label }: { src: string; url: string; downloadUrl?: string | null; fileName: string; label: string }) {
+function FileActions({ src, previewUrl, downloadUrl, fileName, label }: { src: string; previewUrl: string | null; downloadUrl?: string | null; fileName: string; label: string }) {
   const local = src.startsWith("blob:") || src.startsWith("data:");
   const link = downloadUrl ? { href: downloadUrl }
     : local ? { href: src, download: fileName }
@@ -81,7 +83,8 @@ function FileActions({ src, url, downloadUrl, fileName, label }: { src: string; 
         <Download aria-hidden="true" />내려받기
       </a>
     </Button>
-    <CopyButton text={new URL(url, window.location.origin).toString()} label="주소 복사" ariaLabel={`${label} 주소 복사`} />
+    {previewUrl && <CopyButton text={previewUrl} label="링크 복사" ariaLabel={`${label} 링크 복사`}
+      title="로그인 없이 열리는 링크예요. 잠시 뒤 만료돼요 — 그때는 다시 조회해서 복사하세요." />}
   </>;
 }
 
@@ -95,7 +98,7 @@ export function AuthenticatedImage({ alt = "생성된 이미지", fileName, down
   if (!fileName) return image;
   return <div className="flex flex-col items-start gap-1.5">
     {image}
-    <span className="flex items-center gap-0.5"><FileActions src={src} url={source.url} downloadUrl={downloadUrl} fileName={fileName} label={alt} /></span>
+    <span className="flex items-center gap-0.5"><FileActions src={src} previewUrl={source.previewUrl} downloadUrl={downloadUrl} fileName={fileName} label={alt} /></span>
   </div>;
 }
 
@@ -109,7 +112,7 @@ export function AuthenticatedAudio({ label = "생성된 오디오", fileName, do
   return src
     ? <AudioPlayer src={src} label={label} duration={duration}
       onError={source.previewUrl ? () => setFail("오디오를 불러오지 못했어요. 다시 조회해 주세요.") : undefined}>
-      {fileName && <FileActions src={src} url={source.url} downloadUrl={downloadUrl} fileName={fileName} label={label} />}
+      {fileName && <FileActions src={src} previewUrl={source.previewUrl} downloadUrl={downloadUrl} fileName={fileName} label={label} />}
     </AudioPlayer>
     : <div className="h-11 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="오디오를 불러오는 중" />;
 }

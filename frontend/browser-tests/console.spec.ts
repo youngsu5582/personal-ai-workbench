@@ -291,31 +291,37 @@ test("오디오 플레이어는 재생 · 일시정지를 바꾸고 방향키로
   await expect(player.getByRole("button", { name: "재생" })).toBeVisible();
 });
 
-test("결과 파일은 서버가 준 내려받기 주소로 저장하고 API 주소를 복사한다", async ({ page, context }) => {
+test("결과 파일은 서버가 준 내려받기 주소로 저장하고 로그인 없이 열리는 링크를 복사한다", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await prepare(page);
-  const sha = "a".repeat(64);
-  const signed = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0], downloadUrl: "https://storage.example/a.wav?attachment" }] }] };
+  // 보관소의 서명 주소. 플레이어가 이 주소로 재생한다.
+  await page.route("https://storage.example/**", route => route.fulfill({ contentType: "audio/wav", body: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64") }));
+  const signed = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0],
+    previewUrl: "https://storage.example/a.wav?inline", downloadUrl: "https://storage.example/a.wav?attachment" }] }] };
   await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [signed], hasNext: false } }));
   await page.route("**/api/jobs/job-v", route => route.fulfill({ json: signed }));
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
   await page.getByRole("button", { name: /동시성 문제는/ }).click();
   await expect(page.getByRole("link", { name: "결과 1 오디오 내려받기" })).toHaveAttribute("href", "https://storage.example/a.wav?attachment");
-  await page.getByRole("button", { name: "결과 1 오디오 주소 복사" }).click();
+  // API 주소(/api/files/…)는 토큰 헤더가 있어야 열려서 주소창에 붙이면 401 이다. 복사하는 것은 서명 주소다.
+  await page.getByRole("button", { name: "결과 1 오디오 링크 복사" }).click();
   await expect(page.getByText("복사됨")).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${new URL(page.url()).origin}/api/files/${sha}`);
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://storage.example/a.wav?inline");
 });
 
-test("서명할 수 없는 보관소면 받아 둔 파일에 이름을 붙여 저장한다", async ({ page }) => {
+test("서명할 수 없는 보관소면 받아 둔 파일에 이름을 붙여 저장하고 링크 복사는 두지 않는다", async ({ page }) => {
   await prepare(page);
   const sha = "a".repeat(64);
-  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [spoken], hasNext: false } }));
-  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: spoken }));
+  const unsigned = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0], previewUrl: null, downloadUrl: null }] }] };
+  await page.route(`**/api/files/${sha}`, route => route.fulfill({ contentType: "audio/wav", body: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64") }));
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [unsigned], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: unsigned }));
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
   await page.getByRole("button", { name: /동시성 문제는/ }).click();
   const link = page.getByRole("link", { name: "결과 1 오디오 내려받기" });
   await expect(link).toHaveAttribute("download", `${sha}.wav`);
-  await expect(link).toHaveAttribute("href", /^data:audio/);
+  await expect(link).toHaveAttribute("href", /^blob:/);
+  await expect(page.getByRole("button", { name: "결과 1 오디오 링크 복사" })).toHaveCount(0);
 });
 
 test("이미지 작업에서는 첨부 파일 칸이 없다", async ({ page }) => {
