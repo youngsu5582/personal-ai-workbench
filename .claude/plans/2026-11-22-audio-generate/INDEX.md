@@ -14,15 +14,18 @@ STT 는 PR #118~#121 로 끝났다. 사실 · 결정 · 설계는 SPEC.md.
 - [x] PR B1 #124 (`feat/audio-provider`, A 위에 쌓음) — 포트 `ExternalApiAudioProvider` · WAV 길이 · Gemini Interactions 어댑터 · 목소리 30개. 로컬 커밋까지. live 2건 통과(2026-11-22)
 - [x] PR B2 #125 (`feat/audio-generate-run`, B1 위) — `audio-generate` 옵션 · 접수(모르는 목소리 400 + `availableVoices`) · 워커 · 원장 `AudioRequest` · 단가 V21 · `scripts/audio.sh`. 로컬 커밋까지
 - [x] PR C #126 (`feat/audio-console`, B2 위) — 모델 목록의 `voices` · 작업실 음성 탭 · 작업 내역의 오디오 재생 · 음성 청록 토큰. 로컬 커밋까지, 브라우저 검사 36개 통과(모의 API)
-- [ ] `docs/roadmap.md` 갱신 (PR 번호가 생긴 뒤)
+- [x] `docs/roadmap.md` 갱신 (T1 에서)
+
+- [x] #123 ~ #126 머지(2026-11-22, Codex 리뷰: #125 지적 없음)
+- [~] T1 TTS 템플릿(콘솔) — `feat/template-tts`
+- [ ] T2 STT 템플릿 — 실행 때 파일을 받는 칸 `inputFileCount` · `files`(옛 이름 `inputImageCount` · `images` 도 받음)
+- [ ] 배포 — T2 뒤. 태그 → 배포 PR → 서버 apply(사용자) → 운영 STT · TTS 실호출 1건씩
 
 ## Resume Point
-**PR 네 개가 모두 열려 있다** — #123 → main, #124 → #123, #125 → #124, #126 → #125. live 2건 · 로컬 스모크 1건 통과(SPEC F13).
-다음은 리뷰 반영과 머지다. 머지 **직전에** `.stack` 을 본다(메모리 `github-stacked-pr-merge`) — 아래부터 하나씩 머지하면 위 PR 의 base 가 main 으로 돌고 SHA 가 바뀐다.
-#123 을 머지할 때 ADR 0006 의 상태를 채택(#123 머지)으로 바꾼다. B2(#125)가 머지되면 `docs/roadmap.md` 를 갱신한다.
-Codex 의 plan 파일 지적(P1)은 #118 처럼 두었다.
-`.env` 는 `text-attach-run` 의 것을 복사했다. `var/keys/authserver-signing-key.pem` 은 이 워크트리용으로 만들었다(gitignore).
-11/28 저녁까지 #125 가 `main` 에 없으면 서비스 쪽은 원래 방식으로 간다(`playground` 의 INDEX).
+A~C(#123 ~ #126)는 `main` 에 있다. 배포는 템플릿 PR 둘(T1 TTS · T2 STT) 뒤에 한 번에 한다(사용자 결정, 메모리 `workbench-audio-deploy-plan`). 운영 Gemini 키는 Free Tier 그대로.
+지금은 T1(`feat/template-tts`) — 콘솔 템플릿에 음성 종류(읽을 글 · 목소리 · 말투). 서버는 #125 로 이미 TTS 템플릿을 받는다.
+다음 T2 — `TemplateSpec.inputImageCount` → `inputFileCount`(저장 JSON 은 `@JsonAlias` 로 옛 이름을 읽음), 실행 요청 `images` → `files`(옛 이름도 받음), 글 생성 템플릿이 실행 때 파일(오디오 · 이미지)을 첨부로 받음. 블로그가 템플릿 API 를 쓰므로 옛 이름은 계속 받는다.
+11/28 저녁이 서비스 기한이다 — 배포가 그 전에 끝나야 한다.
 
 ## Files
 - SPEC.md — 확인한 사실, 결정, 설계, 테스트
