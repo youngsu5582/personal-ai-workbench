@@ -28,6 +28,14 @@ fun interface PresignedUrlIssuer {
      * 64자 해시가 파일명이 된다 — 보관소에 응답 헤더를 덮어써 달라고 부탁한다.
      */
     fun issue(key: String, fileName: String): URI
+
+    /**
+     * [key] 를 **파일로 저장하게** 하는 주소. [issue] 는 브라우저가 바로 그리거나 재생하는 주소다.
+     *
+     * 서명 주소는 다른 출처라 브라우저가 `<a download>` 의 이름을 따르지 않는다. 저장할지는 응답 헤더가 정하므로
+     * 보관소에 그 헤더를 덮어써 달라고 부탁한다. 그럴 수 없는 발급자는 [issue] 와 같은 주소를 준다 — 열리기는 한다.
+     */
+    fun issueDownload(key: String, fileName: String): URI = issue(key, fileName)
 }
 
 /**

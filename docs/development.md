@@ -228,6 +228,7 @@ curl -i -H "Authorization: Bearer $(./scripts/dev-token.sh)" http://localhost:80
 |---|---|---|
 | `url` | 안 죽는다 | 저장·북마크·스크립트. 302 로 서명 주소에 넘긴다 |
 | `previewUrl` | 짧다(기본 15분) | `<img src>` 로 바로 그린다. 로컬 디스크면 `null` |
+| `downloadUrl` | `previewUrl` 과 같다 | 열지 않고 파일로 저장한다(응답이 `attachment`). 로컬 디스크면 `null` 이고, 그때는 `url` 로 받아 저장한다 |
 
 발급된 주소는 **그 자체가 통행증**이다. 그래서 소유권 확인은 발급 **전에** 끝나고(남의 파일이면 404), 수명이 짧다(`workbench.storage.presigned-url-ttl`, 기본 5분). 서명 없이 같은 객체를 부르면 보관소가 거부한다.
 
