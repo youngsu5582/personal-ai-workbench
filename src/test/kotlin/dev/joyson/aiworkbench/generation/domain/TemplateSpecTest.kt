@@ -17,6 +17,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import tools.jackson.module.kotlin.jacksonObjectMapper
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TemplateSpecTest {
 
@@ -24,7 +27,7 @@ class TemplateSpecTest {
     private val photo = FileSource.Uploaded("b".repeat(64))
     private val size = ImageSize.ByRatio(AspectRatio.SIXTEEN_NINE, Resolution.ONE_K)
 
-    private fun template(option: GenerationOption, inputImageCount: Int = 0) = TemplateSpec(option, inputImageCount)
+    private fun template(option: GenerationOption, inputFileCount: Int = 0) = TemplateSpec(option, inputFileCount)
 
     @Test
     fun `글 생성은 지시문과 프롬프트의 변수를 처음 나온 순서로 모으고 같은 이름은 한 값으로 채운다`() {
@@ -48,7 +51,7 @@ class TemplateSpecTest {
 
     @Test
     fun `이미지 생성은 실행 때 받은 이미지를 참조로 붙인다`() {
-        val template = template(ImageOption(prompt = "입력한 이미지의 스타일을 바꿔라. {{style}}", size = size), inputImageCount = 1)
+        val template = template(ImageOption(prompt = "입력한 이미지의 스타일을 바꿔라. {{style}}", size = size), inputFileCount = 1)
 
         val filled = assertIs<ImageOption>(template.fill(mapOf("style" to "수채화"), listOf(photo)))
         assertEquals(listOf(photo), filled.sources)
@@ -57,13 +60,36 @@ class TemplateSpecTest {
     @Test
     fun `고정 참조와 입력 이미지가 합쳐 상한을 넘는 템플릿은 만들 수 없다`() {
         assertFailsWith<IllegalArgumentException> {
-            template(ImageOption(prompt = "섞어라", size = size, sources = listOf(reference)), inputImageCount = 1)
+            template(ImageOption(prompt = "섞어라", size = size, sources = listOf(reference)), inputFileCount = 1)
         }
     }
 
+    /** STT 템플릿이 이것이다 — 실행마다 다른 오디오를 받아 첨부 뒤에 붙인다. */
     @Test
-    fun `글 생성은 입력 이미지를 받지 않는다`() {
-        assertFailsWith<IllegalArgumentException> { template(TextGenerateOption(prompt = "요약해"), inputImageCount = 1) }
+    fun `글 생성은 실행 때 받은 파일을 첨부로 붙인다`() {
+        val template = template(TextGenerateOption(prompt = "들리는 그대로 받아 써"), inputFileCount = 1)
+
+        assertEquals(listOf<FileSource>(photo), assertIs<TextGenerateOption>(template.fill(emptyMap(), listOf(photo))).attachments)
+    }
+
+    @Test
+    fun `글 생성은 고정 첨부와 실행 파일을 합쳐 상한을 넘을 수 없다`() {
+        assertFailsWith<IllegalArgumentException> {
+            template(TextGenerateOption(prompt = "요약해", attachments = listOf(reference)), inputFileCount = 1)
+        }
+        assertFailsWith<IllegalArgumentException> { template(TextGenerateOption(prompt = "요약해"), inputFileCount = 2) }
+    }
+
+    /** 저장된 행의 계약이다. 실행 때 받는 것이 이미지뿐이던 때의 행은 옛 이름으로 적혀 있다. */
+    @Test
+    fun `옛 이름 inputImageCount 로 적힌 명세도 읽고 새 이름으로 쓴다`() {
+        val mapper = jacksonObjectMapper()
+        val old = mapper.readValue("""{"option":{"type":"image-generate","prompt":"p","size":{"type":"ratio","ratio":"1:1","resolution":"1k"}},"inputImageCount":1}""", TemplateSpec::class.java)
+
+        assertEquals(1, old.inputFileCount)
+        val json = mapper.writeValueAsString(old)
+        assertTrue("\"inputFileCount\":1" in json, json)
+        assertFalse("inputImageCount" in json, json)
     }
 
     /** 목소리는 고르는 값이라 변수 자리가 아니다. 글 → 말투 순서로 모은다. */
@@ -79,8 +105,8 @@ class TemplateSpecTest {
     }
 
     @Test
-    fun `TTS 는 입력 이미지를 받지 않는다`() {
-        assertFailsWith<IllegalArgumentException> { template(AudioGenerateOption(text = "{{text}}", voice = "Kore"), inputImageCount = 1) }
+    fun `TTS 는 실행 때 파일을 받지 않는다`() {
+        assertFailsWith<IllegalArgumentException> { template(AudioGenerateOption(text = "{{text}}", voice = "Kore"), inputFileCount = 1) }
     }
 
     @Test
@@ -96,7 +122,7 @@ class TemplateSpecTest {
                     ),
                 ),
             ),
-            inputImageCount = 1,
+            inputFileCount = 1,
         )
 
         assertEquals(listOf("review", "policy"), template.variables.toList())
@@ -111,8 +137,8 @@ class TemplateSpecTest {
     }
 
     @Test
-    fun `변수 키와 입력 이미지 수는 정확히 맞아야 한다`() {
-        val template = template(ImageOption(prompt = "{{style}}", size = size), inputImageCount = 1)
+    fun `변수 키와 실행 파일 수는 정확히 맞아야 한다`() {
+        val template = template(ImageOption(prompt = "{{style}}", size = size), inputFileCount = 1)
 
         assertFailsWith<IllegalArgumentException> { template.fill(emptyMap(), listOf(photo)) }
         assertFailsWith<IllegalArgumentException> { template.fill(mapOf("style" to "수채화", "extra" to "값"), listOf(photo)) }

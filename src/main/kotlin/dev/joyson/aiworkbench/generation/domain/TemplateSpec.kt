@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.domain
 
+import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonInclude
 import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
@@ -15,7 +16,7 @@ import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
  * 템플릿을 실행하면 무엇이 되는가 — 실행 명세.
  *
  * DB 가 조회 · 정렬에 쓰지 않고 실행할 때 통째로 읽는 값이라 JSON 한 칸(`spec`)에 담는다.
- * 함께 검증되는 값이기도 하다 — 받을 이미지 수는 옵션의 종류와 고정 참조 수에 달렸다.
+ * 함께 검증되는 값이기도 하다 — 받을 파일 수는 옵션의 종류와 고정 참조 · 첨부 수에 달렸다.
  * 필드 이름이 곧 저장된 행의 계약이라, 바꾸면 기존 행을 못 읽는다.
  *
  * [option] 은 `/api/jobs` 의 `option` 과 같은 모양이고, 글 필드에 `{{name}}` 변수 자리를 둔다.
@@ -23,13 +24,19 @@ import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class TemplateSpec(
     val option: GenerationOption,
-    /** 실행할 때 받을 이미지 수. 실행 요청은 정확히 이만큼 보내야 한다. */
-    val inputImageCount: Int = 0,
+    /**
+     * 실행할 때 받을 파일 수. 실행 요청은 정확히 이만큼 보내야 한다.
+     * 이미지 생성 · 판정은 이미지를, 글 생성은 첨부(이미지 · 오디오)를 받는다 — 받은 오디오를 받아 쓰는 STT 템플릿이 그 예다.
+     *
+     * 실행 때 받는 것이 이미지뿐이던 때의 행은 `inputImageCount` 로 적혀 있어 그 이름도 읽는다.
+     */
+    @param:JsonAlias("inputImageCount")
+    val inputFileCount: Int = 0,
     /** 실행 요청이 모델을 주지 않을 때 쓰는 모델. 없으면 실행할 때마다 골라야 한다. */
     val model: String? = null,
 ) {
     init {
-        require(option.acceptsInputImages(inputImageCount)) { "이 옵션은 입력 이미지 ${inputImageCount}장을 받을 수 없다" }
+        require(option.acceptsInputFiles(inputFileCount)) { "이 옵션은 실행 때 파일 ${inputFileCount}개를 받을 수 없다" }
         require(model == null || model.isNotBlank()) { "기본 모델을 비우려면 필드를 빼야 한다" }
     }
 
@@ -41,18 +48,18 @@ data class TemplateSpec(
         }
 
     /**
-     * 변수를 채우고 입력 이미지를 붙인 옵션을 만든다.
+     * 변수를 채우고 실행 때 받은 파일을 붙인 옵션을 만든다.
      *
-     * 변수는 [variables] 와 키가 정확히 같아야 하고, 이미지는 [inputImageCount] 장이어야 한다.
+     * 변수는 [variables] 와 키가 정확히 같아야 하고, 파일은 [inputFileCount] 개여야 한다.
      * 값은 한 번만 치환하므로 값 안의 `{{x}}` 는 그대로 남는다. 결과가 옵션의 규칙을 어기면
      * (치환 후 빈 prompt 등) [IllegalArgumentException] 이다.
      */
-    fun fill(values: Map<String, String>, images: List<FileSource>): GenerationOption {
+    fun fill(values: Map<String, String>, files: List<FileSource>): GenerationOption {
         val names = variables
         require(values.keys == names) { "필요한 변수와 전달된 변수가 일치해야 한다: 필요 $names" }
-        require(images.size == inputImageCount) { "입력 이미지는 ${inputImageCount}장이어야 한다: ${images.size}장" }
+        require(files.size == inputFileCount) { "실행 때 받을 파일은 ${inputFileCount}개여야 한다: ${files.size}개" }
         return option.mapText { text -> VARIABLE.replace(text) { values.getValue(it.groupValues[1]) } }
-            .withInputImages(images)
+            .withInputFiles(files)
     }
 
     private companion object {
@@ -99,27 +106,28 @@ private fun DecisionQuestion.mapText(transform: (String) -> String): DecisionQue
 }
 
 /**
- * 실행 때 [count] 장의 이미지를 더 받을 수 있는가.
+ * 실행 때 [count] 개의 파일을 더 받을 수 있는가.
  *
- * 이미지 생성은 고정 참조와 입력을 합쳐 [ImageOption.MAX_SOURCES] 장까지다. 글 생성은 이미지를 받지 않는다.
- * 판정은 근거 수에 상한이 없다. TTS 는 이미지를 받지 않는다.
+ * 이미지 생성은 고정 참조와 입력을 합쳐 [ImageOption.MAX_SOURCES] 장까지다. 글 생성은 고정 첨부와 합쳐
+ * [TextGenerateOption.MAX_ATTACHMENTS] 개까지다. 판정은 근거 수에 상한이 없다. TTS 는 파일을 받지 않는다.
+ * 어떤 형식을 받는지는 실행할 때 접수가 확인한다 — 이미지 생성 · 판정은 이미지, 글 생성은 모델이 받는 형식이다.
  */
-private fun GenerationOption.acceptsInputImages(count: Int): Boolean = count >= 0 && when (this) {
-    is TextGenerateOption -> count == 0
+private fun GenerationOption.acceptsInputFiles(count: Int): Boolean = count >= 0 && when (this) {
+    is TextGenerateOption -> attachments.size + count <= TextGenerateOption.MAX_ATTACHMENTS
     is ImageOption -> sources.size + count <= ImageOption.MAX_SOURCES
     is DecisionOption -> true
     is AudioGenerateOption -> count == 0
 }
 
 /**
- * 실행 때 받은 이미지를 옵션에 붙인다. 이미지 생성은 참조 뒤에, 판정은 근거 뒤에 둔다.
+ * 실행 때 받은 파일을 옵션에 붙인다. 이미지 생성은 참조 뒤에, 글 생성은 첨부 뒤에, 판정은 근거 뒤에 둔다.
  *
- * 글 생성 · TTS 에 이미지를 주면 [IllegalArgumentException] 이다. 받을 자리가 없는데 조용히 버리면
- * 사용자는 이미지가 쓰였다고 믿는다.
+ * TTS 에 파일을 주면 [IllegalArgumentException] 이다. 받을 자리가 없는데 조용히 버리면
+ * 사용자는 파일이 쓰였다고 믿는다.
  */
-private fun GenerationOption.withInputImages(images: List<FileSource>): GenerationOption = when (this) {
-    is TextGenerateOption -> apply { require(images.isEmpty()) { "글 생성은 입력 이미지를 받지 않는다" } }
-    is ImageOption -> copy(sources = sources + images)
-    is DecisionOption -> copy(input = input + images.map { DecisionEvidence.Image(it) })
-    is AudioGenerateOption -> apply { require(images.isEmpty()) { "TTS 는 입력 이미지를 받지 않는다" } }
+private fun GenerationOption.withInputFiles(files: List<FileSource>): GenerationOption = when (this) {
+    is TextGenerateOption -> copy(attachments = attachments + files)
+    is ImageOption -> copy(sources = sources + files)
+    is DecisionOption -> copy(input = input + files.map { DecisionEvidence.Image(it) })
+    is AudioGenerateOption -> apply { require(files.isEmpty()) { "TTS 는 실행 때 파일을 받지 않는다" } }
 }

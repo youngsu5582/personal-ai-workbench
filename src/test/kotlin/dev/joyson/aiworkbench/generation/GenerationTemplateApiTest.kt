@@ -6,7 +6,13 @@ import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.application.GenerationTemplateService
 import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
+import dev.joyson.aiworkbench.generation.domain.option.FileSource
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.storage.FileStorage
+import dev.joyson.aiworkbench.storage.Sha256
+import dev.joyson.aiworkbench.upload.domain.UploadedFile
+import dev.joyson.aiworkbench.upload.domain.UploadedFileMetadata
+import dev.joyson.aiworkbench.upload.domain.UploadedFileRepository
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
 import dev.joyson.aiworkbench.workspace.application.WorkspaceService
@@ -30,6 +36,8 @@ class GenerationTemplateApiTest @Autowired constructor(
     private val templates: GenerationTemplateService,
     private val workspaces: WorkspaceService,
     private val jobs: GenerationJobService,
+    private val uploadedFiles: UploadedFileRepository,
+    private val fileStorage: FileStorage,
 ) : IntegrationTest() {
 
     private val textOption = """{"type":"text-generate","instructions":"너는 {{role}}이다","prompt":"{{request}}"}"""
@@ -58,7 +66,7 @@ class GenerationTemplateApiTest @Autowired constructor(
             jsonPath("$.option.instructions") { value("너는 {{role}}이다") }
             jsonPath("$.variables[0]") { value("role") }
             jsonPath("$.variables[1]") { value("request") }
-            jsonPath("$.inputImageCount") { value(0) }
+            jsonPath("$.inputFileCount") { value(0) }
             jsonPath("$.model") { value(null) }
         }.andReturn()
         val templateUuid = JsonMapper.shared().readTree(created.response.contentAsString).get("uuid").stringValue()
@@ -123,17 +131,18 @@ class GenerationTemplateApiTest @Autowired constructor(
         assertEquals(SharedTestConfig.FAKE_TEXT_MODEL, assertNotNull(jobs.findOwned(jobUuid, workspace)).model)
     }
 
+    /** 옛 이름(`inputImageCount` · `images`)으로 보내도 받는다 — 템플릿을 만드는 바깥 스크립트가 아직 그 이름을 쓴다. */
     @Test
-    fun `받을 수 없는 입력 이미지 수와 종류 변경은 400 이다`() {
+    fun `받을 수 없는 실행 파일 수와 종류 변경은 400 이고 옛 이름도 받는다`() {
         val (_, token) = token("template-image-count")
-        create(token, """{"name":"글","option":$textOption,"inputImageCount":1}""").andExpect { status { isBadRequest() } }
+        create(token, """{"name":"글","option":$textOption,"inputFileCount":2}""").andExpect { status { isBadRequest() } }
         val fixedReference = imageOption.dropLast(1) + ""","sources":[{"type":"uploaded","sha256":"$sha"}]}"""
         create(token, """{"name":"섞기","option":$fixedReference,"inputImageCount":1}""").andExpect { status { isBadRequest() } }
 
         val created = create(token, """{"name":"스타일 수정","option":$imageOption,"inputImageCount":1}""").andExpect {
             status { isCreated() }
             jsonPath("$.type") { value("image-generate") }
-            jsonPath("$.inputImageCount") { value(1) }
+            jsonPath("$.inputFileCount") { value(1) }
         }.andReturn()
         val path = "/api/templates/" + JsonMapper.shared().readTree(created.response.contentAsString).get("uuid").stringValue()
 
@@ -149,6 +158,46 @@ class GenerationTemplateApiTest @Autowired constructor(
             contentType = MediaType.APPLICATION_JSON
             content = """{"variables":{"style":"수채화"},"images":[{"type":"uploaded","sha256":"$sha"}],"model":"${SharedTestConfig.FAKE_MODEL}"}"""
         }.andExpect { status { isBadRequest() }; jsonPath("$.sourceSha256") { value(sha) } }
+    }
+
+    /** STT 템플릿 — 글 템플릿이 실행 때 받은 오디오를 첨부로 붙여, 받아쓰기를 변수 없이 부를 수 있다. */
+    @Test
+    fun `글 템플릿은 실행 때 받은 오디오를 첨부로 붙인다`() {
+        val (owner, token) = token("template-stt")
+        val workspace = assertNotNull(workspaces.findDefaultUuid(owner))
+        val audio = uploadedWav(owner, workspace)
+        val body = """{"name":"받아쓰기","option":{"type":"text-generate","prompt":"들리는 그대로 받아 써"},"inputFileCount":1,"model":"${SharedTestConfig.FAKE_TEXT_MODEL}"}"""
+        val created = create(token, body).andExpect {
+            status { isCreated() }
+            jsonPath("$.inputFileCount") { value(1) }
+        }.andReturn()
+        val templateUuid = JsonMapper.shared().readTree(created.response.contentAsString).get("uuid").stringValue()
+
+        val submitted = mvc.post("/api/templates/$templateUuid/jobs") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"files":[{"type":"uploaded","sha256":"$audio"}]}"""
+        }.andExpect { status { isAccepted() } }.andReturn()
+        val jobUuid = UUID.fromString(JsonMapper.shared().readTree(submitted.response.contentAsString).get("uuid").stringValue())
+        val option = assertNotNull(jobs.findOwned(jobUuid, workspace)).option as TextGenerateOption
+        assertEquals(listOf<FileSource>(FileSource.Uploaded(audio)), option.attachments)
+    }
+
+    /** 올린 WAV 한 개를 보관소에 둔다. 처음 참조될 때 앞부분 바이트로 형식을 판정한다. */
+    private fun uploadedWav(owner: UUID, workspace: UUID): String {
+        val wav = "RIFF".toByteArray() + byteArrayOf(0x24, 0, 0, 0) + "WAVE".toByteArray()
+        val sha256 = Sha256.of(wav).hex
+        val file = uploadedFiles.save(
+            UploadedFile(
+                sha256 = sha256,
+                ownerUserUuid = owner,
+                workspaceUuid = workspace,
+                storageKey = "workspaces/$workspace/uploads/$sha256",
+                metadata = UploadedFileMetadata(mimeType = "audio/wav", fileSize = wav.size.toLong()),
+            ),
+        )
+        fileStorage.put(file.storageKey, wav, "audio/wav")
+        return sha256
     }
 
     @Test
