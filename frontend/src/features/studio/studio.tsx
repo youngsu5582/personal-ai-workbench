@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { ApiError, contentTypeOf, request, upload, type Job } from "../../api";
-import { AuthenticatedImage } from "../../shared/authenticated-image";
+import { AuthenticatedAudio, AuthenticatedImage } from "../../shared/authenticated-media";
 import { CopyButton } from "../../shared/copy-button";
 import { errorText, type Context } from "../../shared/console-utils";
-import { ModelPicker } from "../../shared/model-picker";
+import { ModelPicker, type Model } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
-import { Field, Textarea } from "../../shared/ui/field";
+import { Field, Input, Textarea } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { Segmented } from "../../shared/ui/segmented";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../shared/ui/select";
 import { Badge, Card, CardTitle } from "../../shared/ui/surface";
 import { EmptyState } from "../../shared/ui/empty-state";
 
 const STATUS: Record<string, string> = { PENDING: "접수됨", DISPATCHED: "처리 중", CLOSED: "처리 종료", SUCCEEDED: "성공", FAILED: "실패", RUNNING: "진행 중" };
+type Kind = "image" | "text" | "audio";
+const JOB_TYPE = { image: "image-generate", text: "text-generate", audio: "audio-generate" } as const;
+/** 목록에 있으면 이 목소리를 먼저 고른다. 없으면 목록의 첫 목소리다. */
+const PREFERRED_VOICE = "Kore";
 
 export function StudioPanel({ token, workspace }: Context) {
-  const [kind, setKind] = useState<"image" | "text">("image");
+  const [kind, setKind] = useState<Kind>("image");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +28,15 @@ export function StudioPanel({ token, workspace }: Context) {
   const [busy, setBusy] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [fail, setFail] = useState("");
+  const [models, setModels] = useState<Model[]>([]);
+  const [voice, setVoice] = useState("");
+  const [style, setStyle] = useState("");
+  // 목소리는 모델에 딸려 온다. 모델을 바꿔 고른 목소리를 받지 않으면, 받는 목소리로 다시 고른다.
+  const voices = models.find((m) => m.id === model)?.voices;
+  useEffect(() => {
+    if (!voices?.length || voices.includes(voice)) return;
+    setVoice(voices.includes(PREFERRED_VOICE) ? PREFERRED_VOICE : voices[0]);
+  }, [voices, voice]);
   useEffect(() => {
     if (!file) {
       setFilePreview("");
@@ -72,7 +86,15 @@ export function StudioPanel({ token, workspace }: Context) {
     try {
       const sha = file ? await upload(token, workspace, file) : null;
       const option =
-        kind === "image"
+        kind === "audio"
+          ? {
+              type: "audio-generate",
+              text: prompt,
+              voice,
+              // 비워 두면 보내지 않는다. 빈 말투는 서버가 400 으로 거절한다.
+              ...(style.trim() ? { style: style.trim() } : {}),
+            }
+          : kind === "image"
           ? {
               type: "image-generate",
               prompt,
@@ -109,15 +131,35 @@ export function StudioPanel({ token, workspace }: Context) {
       <Card className="p-6">
         <form onSubmit={run} className="flex flex-col gap-5">
           <CardTitle>무엇을 만들까요?</CardTitle>
-          <Segmented label="작업 유형" value={kind} className="w-56"
-            onChange={(next) => { setKind(next); setModel(""); setFile(null); }}
-            options={[{ value: "image", label: "이미지" }, { value: "text", label: "텍스트" }]} />
-          <ModelPicker id="studio-model" token={token} workspace={workspace} type={kind === "image" ? "image-generate" : "text-generate"}
-            value={model} onChange={setModel} autoSelectFirst />
-          <Field label="프롬프트" htmlFor="studio-prompt">
+          <Segmented label="작업 유형" value={kind} className="w-72"
+            onChange={(next) => { setKind(next); setModel(""); setFile(null); setModels([]); }}
+            options={[{ value: "image", label: "이미지" }, { value: "text", label: "텍스트" }, { value: "audio", label: "음성" }]} />
+          <ModelPicker id="studio-model" token={token} workspace={workspace} type={JOB_TYPE[kind]}
+            value={model} onChange={setModel} onModels={setModels} autoSelectFirst />
+          <Field label={kind === "audio" ? "읽을 글" : "프롬프트"} htmlFor="studio-prompt"
+            hint={kind === "audio" ? "글은 그대로 소리 내어 읽혀요. 말투는 글에 쓰지 말고 아래 칸에 적어 주세요." : undefined}>
             <Textarea id="studio-prompt" required value={prompt} onChange={(e) => setPrompt(e.target.value)} className="min-h-32"
-              placeholder={kind === "image" ? "예: 햇살이 드는 카페 창가의 고양이, 수채화" : "예: 친환경 텀블러를 소개하는 문구 3개 · 첨부한 오디오를 들리는 그대로 받아 써 줘"} />
+              placeholder={kind === "image" ? "예: 햇살이 드는 카페 창가의 고양이, 수채화"
+                : kind === "audio" ? "예: 그 쿠폰 발급 로직에서 동시성 문제는 어떻게 막으셨나요?"
+                : "예: 친환경 텀블러를 소개하는 문구 3개 · 첨부한 오디오를 들리는 그대로 받아 써 줘"} />
           </Field>
+          {kind === "audio" && (
+            <>
+              <Field label="목소리" htmlFor="studio-voice">
+                <Select value={voice} onValueChange={setVoice} disabled={!voices?.length}>
+                  <SelectTrigger id="studio-voice">
+                    <SelectValue placeholder={model ? "목소리를 불러오는 중이에요" : "모델을 먼저 고르세요"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {voices?.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="말투" htmlFor="studio-style" optional>
+                <Input id="studio-style" value={style} onChange={(e) => setStyle(e.target.value)} placeholder="예: 차분하고 또렷하게" />
+              </Field>
+            </>
+          )}
           {kind === "image" && (
             <Field label="참고 이미지" optional>
               <FileDrop id="studio-reference" label="참고 이미지" accept="image/png,image/jpeg,image/webp" hint="PNG · JPG · WEBP" onFile={setFile}>
@@ -148,7 +190,7 @@ export function StudioPanel({ token, workspace }: Context) {
             </Field>
           )}
           {fail && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{fail}</p>}
-          <Button type="submit" variant="primary" className="w-full" disabled={busy || !model}>
+          <Button type="submit" variant="primary" className="w-full" disabled={busy || !model || (kind === "audio" && !voice)}>
             <Sparkles aria-hidden="true" />{busy ? "접수 중…" : "작업 실행"}
           </Button>
           <p className="m-0 text-center text-[11px] text-subtle-foreground">실행 시 선택한 모델의 사용 요금이 발생할 수 있어요.</p>
@@ -178,10 +220,12 @@ export function StudioPanel({ token, workspace }: Context) {
                     </div>
                   );
                 })}
-                {task.files.map((f) => (
-                  <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl}
-                    onRefresh={() => request<Job>(token, `/api/jobs/${job.uuid}`, workspace).then(setJob).catch((e) => setFail(errorText(e)))} />
-                ))}
+                {task.files.map((f) => {
+                  const refresh = () => request<Job>(token, `/api/jobs/${job.uuid}`, workspace).then(setJob).catch((e) => setFail(errorText(e)));
+                  return f.mimeType?.startsWith("audio/")
+                    ? <AuthenticatedAudio key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh} label={`결과 ${i + 1} 오디오`} />
+                    : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh} />;
+                })}
               </div>
             ))}
           </div>

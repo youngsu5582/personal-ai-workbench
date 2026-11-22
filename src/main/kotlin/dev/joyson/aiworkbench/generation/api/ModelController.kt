@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.api
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import dev.joyson.aiworkbench.generation.domain.GenerationJobType
 import dev.joyson.aiworkbench.provider.ProviderModel
 import dev.joyson.aiworkbench.provider.ProviderRegistry
@@ -24,13 +25,26 @@ class ModelController(private val registry: ProviderRegistry) {
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 작업 종류다: $type")
         return ModelsResponse(
             when (jobType) {
-                GenerationJobType.IMAGE_GENERATE -> registry.imageModels
-                GenerationJobType.TEXT_GENERATE -> registry.textModels
-                GenerationJobType.DECISION -> registry.decisionModels
-                GenerationJobType.AUDIO_GENERATE -> registry.audioModels
+                GenerationJobType.IMAGE_GENERATE -> registry.imageModels.map { it.toResponse() }
+                GenerationJobType.TEXT_GENERATE -> registry.textModels.map { it.toResponse() }
+                GenerationJobType.DECISION -> registry.decisionModels.map { it.toResponse() }
+                // 받는 목소리의 정본은 어댑터다. 받는 쪽이 이름 목록을 따로 들고 있지 않게 모델과 함께 준다.
+                GenerationJobType.AUDIO_GENERATE -> registry.audioModels.map { model ->
+                    model.toResponse(voices = registry.findAudio(model.id)?.voices(model.id)?.sorted().orEmpty())
+                }
             },
         )
     }
+
+    private fun ProviderModel.toResponse(voices: List<String>? = null) = ModelResponse(id, provider, voices)
 }
 
-data class ModelsResponse(val models: List<ProviderModel>)
+data class ModelsResponse(val models: List<ModelResponse>)
+
+data class ModelResponse(
+    val id: String,
+    val provider: String,
+    /** TTS 모델이 받는 목소리. 다른 종류의 모델에는 칸째 없다 — 해당이 없는 것이지 모르는 것이 아니다. */
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    val voices: List<String>? = null,
+)

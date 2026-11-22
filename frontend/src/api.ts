@@ -48,6 +48,10 @@ export type Job = {
     output?: { type: string; schema?: string };
     input?: DecisionEvidence[];
     questions?: { name: string; instructions: string }[];
+    /** TTS(`audio-generate`)의 글 · 목소리 · 말투. */
+    text?: string;
+    voice?: string;
+    style?: string;
   };
   inputs: JobInput[];
   progress: { total: number; succeeded: number; failed: number };
@@ -57,7 +61,8 @@ export type Job = {
     /** 마지막 시도가 집힌 시각과 끝난 시각. 시각을 남기기 전에 끝난 결과는 둘 다 없다. */
     startedAt?: string | null;
     finishedAt?: string | null;
-    files: { url: string; previewUrl: string | null; sha256: string }[];
+    /** 그릴지 재생할지는 `mimeType` 으로 가른다. 이미지는 가로 · 세로, 오디오는 재생 길이(초)가 있다. */
+    files: { url: string; previewUrl: string | null; sha256: string; mimeType: string; width?: number; height?: number; durationSeconds?: number }[];
     texts: { content: unknown }[];
     decisions: { answers: unknown[] }[];
   }[];

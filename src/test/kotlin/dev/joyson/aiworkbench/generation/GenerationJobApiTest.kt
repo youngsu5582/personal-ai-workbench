@@ -11,6 +11,8 @@ import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
+import org.hamcrest.Matchers.hasKey
+import org.hamcrest.Matchers.not
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -81,6 +83,26 @@ class GenerationJobApiTest @Autowired constructor(
                     jsonPath("$.models[0].provider") { value(SharedTestConfig.FAKE_PROVIDER) }
                 }
             }
+    }
+
+    /** 받는 목소리의 정본은 어댑터다. 받는 쪽이 따로 목록을 들지 않게 모델과 함께 주고, 다른 종류에는 칸이 없다. */
+    @Test
+    fun `TTS 모델은 받는 목소리를 함께 준다`() {
+        mockMvc.get("/api/models") {
+            header("Authorization", "Bearer $token")
+            param("type", "audio-generate")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.models[0].voices.length()") { value(1) }
+            jsonPath("$.models[0].voices[0]") { value(SharedTestConfig.FAKE_VOICE) }
+        }
+        mockMvc.get("/api/models") {
+            header("Authorization", "Bearer $token")
+            param("type", "text-generate")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.models[0]") { value(not(hasKey("voices"))) }
+        }
     }
 
     @Test

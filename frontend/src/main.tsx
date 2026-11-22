@@ -136,7 +136,7 @@ function App() {
             ? <TemplatesPanel key={workspace} token={token} workspace={workspace} onJob={uuid => go("jobs", uuid)} />
             : loading)}
           {page === "studio" && <>
-            <PageHeader eyebrow="Playground" title="작업실" description="이미지와 텍스트를 생성해 보세요." />
+            <PageHeader eyebrow="Playground" title="작업실" description="이미지 · 텍스트 · 음성을 만들어 보세요." />
             {workspace ? <StudioPanel key={workspace} token={token} workspace={workspace} /> : loading}
           </>}
           {page === "library" && <>
