@@ -17,8 +17,17 @@ spec:
       serviceAccountName: workbench
       securityContext:
         runAsNonRoot: true
+        # 볼륨 파일의 그룹을 앱 사용자(이미지의 uid · gid 10001)로 둔다. 서명 키를 0440 으로 붙여도 앱이 읽는다.
+        fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        # 인가 서버가 토큰에 서명하는 RSA 개인키(PEM). 운영자가 서버에서 만든 Secret 이다 — 만드는 법은 deploy/README.md 의 Secret 절.
+        # 없으면 Pod 가 뜨지 않는다. 앱도 키 없이는 기동하지 않으므로 먼저 멈추는 쪽이 낫다.
+        - name: authserver-signing-key
+          secret:
+            secretName: workbench-authserver-signing-key
+            defaultMode: 0440
       containers:
         - name: workbench
           image: ghcr.io/youngsu5582/personal-ai-workbench:main
@@ -31,6 +40,11 @@ spec:
           envFrom:
             - secretRef:
                 name: workbench-runtime
+          # AUTH_SIGNING_KEY 가 이 위치의 파일을 가리킨다(runtime.env.example).
+          volumeMounts:
+            - name: authserver-signing-key
+              mountPath: /etc/workbench/keys
+              readOnly: true
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
