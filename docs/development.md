@@ -743,8 +743,8 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out var/keys/auths
 
 ## 생성 템플릿
 
-자주 하는 요청을 저장해 두고, 실행할 때 변수와 입력 이미지만 채운다. 템플릿의 `option` 은 `POST /api/jobs` 의 `option` 과 같은 모양이고,
-글 필드에 `{{name}}` 변수 자리를 둔다. 종류(`text-generate` · `image-generate` · `decision`)는 만든 뒤 바꾸지 않는다.
+자주 하는 요청을 저장해 두고, 실행할 때 변수와 파일만 채운다. 템플릿의 `option` 은 `POST /api/jobs` 의 `option` 과 같은 모양이고,
+글 필드에 `{{name}}` 변수 자리를 둔다. 종류(`text-generate` · `image-generate` · `decision` · `audio-generate`)는 만든 뒤 바꾸지 않는다.
 
 ```http
 POST /api/templates
@@ -758,7 +758,8 @@ Authorization: Bearer <token>
            "sources":[{"type":"uploaded","sha256":"<참조 이미지>"}]}}
 ```
 
-응답의 `variables` 는 실행 때 채울 변수 이름이고 `inputImageCount` 는 실행 때 받을 이미지 수다(기본 0).
+응답의 `variables` 는 실행 때 채울 변수 이름이고 `inputFileCount` 는 실행 때 받을 파일 수다(기본 0).
+요청에서는 같은 값을 `inputImageCount` 로 보내도 받는다.
 `model` 을 주면 템플릿의 기본 모델로 저장한다. 그 모델이 템플릿 종류를 다루지 못하면 400 이다.
 응답의 uuid로 조회·수정·삭제하고, 목록은 `GET /api/templates`에서 확인한다. 개별 경로는 `/api/templates/{uuid}`이며 수정은 PUT, 삭제는 DELETE다.
 각 요청에서 `X-Workspace-Id` 헤더로 자신의 서비스를 지정할 수 있다. 생략하면 기본 서비스가 선택된다.
@@ -772,15 +773,21 @@ Authorization: Bearer <token>
 {"variables":{"content":"이 글을 요약하면 ..."},"model":"gpt-image-2","taskCount":2}
 ```
 
-실행 요청은 종류와 관계없이 `variables` · `images` · `model` · `taskCount` 다. `model` 을 빼면 템플릿의 기본 모델을 쓰고,
+실행 요청은 종류와 관계없이 `variables` · `files` · `model` · `taskCount` 다(`files` 는 `images` 로 보내도 받는다). `model` 을 빼면 템플릿의 기본 모델을 쓰고,
 기본 모델도 없으면 400 이다. 다른 모델로 돌려 보려면 `GET /api/models?type=<템플릿의 type>` 에서 골라 넣는다. 접수 응답은 기존 Job과 같이 202와 uuid다.
 
-- 변수를 둘 수 있는 곳은 사람이 쓰는 글 필드다 — `prompt` · `instructions` · 판정 근거의 `text` · 질문의 `instructions` · 선택지와 단계의 `description`.
+- 변수를 둘 수 있는 곳은 사람이 쓰는 글 필드다 — `prompt` · `instructions` · 판정 근거의 `text` · 질문의 `instructions` · 선택지와 단계의 `description` · TTS 의 `text` · `style`.
   질문 `name` · 선택지 `value` · 단계 `label` 은 답의 키라 변수로 다루지 않는다.
 - 변수 이름은 영문자 또는 밑줄로 시작하고 영문자·숫자·밑줄로 구성한다. 사용된 변수와 전달된 변수는 정확히 일치해야 하고, 빈 값은 받되
   채운 결과가 옵션의 규칙(빈 `prompt` 등)을 어기면 400 이다. 실행마다 바뀌는 사용자 요청은 `"prompt":"{{request}}"` 처럼 변수로 둔다.
-- `images` 는 `inputImageCount` 장과 정확히 같아야 한다. 이미지 생성은 템플릿의 `sources` 뒤에, 판정은 근거 뒤에 붙는다.
-  이미지 생성은 고정 참조와 입력을 합쳐 `ImageOption.MAX_SOURCES` 장까지이고, 글 생성은 입력 이미지를 받지 않는다.
+- `files` 는 `inputFileCount` 개와 정확히 같아야 한다. 이미지 생성은 템플릿의 `sources` 뒤에, 글 생성은 `attachments` 뒤에, 판정은 근거 뒤에 붙는다.
+  이미지 생성은 고정 참조와 합쳐 `ImageOption.MAX_SOURCES` 장, 글 생성은 고정 첨부와 합쳐 `TextGenerateOption.MAX_ATTACHMENTS` 개까지다. TTS 는 파일을 받지 않는다.
+  받는 형식은 실행할 때 접수가 확인한다 — 이미지 생성 · 판정은 이미지, 글 생성은 모델이 받는 형식(이미지 · 오디오)이다.
+- **STT 템플릿**은 글 템플릿에 `"inputFileCount":1` 을 두면 된다. 실행할 때 올린 오디오를 `files` 로 주면 첨부로 붙어 받아 쓴다.
+
+```json
+{"name":"받아쓰기","option":{"type":"text-generate","prompt":"이 오디오를 들리는 그대로 받아 써"},"inputFileCount":1,"model":"gemini-3.5-flash-lite"}
+```
 - 판정 템플릿의 `taskCount` 는 1 이다.
 
 완성된 옵션은 Job에 저장되므로 이후 템플릿을 수정하거나 삭제해도 접수된 작업은 바뀌지 않는다. 템플릿으로 만든 Job도 선택한 서비스에 속한다.
