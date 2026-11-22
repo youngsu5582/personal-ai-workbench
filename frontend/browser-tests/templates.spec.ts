@@ -16,7 +16,7 @@ async function choose(page: import("@playwright/test").Page, label: string | Reg
 const names = (...texts: (string | undefined)[]) =>
   [...new Set(texts.flatMap(text => Array.from((text ?? "").matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)}}/g), m => m[1])))];
 const textTemplate = (uuid: string, name: string, prompt: string) => ({ uuid, serviceUuid: "a", name, type: "text-generate",
-  option: { type: "text-generate", prompt }, variables: names(prompt), inputImageCount: 0, createdAt: "2026-11-01T00:00:00Z" });
+  option: { type: "text-generate", prompt }, variables: names(prompt), inputFileCount: 0, createdAt: "2026-11-01T00:00:00Z" });
 
 test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async ({ page }) => {
   let stored: Record<string, unknown> | null = null;
@@ -40,7 +40,7 @@ test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async
     const input = r.request().postDataJSON();
     saved = input;
     stored = { uuid: "t1", serviceUuid: "a", createdAt: "2026-11-01T00:00:00Z", name: input.name, type: input.option.type, option: input.option,
-      variables: names(input.option.instructions, input.option.prompt), inputImageCount: input.inputImageCount };
+      variables: names(input.option.instructions, input.option.prompt), inputFileCount: input.inputFileCount };
     return r.fulfill({ status: method === "POST" ? 201 : 200, json: stored });
   });
   await page.goto("/?login=success");
@@ -51,7 +51,7 @@ test("템플릿을 만들고 수정한 뒤 변수와 함께 실행한다", async
   await page.getByLabel("시스템 지시문").fill("당신은 {{role}}입니다. {{tone}} 말투로 답하세요.");
   await expect(page.getByRole("textbox", { name: "프롬프트", exact: true })).toHaveValue("{{request}}");
   await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
-  expect(saved).toEqual({ name: "편집자", inputImageCount: 0,
+  expect(saved).toEqual({ name: "편집자", inputFileCount: 0,
     option: { type: "text-generate", instructions: "당신은 {{role}}입니다. {{tone}} 말투로 답하세요.", prompt: "{{request}}" } });
   await page.getByRole("button", { name: "수정", exact: true }).click();
   await page.getByLabel("템플릿 이름").fill("수정한 편집자");
@@ -156,9 +156,9 @@ async function imageRoutes(page: import("@playwright/test").Page) {
   await page.route("**/api/uploads", r => r.fulfill({ json: { sha256: "f".repeat(64), uploadRequired: false, url: null, headers: {} } }));
   await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "image-a", provider: "Example" }] } }));
 }
-const image = (uuid: string, name: string, prompt: string, inputImageCount: number) => ({ uuid, serviceUuid: "a", name, type: "image-generate",
+const image = (uuid: string, name: string, prompt: string, inputFileCount: number) => ({ uuid, serviceUuid: "a", name, type: "image-generate",
   option: { type: "image-generate", prompt, size: { type: "ratio", ratio: "16:9", resolution: "1k" }, quality: "auto" },
-  variables: names(prompt), inputImageCount, createdAt: "2026-11-01T00:00:00Z" });
+  variables: names(prompt), inputFileCount, createdAt: "2026-11-01T00:00:00Z" });
 const png = { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") };
 
 test("이미지 템플릿을 종류와 변수 칩으로 만든다", async ({ page }) => {
@@ -169,7 +169,7 @@ test("이미지 템플릿을 종류와 변수 칩으로 만든다", async ({ pag
     const input = r.request().postDataJSON();
     saved = input;
     return r.fulfill({ status: 201, json: { uuid: "t9", serviceUuid: "a", createdAt: "2026-11-01T00:00:00Z", name: input.name, type: input.option.type,
-      option: input.option, variables: names(input.option.prompt), inputImageCount: input.inputImageCount } });
+      option: input.option, variables: names(input.option.prompt), inputFileCount: input.inputFileCount } });
   });
   await page.goto("/?login=success");
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
@@ -187,7 +187,7 @@ test("이미지 템플릿을 종류와 변수 칩으로 만든다", async ({ pag
   await page.getByRole("radio", { name: "1장 받음" }).click();
   await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "썸네일 스타일 수정" })).toBeVisible();
-  expect(saved).toEqual({ name: "썸네일 스타일 수정", inputImageCount: 1, option: { type: "image-generate", prompt: "입력한 이미지의 스타일을 바꿔 줘. {{style}}",
+  expect(saved).toEqual({ name: "썸네일 스타일 수정", inputFileCount: 1, option: { type: "image-generate", prompt: "입력한 이미지의 스타일을 바꿔 줘. {{style}}",
     size: { type: "ratio", ratio: "16:9", resolution: "1k" }, quality: "auto" } });
 });
 
@@ -216,7 +216,7 @@ test("이미지 템플릿은 미리보기에 입력값을 채우고 입력 이�
   await page.getByLabel("입력 이미지").setInputFiles(png);
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
-  expect(submitted).toEqual({ model: "image-a", taskCount: 1, variables: { style: "따뜻한 수채화" }, images: [{ type: "uploaded", sha256: "f".repeat(64) }] });
+  expect(submitted).toEqual({ model: "image-a", taskCount: 1, variables: { style: "따뜻한 수채화" }, files: [{ type: "uploaded", sha256: "f".repeat(64) }] });
 });
 
 test("기본 모델을 저장하면 실행 화면에서 미리 선택되고 바꿀 수 있다", async ({ page }) => {
@@ -235,7 +235,7 @@ test("기본 모델을 저장하면 실행 화면에서 미리 선택되고 바�
     const input = r.request().postDataJSON();
     saved = input;
     stored = { uuid: "t1", serviceUuid: "a", createdAt: "2026-11-01T00:00:00Z", name: input.name, type: input.option.type, option: input.option,
-      variables: names(input.option.instructions, input.option.prompt), inputImageCount: input.inputImageCount, model: input.model ?? null };
+      variables: names(input.option.instructions, input.option.prompt), inputFileCount: input.inputFileCount, model: input.model ?? null };
     return r.fulfill({ status: 201, json: stored });
   });
   await page.goto("/?login=success");
@@ -274,7 +274,7 @@ test("글 템플릿을 고쳐도 화면에 없는 출력 형식과 effort 는 �
   const output = { type: "json-schema", name: "answer", schema: { type: "object", properties: { title: { type: "string" } } } };
   const sink: { saved?: Record<string, unknown> } = {};
   await single(page, { uuid: "t1", serviceUuid: "a", name: "구조화 답", type: "text-generate",
-    option: { type: "text-generate", prompt: "{{request}}", output, effort: "low" }, variables: ["request"], inputImageCount: 0, model: null, createdAt: "2026-11-01T00:00:00Z" }, sink);
+    option: { type: "text-generate", prompt: "{{request}}", output, effort: "low" }, variables: ["request"], inputFileCount: 0, model: null, createdAt: "2026-11-01T00:00:00Z" }, sink);
   await page.getByRole("button", { name: /구조화 답/ }).click();
   await page.getByRole("button", { name: "수정", exact: true }).click();
   await page.getByLabel("템플릿 이름").fill("구조화 답 v2");
@@ -287,7 +287,7 @@ test("변수 이름이 객체 속성 이름과 같아도 미리보기와 실행�
   const sink: { submitted?: Record<string, unknown> } = {};
   await single(page, { uuid: "t2", serviceUuid: "a", name: "속성 이름 변수", type: "text-generate",
     option: { type: "text-generate", prompt: "{{constructor}} / {{__proto__}} / {{toString}}" }, variables: ["constructor", "__proto__", "toString"],
-    inputImageCount: 0, model: "model-a", createdAt: "2026-11-01T00:00:00Z" }, sink);
+    inputFileCount: 0, model: "model-a", createdAt: "2026-11-01T00:00:00Z" }, sink);
   await page.getByRole("button", { name: /속성 이름 변수/ }).click();
   await expect(page.locator("[data-variable-state=empty]")).toHaveCount(3);
   await page.getByLabel("변수 constructor").fill("가");
@@ -302,7 +302,7 @@ test("변수 이름이 객체 속성 이름과 같아도 미리보기와 실행�
 /** TTS 모델은 받는 목소리를 함께 준다. 목소리는 모델에 딸려 와서 목록이 모델마다 다를 수 있다. */
 const ttsModels = { models: [{ id: "tts-a", provider: "Example", voices: ["Achernar", "Kore", "Puck"] }] };
 const tts = (uuid: string, name: string, text: string, style?: string) => ({ uuid, serviceUuid: "a", name, type: "audio-generate",
-  option: { type: "audio-generate", text, voice: "Puck", ...(style ? { style } : {}) }, variables: names(text, style), inputImageCount: 0,
+  option: { type: "audio-generate", text, voice: "Puck", ...(style ? { style } : {}) }, variables: names(text, style), inputFileCount: 0,
   model: null, createdAt: "2026-11-01T00:00:00Z" });
 
 test("TTS 템플릿을 글 · 목소리 · 말투로 만든다", async ({ page }) => {
@@ -333,7 +333,7 @@ test("TTS 템플릿을 글 · 목소리 · 말투로 만든다", async ({ page }
   await expect(page.locator("[data-variable-state=empty]")).toHaveText(["{{question}}", "{{tone}}"]);
   await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
   await expect(page.getByRole("heading", { name: "면접관 질문 읽기" })).toBeVisible();
-  expect(saved).toEqual({ name: "면접관 질문 읽기", inputImageCount: 0,
+  expect(saved).toEqual({ name: "면접관 질문 읽기", inputFileCount: 0,
     option: { type: "audio-generate", text: "{{question}}", voice: "Puck", style: "{{tone}} 말투로" } });
 });
 
@@ -362,4 +362,55 @@ test("TTS 템플릿은 변수를 채워 음성 모델로 실행한다", async ({
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
   expect(submitted).toEqual({ model: "tts-a", taskCount: 1, variables: { question: "동시성 문제는 어떻게 막으셨나요?" } });
+});
+
+test("STT 템플릿은 글 템플릿이 실행 때 오디오를 1개 받게 만든다", async ({ page }) => {
+  let saved: unknown;
+  await imageRoutes(page);
+  await page.route("**/api/templates**", r => {
+    if (r.request().method() === "GET") return r.fulfill({ json: [] });
+    const input = r.request().postDataJSON();
+    saved = input;
+    return r.fulfill({ status: 201, json: { ...textTemplate("t5", input.name, input.option.prompt), inputFileCount: input.inputFileCount } });
+  });
+  await page.goto("/?login=success");
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
+  await page.getByRole("button", { name: "템플릿 만들기" }).click();
+  await page.getByLabel("템플릿 이름").fill("받아쓰기");
+  await page.getByRole("textbox", { name: "프롬프트", exact: true }).fill("이 오디오를 들리는 그대로 받아 써");
+  await page.getByRole("radio", { name: "1개 받음" }).click();
+  await expect(page.getByText("1개 받음 · 이미지 또는 오디오")).toBeVisible();
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "받아쓰기" })).toBeVisible();
+  expect(saved).toEqual({ name: "받아쓰기", inputFileCount: 1, option: { type: "text-generate", prompt: "이 오디오를 들리는 그대로 받아 써" } });
+});
+
+test("STT 템플릿은 실행할 때 오디오를 서버가 받는 형식으로 올려 파일로 보낸다", async ({ page }) => {
+  let submitted: unknown;
+  const uploads: unknown[] = [];
+  await imageRoutes(page);
+  await page.route("**/api/uploads", r => {
+    uploads.push(r.request().postDataJSON());
+    return r.fulfill({ json: { sha256: "e".repeat(64), uploadRequired: false, url: null, headers: {} } });
+  });
+  await page.route("**/api/models?**", r => r.fulfill({ json: { models: [{ id: "text-a", provider: "Example" }] } }));
+  await page.route("**/api/templates**", r => {
+    if (r.request().method() === "POST") { submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: { uuid: "job-2" } }); }
+    return r.fulfill({ json: [{ ...textTemplate("t6", "받아쓰기", "이 오디오를 들리는 그대로 받아 써"), inputFileCount: 1 }] });
+  });
+  await page.goto("/?login=success");
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
+  const card = page.getByRole("button", { name: /받아쓰기/ });
+  await expect(card.getByText("입력 파일 1개")).toBeVisible();
+  await card.click();
+  await choose(page, /^모델$/, "text-a");
+  await expect(page.getByRole("button", { name: "작업 실행" })).toBeDisabled();
+  // 브라우저가 m4a 를 audio/x-m4a 로 알려 줘도 서버가 받는 audio/mp4 로 올린다(작업실의 첨부와 같다).
+  await page.getByLabel("입력 파일").setInputFiles({ name: "answer.m4a", mimeType: "audio/x-m4a", buffer: Buffer.from("fake-audio") });
+  await expect(page.getByText(/audio\/mp4 · 실행할 때 올려요/)).toBeVisible();
+  await expect(page.getByLabel("고른 입력 오디오 미리듣기")).toBeVisible();
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
+  expect(uploads).toEqual([{ contentType: "audio/mp4", contentLength: 10, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
+  expect(submitted).toEqual({ model: "text-a", taskCount: 1, variables: {}, files: [{ type: "uploaded", sha256: "e".repeat(64) }] });
 });

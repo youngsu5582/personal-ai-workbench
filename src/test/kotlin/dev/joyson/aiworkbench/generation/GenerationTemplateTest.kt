@@ -93,13 +93,13 @@ class GenerationTemplateTest @Autowired constructor(
     }
 
     @Test
-    fun `종류를 바꾸거나 받을 수 없는 이미지 수로 저장하면 거절한다`() {
+    fun `종류를 바꾸거나 받을 수 없는 실행 파일 수로 저장하면 거절한다`() {
         val owner = newOwner()
         val workspace = assertNotNull(workspaces.findDefaultUuid(owner))
         val template = templates.create(owner, "요약", text, 0, workspace)
 
         assertFailsWith<InvalidTemplateException> { templates.update(owner, template.uuid, "그림", image, 0, workspace) }
-        assertFailsWith<InvalidTemplateException> { templates.create(owner, "글", text, 1, workspace) }
+        assertFailsWith<InvalidTemplateException> { templates.create(owner, "글", text, 2, workspace) }
         assertFailsWith<InvalidTemplateException> { templates.create(owner, "그림", image, 2, workspace) }
     }
 

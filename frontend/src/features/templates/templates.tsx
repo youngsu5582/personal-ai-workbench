@@ -101,7 +101,7 @@ export function TemplatesPanel({ token, workspace, onJob }: Props) {
           <span className="mt-auto flex w-full items-center gap-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
             <Badge tone={TYPE_TONE[template.type]}>{TYPE_LABEL[template.type]}</Badge>
             <span>변수 {template.variables.length}개</span>
-            {template.inputImageCount > 0 && <span>· 입력 이미지 {template.inputImageCount}장</span>}
+            {template.inputFileCount > 0 && <span>· {template.type === "text-generate" ? `입력 파일 ${template.inputFileCount}개` : `입력 이미지 ${template.inputFileCount}장`}</span>}
             <ArrowRight className="ml-auto size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </span>
         </button>;

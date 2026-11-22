@@ -6,7 +6,7 @@ export type PreviewSource = {
   type: JobType;
   option: TemplateOption;
   variables: string[];
-  inputImageCount: number;
+  inputFileCount: number;
   model: string | null;
 };
 
@@ -49,6 +49,9 @@ export function TemplatePreview({ source, values, note }: { source: PreviewSourc
     </>}
     <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs">
       <dt className="text-subtle-foreground">기본 모델</dt><dd className="m-0 font-mono text-foreground">{source.model ?? <span className="font-sans text-muted-foreground">실행할 때 골라요</span>}</dd>
+      {source.type === "text-generate" && <>
+        <dt className="text-subtle-foreground">실행 때 받을 파일</dt><dd className="m-0 text-foreground">{source.inputFileCount ? `${source.inputFileCount}개 받음 · 이미지 또는 오디오` : "받지 않음"}</dd>
+      </>}
       {source.type === "audio-generate" && <>
         <dt className="text-subtle-foreground">목소리</dt><dd className="m-0 font-mono text-foreground">{option.voice || <span className="font-sans text-muted-foreground">아직 고르지 않았어요</span>}</dd>
       </>}
@@ -56,7 +59,7 @@ export function TemplatePreview({ source, values, note }: { source: PreviewSourc
         <dt className="text-subtle-foreground">크기</dt><dd className="m-0 text-foreground">{sizeLabel(option.size)}</dd>
         <dt className="text-subtle-foreground">품질</dt><dd className="m-0 text-foreground">{qualityLabel(option.quality)}</dd>
         <dt className="text-subtle-foreground">고정 참조 이미지</dt><dd className="m-0 text-foreground">{option.sources?.length ? `${option.sources.length}장` : "없음"}</dd>
-        <dt className="text-subtle-foreground">입력 이미지</dt><dd className="m-0 text-foreground">{source.inputImageCount ? `${source.inputImageCount}장 받음` : "받지 않음"}</dd>
+        <dt className="text-subtle-foreground">입력 이미지</dt><dd className="m-0 text-foreground">{source.inputFileCount ? `${source.inputFileCount}장 받음` : "받지 않음"}</dd>
       </>}
     </dl>
   </Card>;

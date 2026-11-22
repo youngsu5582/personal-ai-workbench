@@ -17,15 +17,15 @@ STT 는 PR #118~#121 로 끝났다. 사실 · 결정 · 설계는 SPEC.md.
 - [x] `docs/roadmap.md` 갱신 (T1 에서)
 
 - [x] #123 ~ #126 머지(2026-11-22, Codex 리뷰: #125 지적 없음)
-- [~] T1 TTS 템플릿(콘솔) — `feat/template-tts`
-- [ ] T2 STT 템플릿 — 실행 때 파일을 받는 칸 `inputFileCount` · `files`(옛 이름 `inputImageCount` · `images` 도 받음)
+- [x] T1 TTS 템플릿(콘솔) — #128 (`feat/template-tts`)
+- [x] T2 STT 템플릿 — `feat/template-stt`(#128 위). 실행 때 파일을 받는 칸 `inputFileCount` · `files`(옛 이름 `inputImageCount` · `images` 도 받음)
 - [ ] 배포 — T2 뒤. 태그 → 배포 PR → 서버 apply(사용자) → 운영 STT · TTS 실호출 1건씩
 
 ## Resume Point
-A~C(#123 ~ #126)는 `main` 에 있다. 배포는 템플릿 PR 둘(T1 TTS · T2 STT) 뒤에 한 번에 한다(사용자 결정, 메모리 `workbench-audio-deploy-plan`). 운영 Gemini 키는 Free Tier 그대로.
-지금은 T1(`feat/template-tts`) — 콘솔 템플릿에 음성 종류(읽을 글 · 목소리 · 말투). 서버는 #125 로 이미 TTS 템플릿을 받는다.
-다음 T2 — `TemplateSpec.inputImageCount` → `inputFileCount`(저장 JSON 은 `@JsonAlias` 로 옛 이름을 읽음), 실행 요청 `images` → `files`(옛 이름도 받음), 글 생성 템플릿이 실행 때 파일(오디오 · 이미지)을 첨부로 받음. 블로그가 템플릿 API 를 쓰므로 옛 이름은 계속 받는다.
-11/28 저녁이 서비스 기한이다 — 배포가 그 전에 끝나야 한다.
+A~C(#123 ~ #126)는 `main` 에 있다. 템플릿 PR 둘 — T1 TTS 템플릿 #128 · T2 STT 템플릿(#128 위에 쌓음) — 이 열려 있고, 둘이 머지되면 **배포**한다.
+배포: `main` 에 태그(`vYYYY.MM.DD`) → `deploy-pr.yml` 이 배포 PR · Release → 머지 → 서버에서 `sudo k3s kubectl apply -k deploy/overlays/home`(사용자). 운영 secret 에 `WORKBENCH_PROVIDER_GEMINI_API_KEY`(Free Tier 키)가 있어야 Gemini 가 뜬다.
+배포 뒤 운영 API 로 STT 1건 · TTS 1건 실호출해 결과 · 원장 · 비용 행을 본다.
+11/28 저녁이 서비스 기한이다.
 
 ## Files
 - SPEC.md — 확인한 사실, 결정, 설계, 테스트
