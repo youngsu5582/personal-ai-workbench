@@ -161,7 +161,7 @@ test("글 생성의 오디오 첨부는 첨부 파일로 세고 오디오로 그
   await row.click();
   await expect(page.getByRole("heading", { name: "첨부 파일" })).toBeVisible();
   // 오디오는 이미지로 그리지 않는다. 서명 주소가 있으면 재생 칸이고, 없으면 들을 수 없다고 말한다.
-  await expect(page.getByLabel("첨부 파일 오디오")).toHaveAttribute("src", /^data:audio/);
+  await expect(page.getByRole("group", { name: "첨부 파일 오디오" }).locator("audio")).toHaveAttribute("src", /^data:audio/);
   await expect(page.getByRole("img", { name: "첨부 파일" })).toHaveCount(0);
   await expect(page.getByText("이 보관소에서는 미리 들을 수 없어요.")).toBeVisible();
   // 올린 오디오를 올린 이미지라고 부르지 않는다.
@@ -187,7 +187,7 @@ test("글 생성에 오디오를 첨부하면 서버가 받는 형식으로 올�
   // 브라우저가 m4a 를 audio/x-m4a 로 알려 줘도 서버가 받는 audio/mp4 로 올린다.
   await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "answer.m4a", mimeType: "audio/x-m4a", buffer: Buffer.from("fake-audio") });
   await expect(page.getByText(/audio\/mp4 · 실행할 때 올려요/)).toBeVisible();
-  await expect(page.getByLabel("선택한 첨부 오디오 미리듣기")).toBeVisible();
+  await expect(page.getByRole("group", { name: "선택한 첨부 오디오 미리듣기" })).toBeVisible();
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByText("첫 서비스의 결과")).toBeVisible({ timeout: 12_000 });
   expect(uploads).toEqual([{ contentType: "audio/mp4", contentLength: 10, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
@@ -222,7 +222,7 @@ test("음성 작업은 모델이 받는 목소리로 읽을 글과 말투를 보
   await page.getByLabel("읽을 글").fill("동시성 문제는 어떻게 막으셨나요?");
   await page.getByLabel("말투").fill("  차분하게  ");
   await page.getByRole("button", { name: "작업 실행" }).click();
-  await expect(page.getByLabel("결과 1 오디오")).toHaveAttribute("src", /^data:audio/);
+  await expect(page.getByRole("group", { name: "결과 1 오디오" }).locator("audio")).toHaveAttribute("src", /^data:audio/);
   await expect(page.getByAltText("생성된 이미지")).toHaveCount(0);
   expect(submitted).toEqual([{
     option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Puck", style: "차분하게" },
@@ -240,8 +240,9 @@ test("작업 내역은 음성 결과를 재생 칸과 길이로 보이고 읽을
   // 오디오는 썸네일로 그리지 않는다.
   await expect(row.locator("img")).toHaveCount(0);
   await row.click();
-  await expect(page.getByLabel("결과 1 오디오")).toHaveAttribute("src", /^data:audio/);
-  await expect(page.getByText("8.5초")).toBeVisible();
+  await expect(page.getByRole("group", { name: "결과 1 오디오" }).locator("audio")).toHaveAttribute("src", /^data:audio/);
+  // 결과 밑의 한 줄이 무엇을 만든 것인지 말한다.
+  await expect(page.getByText("Kore · 8.5초 · WAV")).toBeVisible();
   await expect(page.getByRole("heading", { name: "읽을 글" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "목소리" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "말투" })).toBeVisible();
@@ -256,6 +257,65 @@ test("대시보드의 최근 작업은 TTS 작업을 음성 작업으로 부른�
   await nav.getByRole("button", { name: "대시보드" }).click();
   await expect(page.getByText("음성 작업")).toBeVisible();
   await expect(page.getByText("알 수 없는 작업")).toHaveCount(0);
+});
+
+/** 8kHz 모노 16bit 로 [seconds] 초짜리 무음 WAV. 재생 위치를 옮겨 보려면 길이가 있어야 한다. */
+function silentWav(seconds: number) {
+  const rate = 8000, n = rate * seconds, buf = Buffer.alloc(44 + n * 2);
+  buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVEfmt ", 8);
+  buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write("data", 36); buf.writeUInt32LE(n * 2, 40);
+  return `data:audio/wav;base64,${buf.toString("base64")}`;
+}
+
+test("오디오 플레이어는 재생 · 일시정지를 바꾸고 방향키로 5초씩 옮긴다", async ({ page }) => {
+  await prepare(page);
+  const long = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0], previewUrl: silentWav(12), durationSeconds: 12 }] }] };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [long], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: long }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /동시성 문제는/ }).click();
+  const player = page.getByRole("group", { name: "결과 1 오디오" });
+  // 메타데이터를 읽기 전에도 서버가 잰 길이를 보인다.
+  await expect(player.getByText("0:12")).toBeVisible();
+  const slider = player.getByRole("slider", { name: "결과 1 오디오 재생 위치" });
+  await slider.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(slider).toHaveAttribute("aria-valuenow", "5");
+  await page.keyboard.press("End");
+  await expect(slider).toHaveAttribute("aria-valuetext", "0:12 / 0:12");
+  await page.keyboard.press("Home");
+  await player.getByRole("button", { name: "재생" }).click();
+  await expect(player.getByRole("button", { name: "일시정지" })).toBeVisible();
+  await player.getByRole("button", { name: "일시정지" }).click();
+  await expect(player.getByRole("button", { name: "재생" })).toBeVisible();
+});
+
+test("결과 파일은 서버가 준 내려받기 주소로 저장하고 API 주소를 복사한다", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await prepare(page);
+  const sha = "a".repeat(64);
+  const signed = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0], downloadUrl: "https://storage.example/a.wav?attachment" }] }] };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [signed], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: signed }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /동시성 문제는/ }).click();
+  await expect(page.getByRole("link", { name: "결과 1 오디오 내려받기" })).toHaveAttribute("href", "https://storage.example/a.wav?attachment");
+  await page.getByRole("button", { name: "결과 1 오디오 주소 복사" }).click();
+  await expect(page.getByText("복사됨")).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${new URL(page.url()).origin}/api/files/${sha}`);
+});
+
+test("서명할 수 없는 보관소면 받아 둔 파일에 이름을 붙여 저장한다", async ({ page }) => {
+  await prepare(page);
+  const sha = "a".repeat(64);
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [spoken], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: spoken }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /동시성 문제는/ }).click();
+  const link = page.getByRole("link", { name: "결과 1 오디오 내려받기" });
+  await expect(link).toHaveAttribute("download", `${sha}.wav`);
+  await expect(link).toHaveAttribute("href", /^data:audio/);
 });
 
 test("이미지 작업에서는 첨부 파일 칸이 없다", async ({ page }) => {

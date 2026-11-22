@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 import { ApiError } from "../api";
+import { CopyButton } from "./copy-button";
 import { errorText, type Context } from "./console-utils";
+import { AudioPlayer } from "./ui/audio-player";
 import { Button } from "./ui/button";
 
 type Source = Context & {
@@ -58,22 +60,56 @@ function Retry({ fail, onRetry }: { fail: string; onRetry: () => void }) {
   </div>;
 }
 
-/** 인증이 필요한 이미지를 그린다. */
-export function AuthenticatedImage({ alt = "생성된 이미지", ...source }: Source & { alt?: string }) {
+/** 결과 파일을 받을 때의 이름. 서버가 내려 줄 때와 같은 규칙(`{sha256}.{확장자}`)이다. */
+export const fileNameOf = (sha256: string, mimeType: string) => `${sha256}.${mimeType.split("/")[1] || "bin"}`;
+
+/**
+ * 결과 파일의 동작 — 내려받기와 API 주소 복사.
+ *
+ * 보관소가 서명할 수 있으면 서버가 준 `downloadUrl` 로 받는다 — 응답이 저장하라고 말한다. 서명할 수 없는 보관소면
+ * 이미 받아 둔 브라우저 안 주소(`blob:`)에 이름을 붙여 저장한다. 둘 다 아니면(서명 주소만 있음) 새 탭에서 연다.
+ * 복사하는 것은 오래 사는 API 주소(`url`)다 — 서명 주소는 곧 만료된다.
+ */
+function FileActions({ src, url, downloadUrl, fileName, label }: { src: string; url: string; downloadUrl?: string | null; fileName: string; label: string }) {
+  const local = src.startsWith("blob:") || src.startsWith("data:");
+  const link = downloadUrl ? { href: downloadUrl }
+    : local ? { href: src, download: fileName }
+    : { href: src, target: "_blank", rel: "noopener noreferrer" };
+  return <>
+    <Button asChild variant="ghost" size="sm" className="-my-1 text-muted-foreground">
+      <a {...link} aria-label={`${label} 내려받기`}>
+        <Download aria-hidden="true" />내려받기
+      </a>
+    </Button>
+    <CopyButton text={new URL(url, window.location.origin).toString()} label="주소 복사" ariaLabel={`${label} 주소 복사`} />
+  </>;
+}
+
+/** 인증이 필요한 이미지를 그린다. [fileName] 을 주면 내려받기 · 주소 복사를 붙인다 — 결과물에만 준다. */
+export function AuthenticatedImage({ alt = "생성된 이미지", fileName, downloadUrl, ...source }: Source & { alt?: string; fileName?: string; downloadUrl?: string | null }) {
   const { src, fail, setFail, retry } = useAuthenticatedSource(source, "이미지를 불러오지 못했어요.");
   const frame = "block max-w-full rounded-lg border border-border bg-background";
   if (fail) return <Retry fail={fail} onRetry={() => { retry(); source.onRefresh(); }} />;
-  return src
-    ? <img src={src} alt={alt} className={frame} onError={source.previewUrl ? () => setFail("이미지를 불러오지 못했어요. 다시 조회해 주세요.") : undefined} />
-    : <div className="h-48 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="이미지를 불러오는 중" />;
+  if (!src) return <div className="h-48 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="이미지를 불러오는 중" />;
+  const image = <img src={src} alt={alt} className={frame} onError={source.previewUrl ? () => setFail("이미지를 불러오지 못했어요. 다시 조회해 주세요.") : undefined} />;
+  if (!fileName) return image;
+  return <div className="flex flex-col items-start gap-1.5">
+    {image}
+    <span className="flex items-center gap-0.5"><FileActions src={src} url={source.url} downloadUrl={downloadUrl} fileName={fileName} label={alt} /></span>
+  </div>;
 }
 
-/** 인증이 필요한 오디오를 재생 칸으로 보인다. 서명 주소가 만료되면 다시 조회해 새 주소를 받는다. */
-export function AuthenticatedAudio({ label = "생성된 오디오", ...source }: Source & { label?: string }) {
+/**
+ * 인증이 필요한 오디오를 디자인 시스템 플레이어로 보인다. 서명 주소가 만료되면 다시 조회해 새 주소를 받는다.
+ * [fileName] 을 주면 내려받기 · 주소 복사를 붙인다 — 결과물에만 준다. [duration] 은 서버가 잰 길이다.
+ */
+export function AuthenticatedAudio({ label = "생성된 오디오", fileName, downloadUrl, duration, ...source }: Source & { label?: string; fileName?: string; downloadUrl?: string | null; duration?: number }) {
   const { src, fail, setFail, retry } = useAuthenticatedSource(source, "오디오를 불러오지 못했어요.");
   if (fail) return <Retry fail={fail} onRetry={() => { retry(); source.onRefresh(); }} />;
   return src
-    ? <audio controls preload="metadata" src={src} aria-label={label} className="w-full"
-      onError={source.previewUrl ? () => setFail("오디오를 불러오지 못했어요. 다시 조회해 주세요.") : undefined} />
-    : <div className="h-12 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="오디오를 불러오는 중" />;
+    ? <AudioPlayer src={src} label={label} duration={duration}
+      onError={source.previewUrl ? () => setFail("오디오를 불러오지 못했어요. 다시 조회해 주세요.") : undefined}>
+      {fileName && <FileActions src={src} url={source.url} downloadUrl={downloadUrl} fileName={fileName} label={label} />}
+    </AudioPlayer>
+    : <div className="h-11 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="오디오를 불러오는 중" />;
 }

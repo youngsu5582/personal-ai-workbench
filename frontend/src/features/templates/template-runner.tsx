@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { contentTypeOf, request, upload } from "../../api";
 import { ModelPicker } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
+import { AudioPlayer } from "../../shared/ui/audio-player";
 import { Field, Textarea } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { Card, CardTitle } from "../../shared/ui/surface";
@@ -31,7 +32,7 @@ function Thumbnail({ file }: { file: File }) {
   }, [file]);
   if (!src) return null;
   return contentTypeOf(file).startsWith("audio/")
-    ? <audio controls preload="metadata" src={src} aria-label="고른 입력 오디오 미리듣기" className="w-full" />
+    ? <AudioPlayer src={src} label="고른 입력 오디오 미리듣기" />
     : <img src={src} alt="고른 입력 이미지" className="h-14 w-20 shrink-0 rounded-md border border-border object-cover" />;
 }
 

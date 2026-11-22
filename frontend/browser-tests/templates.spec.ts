@@ -408,7 +408,7 @@ test("STT 템플릿은 실행할 때 오디오를 서버가 받는 형식으로 
   // 브라우저가 m4a 를 audio/x-m4a 로 알려 줘도 서버가 받는 audio/mp4 로 올린다(작업실의 첨부와 같다).
   await page.getByLabel("입력 파일").setInputFiles({ name: "answer.m4a", mimeType: "audio/x-m4a", buffer: Buffer.from("fake-audio") });
   await expect(page.getByText(/audio\/mp4 · 실행할 때 올려요/)).toBeVisible();
-  await expect(page.getByLabel("고른 입력 오디오 미리듣기")).toBeVisible();
+  await expect(page.getByRole("group", { name: "고른 입력 오디오 미리듣기" })).toBeVisible();
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
   expect(uploads).toEqual([{ contentType: "audio/mp4", contentLength: 10, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
