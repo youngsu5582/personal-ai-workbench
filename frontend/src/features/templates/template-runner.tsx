@@ -16,7 +16,8 @@ type Props = {
   onJob: (uuid: string) => void;
 };
 const errorMessage = (e: unknown) => e instanceof Error ? e.message : "요청을 처리하지 못했어요.";
-const example = (key: string) => key === "role" ? "예: 브랜드 콘텐츠 기획자"
+const example = (key: string) => key === "question" ? "예: 그 쿠폰 발급 로직에서 동시성 문제는 어떻게 막으셨나요?"
+  : key === "text" ? "예: 음성으로 바꿀 글" : key === "role" ? "예: 브랜드 콘텐츠 기획자"
   : key === "request" ? "예: 친환경 브랜드를 소개하는 문구를 작성해 주세요."
     : key === "content" ? "예: 블로그 글 본문이나 요약" : key === "style" ? "예: 따뜻한 수채화" : "예: 이 변수에 넣을 값";
 

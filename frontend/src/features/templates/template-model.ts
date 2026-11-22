@@ -1,4 +1,4 @@
-export type JobType = "text-generate" | "image-generate" | "decision";
+export type JobType = "text-generate" | "image-generate" | "decision" | "audio-generate";
 export type FileSource = { type: "uploaded" | "generated"; sha256: string };
 export type ImageSize =
   | { type: "ratio"; ratio: string; resolution: string }
@@ -11,6 +11,10 @@ export type TemplateOption = {
   quality?: string;
   sources?: FileSource[];
   questions?: unknown[];
+  /** TTS: 음성으로 바꿀 글 · 목소리 · 말투. 글과 말투에 변수를 둘 수 있다. */
+  text?: string;
+  voice?: string;
+  style?: string;
 };
 export type Template = {
   uuid: string;
@@ -25,14 +29,15 @@ export type Template = {
   createdAt: string;
 };
 
-export const TYPE_LABEL: Record<JobType, string> = { "text-generate": "글", "image-generate": "이미지", decision: "판정" };
-/** 디자인 방향의 유형별 보조 색. 텍스트는 인디고, 이미지는 코랄, 판정은 보라다. 값은 `Badge` 의 tone 이름이다. */
-export const TYPE_TONE = { "text-generate": "text", "image-generate": "image", decision: "decision" } as const satisfies Record<JobType, string>;
+export const TYPE_LABEL: Record<JobType, string> = { "text-generate": "글", "image-generate": "이미지", decision: "판정", "audio-generate": "음성" };
+/** 디자인 방향의 유형별 보조 색. 텍스트는 인디고, 이미지는 코랄, 판정은 보라, 음성은 청록이다. 값은 `Badge` 의 tone 이름이다. */
+export const TYPE_TONE = { "text-generate": "text", "image-generate": "image", decision: "decision", "audio-generate": "audio" } as const satisfies Record<JobType, string>;
 /** 유형 아이콘 칸의 배경 · 글자색. */
 export const TYPE_TILE: Record<JobType, string> = {
   "text-generate": "bg-tone-text-soft text-tone-text",
   "image-generate": "bg-tone-image-soft text-tone-image",
   decision: "bg-tone-decision-soft text-tone-decision",
+  "audio-generate": "bg-tone-audio-soft text-tone-audio",
 };
 
 export const RATIOS = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"];
@@ -75,4 +80,4 @@ export const variableNames = (...texts: (string | undefined)[]) =>
 export const sizeLabel = (size?: ImageSize) =>
   !size ? "" : size.type === "ratio" ? `${size.ratio} · ${size.resolution}` : `${size.width}×${size.height}px`;
 export const qualityLabel = (quality?: string) => QUALITIES.find(([value]) => value === quality)?.[1] ?? "자동";
-export const summary = (t: Template) => t.option.instructions ?? t.option.prompt ?? `판정 질문 ${t.option.questions?.length ?? 0}개`;
+export const summary = (t: Template) => t.option.instructions ?? t.option.prompt ?? t.option.text ?? `판정 질문 ${t.option.questions?.length ?? 0}개`;

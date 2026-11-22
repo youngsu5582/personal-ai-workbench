@@ -5,6 +5,7 @@ import dev.joyson.aiworkbench.SharedTestConfig
 import dev.joyson.aiworkbench.auth.application.TokenService
 import dev.joyson.aiworkbench.generation.application.GenerationJobService
 import dev.joyson.aiworkbench.generation.application.GenerationTemplateService
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
 import dev.joyson.aiworkbench.user.RegisterIdentityCommand
 import dev.joyson.aiworkbench.user.UserRegistry
@@ -71,6 +72,36 @@ class GenerationTemplateApiTest @Autowired constructor(
         val option = assertNotNull(jobs.findOwned(jobUuid, workspace)).option as TextGenerateOption
         assertEquals("너는 편집자이다", option.instructions)
         assertEquals("요약해", option.prompt)
+    }
+
+    /** 기본 모델을 정하면 저장할 때 목소리까지 확인한다. 실행하면 글과 말투에 변수가 채워진 TTS 작업이 된다. */
+    @Test
+    fun `TTS 템플릿은 목소리를 확인해 저장하고 변수를 채워 실행한다`() {
+        val (owner, token) = token("template-tts")
+        val workspace = assertNotNull(workspaces.findDefaultUuid(owner))
+        val model = SharedTestConfig.FAKE_AUDIO_MODEL
+        create(token, """{"name":"질문","option":{"type":"audio-generate","text":"{{question}}","voice":"nobody"},"model":"$model"}""").andExpect {
+            status { isBadRequest() }
+            jsonPath("$.availableVoices[0]") { value(SharedTestConfig.FAKE_VOICE) }
+        }
+        val created = create(token, """{"name":"질문","option":{"type":"audio-generate","text":"{{question}}","voice":"${SharedTestConfig.FAKE_VOICE}","style":"{{tone}}"},"model":"$model"}""").andExpect {
+            status { isCreated() }
+            jsonPath("$.type") { value("audio-generate") }
+            jsonPath("$.variables[0]") { value("question") }
+            jsonPath("$.variables[1]") { value("tone") }
+        }.andReturn()
+        val templateUuid = JsonMapper.shared().readTree(created.response.contentAsString).get("uuid").stringValue()
+
+        val submitted = mvc.post("/api/templates/$templateUuid/jobs") {
+            header("Authorization", "Bearer $token")
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"variables":{"question":"동시성은 어떻게 막으셨나요?","tone":"차분하게"}}"""
+        }.andExpect { status { isAccepted() } }.andReturn()
+        val jobUuid = UUID.fromString(JsonMapper.shared().readTree(submitted.response.contentAsString).get("uuid").stringValue())
+        assertEquals(
+            AudioGenerateOption(text = "동시성은 어떻게 막으셨나요?", voice = SharedTestConfig.FAKE_VOICE, style = "차분하게"),
+            assertNotNull(jobs.findOwned(jobUuid, workspace)).option,
+        )
     }
 
     @Test

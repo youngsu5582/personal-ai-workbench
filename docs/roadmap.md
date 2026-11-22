@@ -6,11 +6,11 @@ README 의 [이런 걸 하려고 해요](../README.md#이런-걸-하려고-해�
 
 | 하려는 것 | 지금 |
 |---|---|
-| 🧩 어떤 AI 기능이든 요청 하나로 | 🚧 이미지(T2I · I2I) · 글(형식 없는 글 · JSON Schema) — 비디오 · 음성은 아직 |
+| 🧩 어떤 AI 기능이든 요청 하나로 | 🚧 이미지(T2I · I2I) · 글(형식 없는 글 · JSON Schema · 이미지와 오디오 첨부 — 오디오를 받아 쓰는 STT 포함) · 음성(TTS) — 비디오는 아직 |
 | ⏳ 맡겨두고, 결과는 나중에 | ✅ 비동기 처리 · 재시도 — 중복 요청 방지는 아직 |
 | 💰 요청 하나하나의 비용까지 | 🚧 호출마다 단가표로 USD 비용 · 이번 달 조회 — 원화 환산 · 그룹별 조회는 아직 |
 | 📦 급하지 않으면 더 싸게 | ⬜ |
-| 📝 자주 하는 요청은 템플릿으로 | 🚧 글·이미지·판정 요청을 변수와 입력 이미지로 재사용 · 콘솔에서 글·이미지 템플릿 관리와 실행 · 변수 강조와 미리보기 — 콘솔의 판정 템플릿 편집 · 워크플로는 아직 |
+| 📝 자주 하는 요청은 템플릿으로 | 🚧 글·이미지·판정·TTS 요청을 변수와 입력 이미지로 재사용 · 콘솔에서 글·이미지·TTS 템플릿 관리와 실행 · 변수 강조와 미리보기 — 실행 때 오디오를 받는 STT 템플릿 · 콘솔의 판정 템플릿 편집 · 워크플로는 아직 |
 | 🔐 내 서비스들이 안전하게 연결 | 🚧 Google 로그인 · 자체 토큰 · 서비스 관리와 데이터 격리 · 서비스 API 키 발급과 키로 호출 — OAuth 인가 서버는 [ADR 0005](adr/0005-oauth-authorization-server.md) 로 정했고 구현은 아직 |
 | 🖥️ 내 서비스의 작업과 결과를 콘솔에서 관리 | 🚧 작업 생성 · 서비스별 작업 목록과 상세(요청 · 참고 이미지 · 결과를 함께) · 사용량 · 서비스와 키 관리 — 결과물 전용 목록 · 워크플로 · 비교 테스트는 아직 |
 
@@ -31,3 +31,5 @@ README 의 [이런 걸 하려고 해요](../README.md#이런-걸-하려고-해�
 | 10.18 | 호출마다 비용 — 기간이 있는 단가표로 USD 를 계산하고, 원장과 따로 붙임 | [#61](https://github.com/youngsu5582/personal-ai-workbench/pull/61) |
 | 10.18 – 10.19 | 생성 종류를 결과물로 — 이미지는 `image-generate` 하나로 합치고, `text-generate` 로 글과 JSON Schema 를 따르는 답까지 | [#65](https://github.com/youngsu5582/personal-ai-workbench/pull/65) [#67](https://github.com/youngsu5582/personal-ai-workbench/pull/67) [#68](https://github.com/youngsu5582/personal-ai-workbench/pull/68) [#69](https://github.com/youngsu5582/personal-ai-workbench/pull/69) [#66](https://github.com/youngsu5582/personal-ai-workbench/pull/66) |
 | 11.08 – 11.10 | 두 번째 Provider — 같은 `text-generate` 요청으로 Gemini 를 부르고, 0 인 칸을 빼고 보내는 사용량도 단가표로 계산 | [#115](https://github.com/youngsu5582/personal-ai-workbench/pull/115) [#116](https://github.com/youngsu5582/personal-ai-workbench/pull/116) [#114](https://github.com/youngsu5582/personal-ai-workbench/pull/114) |
+| 11.21 | 글 생성에 파일 첨부 — 올린 오디오를 받아 쓰고(STT) 이미지를 함께 읽히며, 콘솔에서 첨부하고 재생 | [#118](https://github.com/youngsu5582/personal-ai-workbench/pull/118) [#119](https://github.com/youngsu5582/personal-ai-workbench/pull/119) [#120](https://github.com/youngsu5582/personal-ai-workbench/pull/120) [#121](https://github.com/youngsu5582/personal-ai-workbench/pull/121) |
+| 11.22 | 결과물을 이미지 밖으로 — 결과물 메타를 종류로 가르고, TTS(`audio-generate`)로 글을 음성으로 만들어 콘솔에서 재생 | [#123](https://github.com/youngsu5582/personal-ai-workbench/pull/123) [#124](https://github.com/youngsu5582/personal-ai-workbench/pull/124) [#125](https://github.com/youngsu5582/personal-ai-workbench/pull/125) [#126](https://github.com/youngsu5582/personal-ai-workbench/pull/126) |
