@@ -82,6 +82,7 @@ overlay 에는 값이 든 Secret 이 없다. 운영자가 만든다.
 | `postgres-credentials` | `POSTGRES_PASSWORD` | 처음 정한 값 |
 | `garage-credentials` | `RPC_SECRET` | `openssl rand -hex 32` |
 | `workbench-runtime` | `overlays/home/runtime.env.example` 의 모든 키 | 로컬 `runtime.env` (Git 제외, mode 600) |
+| `workbench-authserver-signing-key` | `authserver-signing-key.pem` | 서버에서 만든 RSA 개인키. 앱 Pod 의 `/etc/workbench/keys` 에 파일로 붙는다 |
 | `cloudflared-token` | `TUNNEL_TOKEN` | 위 터널의 토큰 |
 
 - `workbench-runtime` 의 `DB_PASSWORD` 는 `POSTGRES_PASSWORD` 와 같은 값이다.
@@ -90,6 +91,17 @@ overlay 에는 값이 든 Secret 이 없다. 운영자가 만든다.
 
   ```bash
   sudo k3s kubectl -n workbench exec garage-0 -- /garage bucket allow --read --write --owner workbench --key workbench-app
+  ```
+
+- 인가 서버의 서명 키는 서버에서 만들고 Secret 으로 넣은 뒤 지운다. 키를 바꾸면 이미 발급한 토큰의 서명을 더는 검증하지 못한다.
+  `workbench-runtime` 의 `AUTH_SIGNING_KEY` 는 `file:/etc/workbench/keys/authserver-signing-key.pem` 이다.
+
+  ```bash
+  umask 077
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out ~/authserver-signing-key.pem
+  sudo k3s kubectl -n workbench create secret generic workbench-authserver-signing-key \
+    --from-file=authserver-signing-key.pem=$HOME/authserver-signing-key.pem
+  shred -u ~/authserver-signing-key.pem
   ```
 
 - 토큰은 명령 인자나 셸 history 에 남기지 않는다.
