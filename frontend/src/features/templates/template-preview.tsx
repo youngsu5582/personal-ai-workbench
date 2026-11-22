@@ -33,13 +33,25 @@ export function TemplatePreview({ source, values, note }: { source: PreviewSourc
         <h3 className="m-0 text-xs font-medium text-subtle-foreground">시스템 지시문</h3>
         {option.instructions ? <Filled text={option.instructions} values={values} /> : <p className="m-0 text-[13px] text-subtle-foreground">없음</p>}
       </div>}
-      <div className="flex flex-col gap-1.5">
+      {source.type === "audio-generate" ? <>
+        <div className="flex flex-col gap-1.5">
+          <h3 className="m-0 text-xs font-medium text-subtle-foreground">읽을 글</h3>
+          {option.text ? <Filled text={option.text} values={values} /> : <p className="m-0 text-[13px] text-subtle-foreground">아직 비어 있어요</p>}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h3 className="m-0 text-xs font-medium text-subtle-foreground">말투</h3>
+          {option.style ? <Filled text={option.style} values={values} /> : <p className="m-0 text-[13px] text-subtle-foreground">없음</p>}
+        </div>
+      </> : <div className="flex flex-col gap-1.5">
         <h3 className="m-0 text-xs font-medium text-subtle-foreground">프롬프트</h3>
         {option.prompt ? <Filled text={option.prompt} values={values} /> : <p className="m-0 text-[13px] text-subtle-foreground">아직 비어 있어요</p>}
-      </div>
+      </div>}
     </>}
     <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs">
       <dt className="text-subtle-foreground">기본 모델</dt><dd className="m-0 font-mono text-foreground">{source.model ?? <span className="font-sans text-muted-foreground">실행할 때 골라요</span>}</dd>
+      {source.type === "audio-generate" && <>
+        <dt className="text-subtle-foreground">목소리</dt><dd className="m-0 font-mono text-foreground">{option.voice || <span className="font-sans text-muted-foreground">아직 고르지 않았어요</span>}</dd>
+      </>}
       {source.type === "image-generate" && <>
         <dt className="text-subtle-foreground">크기</dt><dd className="m-0 text-foreground">{sizeLabel(option.size)}</dd>
         <dt className="text-subtle-foreground">품질</dt><dd className="m-0 text-foreground">{qualityLabel(option.quality)}</dd>

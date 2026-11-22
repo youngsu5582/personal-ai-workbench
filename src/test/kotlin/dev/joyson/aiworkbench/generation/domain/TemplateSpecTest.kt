@@ -1,6 +1,7 @@
 package dev.joyson.aiworkbench.generation.domain
 
 import dev.joyson.aiworkbench.generation.domain.option.AspectRatio
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
 import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
@@ -63,6 +64,23 @@ class TemplateSpecTest {
     @Test
     fun `글 생성은 입력 이미지를 받지 않는다`() {
         assertFailsWith<IllegalArgumentException> { template(TextGenerateOption(prompt = "요약해"), inputImageCount = 1) }
+    }
+
+    /** 목소리는 고르는 값이라 변수 자리가 아니다. 글 → 말투 순서로 모은다. */
+    @Test
+    fun `TTS 는 글과 말투의 변수를 채우고 목소리는 그대로 둔다`() {
+        val spec = template(AudioGenerateOption(text = "{{question}}", voice = "Kore", style = "{{tone}} 말투로"))
+
+        assertEquals(listOf("question", "tone"), spec.variables.toList())
+        assertEquals(
+            AudioGenerateOption(text = "동시성은 어떻게 막으셨나요?", voice = "Kore", style = "차분한 말투로"),
+            spec.fill(mapOf("question" to "동시성은 어떻게 막으셨나요?", "tone" to "차분한"), emptyList()),
+        )
+    }
+
+    @Test
+    fun `TTS 는 입력 이미지를 받지 않는다`() {
+        assertFailsWith<IllegalArgumentException> { template(AudioGenerateOption(text = "{{text}}", voice = "Kore"), inputImageCount = 1) }
     }
 
     @Test

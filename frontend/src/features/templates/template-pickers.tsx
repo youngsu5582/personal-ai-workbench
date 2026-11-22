@@ -1,5 +1,5 @@
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { FileText, Image as ImageIcon, ListChecks } from "lucide-react";
+import { AudioLines, FileText, Image as ImageIcon, ListChecks } from "lucide-react";
 import { cn } from "../../shared/ui/cn";
 import { RATIOS, TYPE_LABEL, TYPE_TILE, type JobType } from "./template-model";
 
@@ -7,15 +7,16 @@ const TYPE_DESCRIPTION: Record<JobType, string> = {
   "text-generate": "지시문과 프롬프트로 글",
   "image-generate": "프롬프트와 크기로 이미지",
   decision: "지금은 API로만",
+  "audio-generate": "글을 목소리로 읽은 음성",
 };
-const TYPE_ICON: Record<JobType, typeof FileText> = { "text-generate": FileText, "image-generate": ImageIcon, decision: ListChecks };
+const TYPE_ICON: Record<JobType, typeof FileText> = { "text-generate": FileText, "image-generate": ImageIcon, decision: ListChecks, "audio-generate": AudioLines };
 const item = "m-0 flex items-center gap-2.5 rounded-lg border border-border bg-surface text-left text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring data-[state=on]:border-accent data-[state=on]:bg-accent-subtle data-[state=on]:shadow-[0_0_0_1px_var(--ds-accent)] disabled:cursor-not-allowed disabled:border-dashed disabled:bg-background disabled:text-subtle-foreground";
 
 /** 템플릿 종류. 판정은 콘솔에서 만들 수 없어 보이기만 한다. */
 export function TypePicker({ value, onChange }: { value: JobType; onChange: (type: JobType) => void }) {
   return <ToggleGroup.Root type="single" aria-label="종류" value={value} onValueChange={next => { if (next) onChange(next as JobType); }}
-    className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-    {(["text-generate", "image-generate", "decision"] as const).map(type => {
+    className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    {(["text-generate", "image-generate", "audio-generate", "decision"] as const).map(type => {
       const Icon = TYPE_ICON[type];
       return <ToggleGroup.Item key={type} value={type} disabled={type === "decision"} className={cn(item, "px-3 py-2.5")}>
         <span className={cn("grid size-7 shrink-0 place-items-center rounded-md", type === "decision" ? "bg-muted text-subtle-foreground" : TYPE_TILE[type])}><Icon className="size-4" aria-hidden="true" /></span>

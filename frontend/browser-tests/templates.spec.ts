@@ -298,3 +298,68 @@ test("변수 이름이 객체 속성 이름과 같아도 미리보기와 실행�
   // `{ __proto__: … }` 객체 글자는 프로토타입을 바꾸므로 항목으로 비교한다.
   expect(Object.entries(sink.submitted?.variables as object).sort()).toEqual([["__proto__", "나"], ["constructor", "가"], ["toString", ""]]);
 });
+
+/** TTS 모델은 받는 목소리를 함께 준다. 목소리는 모델에 딸려 와서 목록이 모델마다 다를 수 있다. */
+const ttsModels = { models: [{ id: "tts-a", provider: "Example", voices: ["Achernar", "Kore", "Puck"] }] };
+const tts = (uuid: string, name: string, text: string, style?: string) => ({ uuid, serviceUuid: "a", name, type: "audio-generate",
+  option: { type: "audio-generate", text, voice: "Puck", ...(style ? { style } : {}) }, variables: names(text, style), inputImageCount: 0,
+  model: null, createdAt: "2026-11-01T00:00:00Z" });
+
+test("TTS 템플릿을 글 · 목소리 · 말투로 만든다", async ({ page }) => {
+  let saved: unknown;
+  await imageRoutes(page);
+  await page.route("**/api/models?**", r => r.fulfill({ json: new URL(r.request().url()).searchParams.get("type") === "audio-generate"
+    ? ttsModels : { models: [{ id: "image-a", provider: "Example" }] } }));
+  await page.route("**/api/templates**", r => {
+    if (r.request().method() === "GET") return r.fulfill({ json: [] });
+    const input = r.request().postDataJSON();
+    saved = input;
+    return r.fulfill({ status: 201, json: { ...tts("t3", input.name, input.option.text, input.option.style), option: input.option } });
+  });
+  await page.goto("/?login=success");
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
+  await page.getByRole("button", { name: "템플릿 만들기" }).click();
+  await page.getByRole("radio", { name: /^음성/ }).click();
+  // 글 템플릿의 칸은 없고 TTS 의 칸만 있다.
+  await expect(page.getByLabel("시스템 지시문")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "프롬프트", exact: true })).toHaveCount(0);
+  await page.getByLabel("템플릿 이름").fill("면접관 질문 읽기");
+  await expect(page.getByRole("textbox", { name: "읽을 글", exact: true })).toHaveValue("{{text}}");
+  await page.getByRole("textbox", { name: "읽을 글", exact: true }).fill("{{question}}");
+  // 기본 모델을 고르지 않아도 이 종류의 모델이 받는 목소리에서 고른다. 목록에 있으면 Kore 가 먼저다.
+  await expect(page.getByRole("combobox", { name: "목소리" })).toHaveText("Kore");
+  await choose(page, "목소리", "Puck");
+  await page.getByRole("textbox", { name: /^말투/ }).fill("{{tone}} 말투로");
+  await expect(page.locator("[data-variable-state=empty]")).toHaveText(["{{question}}", "{{tone}}"]);
+  await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "면접관 질문 읽기" })).toBeVisible();
+  expect(saved).toEqual({ name: "면접관 질문 읽기", inputImageCount: 0,
+    option: { type: "audio-generate", text: "{{question}}", voice: "Puck", style: "{{tone}} 말투로" } });
+});
+
+test("TTS 템플릿은 변수를 채워 음성 모델로 실행한다", async ({ page }) => {
+  let submitted: unknown;
+  let modelType: string | null = null;
+  await imageRoutes(page);
+  await page.route("**/api/models?**", r => {
+    modelType = new URL(r.request().url()).searchParams.get("type");
+    return r.fulfill({ json: ttsModels });
+  });
+  await page.route("**/api/templates**", r => {
+    if (r.request().method() === "POST") { submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: { uuid: "job-2" } }); }
+    return r.fulfill({ json: [tts("t4", "면접관 질문 읽기", "{{question}}", "차분하게")] });
+  });
+  await page.goto("/?login=success");
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "템플릿" }).click();
+  const card = page.getByRole("button", { name: /면접관 질문 읽기/ });
+  await expect(card.getByText("음성")).toBeVisible();
+  await card.click();
+  await choose(page, /^모델$/, "tts-a");
+  expect(modelType).toBe("audio-generate");
+  await page.getByLabel("변수 question").fill("동시성 문제는 어떻게 막으셨나요?");
+  await expect(page.locator("[data-variable-state=filled]")).toHaveText("동시성 문제는 어떻게 막으셨나요?");
+  await expect(page.getByText("Puck")).toBeVisible();
+  await page.getByRole("button", { name: "작업 실행" }).click();
+  await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
+  expect(submitted).toEqual({ model: "tts-a", taskCount: 1, variables: { question: "동시성 문제는 어떻게 막으셨나요?" } });
+});

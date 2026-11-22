@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { request, upload } from "../../api";
-import { ModelPicker } from "../../shared/model-picker";
+import { ModelPicker, type Model } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
 import { Field, Input } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { PageHeader } from "../../shared/ui/page-header";
 import { Segmented } from "../../shared/ui/segmented";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../shared/ui/select";
 import { Badge, Card } from "../../shared/ui/surface";
 import { PromptField } from "./prompt-field";
 import { RatioPicker, TypePicker } from "./template-pickers";
@@ -27,6 +28,10 @@ type Props = {
 const errorMessage = (e: unknown) => e instanceof Error ? e.message : "요청을 처리하지 못했어요.";
 /** 글 템플릿은 실행마다 바뀌는 요청을 이 변수로 받는 것이 기본이다. */
 const TEXT_DEFAULT_PROMPT = "{{request}}";
+/** TTS 템플릿은 실행마다 바뀌는 글을 이 변수로 받는 것이 기본이다. */
+const AUDIO_DEFAULT_TEXT = "{{text}}";
+/** 목록에 있으면 이 목소리를 먼저 고른다. 작업실과 같다. */
+const PREFERRED_VOICE = "Kore";
 
 export function TemplateEditor({ token, workspace, template, onSaved, onCancel }: Props) {
   const creating = !template;
@@ -39,10 +44,21 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
   const [sources, setSources] = useState<FileSource[]>(template?.option.sources ?? []);
   const [preview, setPreview] = useState<string | null>(null);
   const [inputImageCount, setInputImageCount] = useState(template?.inputImageCount ?? 0);
+  const [text, setText] = useState(template?.option.text ?? AUDIO_DEFAULT_TEXT);
+  const [voice, setVoice] = useState(template?.option.voice ?? "");
+  const [style, setStyle] = useState(template?.option.style ?? "");
+  const [models, setModels] = useState<Model[]>([]);
   const [model, setModel] = useState(template?.model ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  // 목소리는 모델에 딸려 온다. 기본 모델을 고르지 않았으면 이 종류의 모든 모델이 받는 목소리를 보인다.
+  const voices = (model ? models.filter(m => m.id === model) : models).flatMap(m => m.voices ?? [])
+    .filter((name, i, all) => all.indexOf(name) === i).sort();
+  useEffect(() => {
+    if (type !== "audio-generate" || !voices.length || voices.includes(voice)) return;
+    setVoice(voices.includes(PREFERRED_VOICE) ? PREFERRED_VOICE : voices[0]);
+  }, [type, voices, voice]);
   // 고정 참조와 실행 입력을 합쳐 상한을 넘지 않게 한다. 서버도 같은 규칙으로 거절한다.
   const inputLimit = Math.max(0, MAX_IMAGES - sources.length);
   // 화면에 칸이 없는 값(글의 output · effort 등)은 원래 옵션에서 그대로 가져온다.
@@ -51,11 +67,16 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
   // 화면이 다루는 칸은 화면 값으로 덮는다. 비운 지시문 · 참조는 필드를 뺀다 — 서버는 빈 값과 "주지 않음" 을 같은 뜻으로 받지 않는다.
   delete kept.instructions;
   delete kept.sources;
+  delete kept.style;
   const option = (type === "text-generate"
     ? { ...kept, type, prompt, ...(instructions.trim() ? { instructions } : {}) }
+    : type === "audio-generate"
+    ? { ...kept, type, text, voice, ...(style.trim() ? { style } : {}) }
     : { ...kept, type, prompt, size, quality, ...(sources.length ? { sources } : {}) }) as TemplateOption;
-  const variables = type === "text-generate" ? variableNames(instructions, prompt) : variableNames(prompt);
-  const count = type === "text-generate" ? 0 : inputImageCount;
+  // 서버가 변수를 찾는 순서와 같다 — 글은 지시문 → 프롬프트, TTS 는 글 → 말투다.
+  const variables = type === "text-generate" ? variableNames(instructions, prompt)
+    : type === "audio-generate" ? variableNames(text, style) : variableNames(prompt);
+  const count = type === "image-generate" ? inputImageCount : 0;
 
   async function attach(file: File | null) {
     if (!file) return;
@@ -84,7 +105,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
     <PageHeader eyebrow="Template" title={creating ? "템플릿 만들기" : "템플릿 수정"} description="자주 하는 생성 요청을 저장하고, 실행할 때 변수만 채워요."
       actions={<>
         <Button onClick={onCancel}>취소</Button>
-        <Button type="submit" variant="primary" disabled={busy}>{busy ? "저장 중…" : "템플릿 저장"}</Button>
+        <Button type="submit" variant="primary" disabled={busy || (type === "audio-generate" && !voice)}>{busy ? "저장 중…" : "템플릿 저장"}</Button>
       </>} />
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <Card className="flex flex-col gap-6 p-6">
@@ -102,17 +123,32 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
             <Input id="template-name" value={name} maxLength={255} required onChange={e => setName(e.target.value)} />
           </Field>
           <ModelPicker id="template-model" token={token} workspace={workspace} type={type} value={model} onChange={setModel} required={false}
-            label="기본 모델" hint="정해 두면 실행 화면에서 미리 골라져요. 실행할 때 바꿀 수 있어요." />
+            onModels={setModels} label="기본 모델" hint="정해 두면 실행 화면에서 미리 골라져요. 실행할 때 바꿀 수 있어요." />
         </div>
 
         {type === "text-generate" && <PromptField id="template-instructions" label="시스템 지시문" optional value={instructions} onChange={setInstructions}
           hint="모델의 역할과 규칙이에요. 실행할 때마다 같은 내용이 들어가요."
           placeholder="예: 당신은 {{role}}입니다. {{tone}} 말투로 답하세요." />}
-        <PromptField id="template-prompt" label="프롬프트" value={prompt} onChange={setPrompt} required
+        {type === "audio-generate" && <>
+          <PromptField id="template-text" label="읽을 글" value={text} onChange={setText} required
+            hint="그대로 소리 내어 읽혀요. 실행마다 바뀌는 부분은 {{text}}처럼 변수로 두세요. 말투는 글에 쓰지 말고 아래 칸에 적어요."
+            placeholder="예: {{question}}" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="목소리" htmlFor="template-voice" hint={model ? undefined : "기본 모델을 고르지 않으면 실행할 때 고른 모델이 이 목소리를 받는지 확인해요."}>
+              <Select value={voice} onValueChange={setVoice} disabled={!voices.length}>
+                <SelectTrigger id="template-voice"><SelectValue placeholder="목소리를 불러오는 중이에요" /></SelectTrigger>
+                <SelectContent>{voices.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <PromptField id="template-style" label="말투" optional value={style} onChange={setStyle}
+              hint="어떻게 읽을지예요. 변수를 둘 수 있어요." placeholder="예: 차분하고 또렷하게" />
+          </div>
+        </>}
+        {type !== "audio-generate" && <PromptField id="template-prompt" label="프롬프트" value={prompt} onChange={setPrompt} required
           hint={type === "text-generate"
             ? "이번에 시킬 일이에요. 실행마다 바뀌는 부분은 {{request}}처럼 변수로 두세요."
             : "만들 이미지를 설명해요. 실행마다 바뀌는 부분은 {{content}}처럼 변수로 두세요."}
-          placeholder={type === "text-generate" ? "예: {{request}}" : "예: 블로그 썸네일을 만들어 주세요. 스타일: {{style}}\n글 내용: {{content}}"} />
+          placeholder={type === "text-generate" ? "예: {{request}}" : "예: 블로그 썸네일을 만들어 주세요. 스타일: {{style}}\n글 내용: {{content}}"} />}
 
         {type === "image-generate" && <>
           <Field label="비율">

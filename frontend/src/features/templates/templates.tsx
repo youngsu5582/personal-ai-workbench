@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, FileText, Image as ImageIcon, ListChecks, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, FileText, Image as ImageIcon, ListChecks, Plus } from "lucide-react";
 import { request } from "../../api";
 import { Button } from "../../shared/ui/button";
 import { cn } from "../../shared/ui/cn";
@@ -12,7 +12,7 @@ import { TemplateRunner } from "./template-runner";
 
 type Props = { token: string; workspace: string; onJob: (uuid: string) => void };
 const errorMessage = (e: unknown) => e instanceof Error ? e.message : "요청을 처리하지 못했어요.";
-const TYPE_ICON: Record<JobType, typeof FileText> = { "text-generate": FileText, "image-generate": ImageIcon, decision: ListChecks };
+const TYPE_ICON: Record<JobType, typeof FileText> = { "text-generate": FileText, "image-generate": ImageIcon, decision: ListChecks, "audio-generate": AudioLines };
 
 function BackLink({ onClick, children }: { onClick: () => void; children: string }) {
   return <Button variant="ghost" size="sm" className="-ml-2.5 mb-4 text-muted-foreground" onClick={onClick}><ArrowLeft aria-hidden="true" />{children}</Button>;
