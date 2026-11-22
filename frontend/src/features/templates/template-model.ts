@@ -10,6 +10,8 @@ export type TemplateOption = {
   size?: ImageSize;
   quality?: string;
   sources?: FileSource[];
+  /** 글: 고정 첨부. 실행 때 받는 파일은 이 뒤에 붙는다. */
+  attachments?: FileSource[];
   questions?: unknown[];
   /** TTS: 음성으로 바꿀 글 · 목소리 · 말투. 글과 말투에 변수를 둘 수 있다. */
   text?: string;
@@ -23,7 +25,8 @@ export type Template = {
   type: JobType;
   option: TemplateOption;
   variables: string[];
-  inputImageCount: number;
+  /** 실행할 때 받을 파일 수. 이미지 생성 · 판정은 이미지, 글은 첨부(이미지 · 오디오)다. */
+  inputFileCount: number;
   /** 실행 요청이 모델을 주지 않을 때 쓰는 모델. */
   model: string | null;
   createdAt: string;
@@ -47,6 +50,10 @@ export const QUALITIES: [string, string][] = [
 ];
 /** 서버의 `ImageOption.MAX_SOURCES` 와 같아야 한다. 고정 참조와 실행 입력을 합친 수다. */
 export const MAX_IMAGES = 1;
+/** 서버의 `TextGenerateOption.MAX_ATTACHMENTS` 와 같아야 한다. 고정 첨부와 실행 입력을 합친 수다. */
+export const MAX_ATTACHMENTS = 1;
+/** 글 템플릿이 실행 때 받는 파일. 작업실의 첨부와 같은 목록이고, 실제로 받는지는 모델이 정한다. */
+export const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/webp,audio/wav,audio/mpeg,audio/ogg,audio/flac,audio/mp4,audio/aac,.m4a,.mp3,.wav,.ogg,.flac,.aac";
 
 /** 서버와 같은 규칙이다. 이름은 영문자 또는 밑줄로 시작하고 영문자·숫자·밑줄만 쓴다. */
 const VARIABLE = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)}}/g;

@@ -13,7 +13,7 @@ import { PromptField } from "./prompt-field";
 import { RatioPicker, TypePicker } from "./template-pickers";
 import { TemplatePreview } from "./template-preview";
 import {
-  MAX_IMAGES, QUALITIES, RESOLUTIONS, TYPE_LABEL, TYPE_TONE,
+  MAX_ATTACHMENTS, MAX_IMAGES, QUALITIES, RESOLUTIONS, TYPE_LABEL, TYPE_TONE,
   type FileSource, type ImageSize, type JobType, type Template, type TemplateOption, variableNames,
 } from "./template-model";
 
@@ -43,7 +43,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
   const [quality, setQuality] = useState(template?.option.quality ?? "auto");
   const [sources, setSources] = useState<FileSource[]>(template?.option.sources ?? []);
   const [preview, setPreview] = useState<string | null>(null);
-  const [inputImageCount, setInputImageCount] = useState(template?.inputImageCount ?? 0);
+  const [inputFileCount, setInputFileCount] = useState(template?.inputFileCount ?? 0);
   const [text, setText] = useState(template?.option.text ?? AUDIO_DEFAULT_TEXT);
   const [voice, setVoice] = useState(template?.option.voice ?? "");
   const [style, setStyle] = useState(template?.option.style ?? "");
@@ -76,7 +76,9 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
   // 서버가 변수를 찾는 순서와 같다 — 글은 지시문 → 프롬프트, TTS 는 글 → 말투다.
   const variables = type === "text-generate" ? variableNames(instructions, prompt)
     : type === "audio-generate" ? variableNames(text, style) : variableNames(prompt);
-  const count = type === "image-generate" ? inputImageCount : 0;
+  // 글은 고정 첨부와 합쳐 상한을 넘지 않게 한다. 화면에 고정 첨부 칸은 없지만 API 로 정한 것이 남아 있을 수 있다.
+  const textLimit = Math.max(0, MAX_ATTACHMENTS - (template?.type === "text-generate" ? template.option.attachments?.length ?? 0 : 0));
+  const count = type === "image-generate" || type === "text-generate" ? inputFileCount : 0;
 
   async function attach(file: File | null) {
     if (!file) return;
@@ -85,7 +87,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
       const sha256 = await upload(token, workspace, file);
       setSources([{ type: "uploaded", sha256 }]);
       setPreview(URL.createObjectURL(file));
-      setInputImageCount(0);
+      setInputFileCount(0);
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   async function save(event: React.FormEvent) {
@@ -95,7 +97,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
     try {
       const result = await request<Template>(token, creating ? "/api/templates" : `/api/templates/${template.uuid}`, workspace, {
         method: creating ? "POST" : "PUT",
-        body: JSON.stringify({ name: name.trim(), option, inputImageCount: count, ...(model ? { model } : {}) }),
+        body: JSON.stringify({ name: name.trim(), option, inputFileCount: count, ...(model ? { model } : {}) }),
       });
       onSaved(result);
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
@@ -114,7 +116,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
             // 글의 기본 프롬프트를 손대지 않았으면 이미지로 옮겨 가지 않는다. 이미지에는 맞지 않는 예시다.
             if (next === "image-generate" && prompt === TEXT_DEFAULT_PROMPT) setPrompt("");
             if (next === "text-generate" && prompt === "") setPrompt(TEXT_DEFAULT_PROMPT);
-            setType(next); setModel(""); setError("");
+            setType(next); setModel(""); setError(""); setInputFileCount(0);
           }} /></Field>
           : <p className="m-0 flex items-center gap-2 text-xs text-muted-foreground"><Badge tone={TYPE_TONE[type]}>{TYPE_LABEL[type]}</Badge>종류는 만든 뒤 바꿀 수 없어요.</p>}
 
@@ -150,6 +152,14 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
             : "만들 이미지를 설명해요. 실행마다 바뀌는 부분은 {{content}}처럼 변수로 두세요."}
           placeholder={type === "text-generate" ? "예: {{request}}" : "예: 블로그 썸네일을 만들어 주세요. 스타일: {{style}}\n글 내용: {{content}}"} />}
 
+        {type === "text-generate" && <Field label="실행할 때 받을 파일"
+          hint={textLimit < 1
+            ? `고정 첨부와 실행 입력을 합쳐 ${MAX_ATTACHMENTS}개까지라, 이 템플릿은 실행 때 파일을 받을 수 없어요.`
+            : "'이 오디오를 들리는 그대로 받아 써' 같은 STT 템플릿은 실행할 때 오디오를 1개 받아요. 이미지도 받을 수 있어요."}>
+          <Segmented label="실행할 때 받을 파일" value={String(inputFileCount)} onChange={v => setInputFileCount(Number(v))}
+            options={[{ value: "0", label: "받지 않음" }, { value: "1", label: "1개 받음", disabled: textLimit < 1 }]} />
+        </Field>}
+
         {type === "image-generate" && <>
           <Field label="비율">
             {size.type === "ratio"
@@ -179,7 +189,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
               hint={inputLimit < 1
                 ? `고정 참조와 실행 입력을 합쳐 ${MAX_IMAGES}장까지라, 참조를 고정하면 실행 때 이미지를 받을 수 없어요.`
                 : "'입력한 이미지의 스타일을 바꿔 줘' 같은 템플릿은 실행할 때 이미지를 1장 받아요."}>
-              <Segmented label="실행할 때 받을 이미지" value={String(inputImageCount)} onChange={v => setInputImageCount(Number(v))}
+              <Segmented label="실행할 때 받을 이미지" value={String(inputFileCount)} onChange={v => setInputFileCount(Number(v))}
                 options={[{ value: "0", label: "받지 않음" }, { value: "1", label: "1장 받음", disabled: inputLimit < 1 }]} />
             </Field>
           </div>
@@ -188,7 +198,7 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
         {error && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{error}</p>}
       </Card>
       <div className="lg:sticky lg:top-6">
-        <TemplatePreview source={{ type, option, variables, inputImageCount: count, model: model || null }} values={{}}
+        <TemplatePreview source={{ type, option, variables, inputFileCount: count, model: model || null }} values={{}}
           note="저장한 뒤 실행 화면에서 변수를 채우면 이 자리에 값이 들어가요." />
       </div>
     </div>

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { request, upload } from "../../api";
+import { contentTypeOf, request, upload } from "../../api";
 import { ModelPicker } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
 import { Field, Textarea } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { Card, CardTitle } from "../../shared/ui/surface";
-import { valueOf, type Template } from "./template-model";
+import { ATTACHMENT_ACCEPT, valueOf, type Template } from "./template-model";
 
 type Props = {
   token: string;
@@ -21,7 +21,7 @@ const example = (key: string) => key === "question" ? "예: 그 쿠폰 발급 �
   : key === "request" ? "예: 친환경 브랜드를 소개하는 문구를 작성해 주세요."
     : key === "content" ? "예: 블로그 글 본문이나 요약" : key === "style" ? "예: 따뜻한 수채화" : "예: 이 변수에 넣을 값";
 
-/** 고른 파일을 올리기 전에 보여 준다. 화면을 떠나면 브라우저 메모리의 주소를 돌려준다. */
+/** 고른 파일을 올리기 전에 보여 준다 — 이미지는 작게 그리고 오디오는 들어 본다. 화면을 떠나면 브라우저 메모리의 주소를 돌려준다. */
 function Thumbnail({ file }: { file: File }) {
   const [src, setSrc] = useState("");
   useEffect(() => {
@@ -29,32 +29,38 @@ function Thumbnail({ file }: { file: File }) {
     setSrc(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  return src ? <img src={src} alt="고른 입력 이미지" className="h-14 w-20 shrink-0 rounded-md border border-border object-cover" /> : null;
+  if (!src) return null;
+  return contentTypeOf(file).startsWith("audio/")
+    ? <audio controls preload="metadata" src={src} aria-label="고른 입력 오디오 미리듣기" className="w-full" />
+    : <img src={src} alt="고른 입력 이미지" className="h-14 w-20 shrink-0 rounded-md border border-border object-cover" />;
 }
 
-/** 템플릿 종류에 맞는 모델과 변수 · 입력 이미지를 받아 작업을 접수한다. */
+/** 템플릿 종류에 맞는 모델과 변수 · 실행 때 받을 파일을 받아 작업을 접수한다. */
 export function TemplateRunner({ token, workspace, template, values, onValues, onJob }: Props) {
   const mounted = useRef(false);
   const [model, setModel] = useState(template.model ?? "");
-  const [images, setImages] = useState<(File | null)[]>(() => Array(template.inputImageCount).fill(null));
+  const [files, setFiles] = useState<(File | null)[]>(() => Array(template.inputFileCount).fill(null));
+  // 글 템플릿은 첨부로 받아 이미지 · 오디오를 모두 받는다. 이미지 생성 · 판정은 이미지만 받는다.
+  const attachments = template.type === "text-generate";
+  const fileLabel = (i: number) => `${attachments ? "입력 파일" : "입력 이미지"}${files.length > 1 ? ` ${i + 1}` : ""}`;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const ready = !!model && images.every(Boolean);
+  const ready = !!model && files.every(Boolean);
   async function run(event: React.FormEvent) {
     event.preventDefault();
     if (busy || !ready) return;
     setBusy(true); setError("");
     try {
       const uploaded = [];
-      for (const file of images) uploaded.push({ type: "uploaded", sha256: await upload(token, workspace, file!) });
+      for (const file of files) uploaded.push({ type: "uploaded", sha256: await upload(token, workspace, file!) });
       const result = await request<{ uuid: string }>(token, `/api/templates/${template.uuid}/jobs`, workspace, {
         method: "POST", body: JSON.stringify({ model: model.trim(), taskCount: 1,
           variables: Object.fromEntries(template.variables.map(key => [key, valueOf(values, key)])),
-          ...(uploaded.length ? { images: uploaded } : {}) }),
+          ...(uploaded.length ? { files: uploaded } : {}) }),
       });
       // 접수 중에 서비스를 바꾸면 이 화면이 사라진다. 그때는 이전 서비스의 작업으로 이동하지 않는다.
       if (mounted.current) onJob(result.uuid);
@@ -70,16 +76,19 @@ export function TemplateRunner({ token, workspace, template, values, onValues, o
         <Textarea id={`var-${key}`} value={valueOf(values, key)} placeholder={example(key)} className="min-h-16"
           onChange={e => onValues({ ...values, [key]: e.target.value })} />
       </Field>)}
-      {images.map((file, i) => <Field key={i} label={`입력 이미지${images.length > 1 ? ` ${i + 1}` : ""}`}>
-        <FileDrop id={`run-image-${i}`} label={`입력 이미지${images.length > 1 ? ` ${i + 1}` : ""}`} accept="image/png,image/jpeg,image/webp"
-          hint="이 템플릿은 실행할 때 이미지를 받아요"
-          onFile={next => setImages(old => old.map((f, j) => j === i ? next : f))}>
-          {file && <span className="flex w-full items-center gap-3 text-left">
-            <Thumbnail file={file} />
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate text-[13px] text-foreground">{file.name}</span>
-              <span className="text-xs text-muted-foreground">실행할 때 올려요 · 바꾸려면 누르세요</span>
+      {files.map((file, i) => <Field key={i} label={fileLabel(i)}>
+        <FileDrop id={`run-file-${i}`} label={fileLabel(i)} accept={attachments ? ATTACHMENT_ACCEPT : "image/png,image/jpeg,image/webp"}
+          hint={attachments ? "이 템플릿은 실행할 때 파일을 받아요 · 이미지 · 오디오(WAV · MP3 · OGG · FLAC · M4A · AAC) · 15MB 이하" : "이 템플릿은 실행할 때 이미지를 받아요"}
+          onFile={next => setFiles(old => old.map((f, j) => j === i ? next : f))}>
+          {file && <span className="flex w-full flex-col gap-2 text-left">
+            <span className="flex items-center gap-3">
+              {!contentTypeOf(file).startsWith("audio/") && <Thumbnail file={file} />}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[13px] text-foreground">{file.name}</span>
+                <span className="text-xs text-muted-foreground">{attachments ? `${contentTypeOf(file) || "형식 알 수 없음"} · ` : ""}실행할 때 올려요 · 바꾸려면 누르세요</span>
+              </span>
             </span>
+            {contentTypeOf(file).startsWith("audio/") && <Thumbnail file={file} />}
           </span>}
         </FileDrop>
       </Field>)}
