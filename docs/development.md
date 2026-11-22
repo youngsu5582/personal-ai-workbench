@@ -344,7 +344,7 @@ Authorization: Bearer <token>
 {"models":[{"id":"gpt-image-2","provider":"openai"}]}
 ```
 
-`type`은 `image-generate`, `text-generate`, `decision` 중 하나이며 필수다. 등록된 어댑터가 없으면 빈 목록이다.
+`type`은 `image-generate`, `text-generate`, `decision`, `audio-generate` 중 하나이며 필수다. 등록된 어댑터가 없으면 빈 목록이다.
 이 목록은 서버 설정과 어댑터가 다루는 모델을 나타내며, 외부 계정 권한이나 실시간 호출 성공을 보장하지 않는다.
 로컬 서버에서는 `./scripts/models.sh text-generate`처럼 확인할 수 있다. `BASE_URL`로 서버 주소를 바꾸고,
 인증 토큰은 생성 스크립트들과 같이 `dev-token.sh`에서 가져온다.
@@ -489,6 +489,43 @@ Content-Type: application/json
 - 거절은 Task 의 실패가 아니다. 나머지 답과 함께 남는다.
 - 이미지 근거는 이미지 생성의 참조와 같이 접수 때 소유를 확인한다. 주소로 넘겼다가 저쪽이 받아 가지 못하면 바이트로 한 번 더 보낸다.
 - 요청 · 응답 본문을 실제 API 로 확인했는지는 `OpenAIDecisionModel` 의 표시가 말한다.
+
+## TTS — 글을 음성으로
+
+글을 음성으로 바꿔(TTS) 오디오 파일 하나를 만든다. 요청 종류는 `"type": "audio-generate"` 이다.
+`text` 는 그대로 읽히는 글이고, 말투는 글 속에 쓰지 않고 `style` 로 준다 — 글 속에 쓰면 그 지시까지 소리 내어 읽힌다.
+
+```bash
+./scripts/audio.sh "그 쿠폰 발급 로직에서 동시성 문제는 어떻게 막으셨나요?"
+STYLE="차분하고 또렷하게" ./scripts/audio.sh "질문" Puck
+./scripts/audio.sh "질문" Kore gemini-3.8-flash-lite-tts
+```
+
+```http
+POST /api/jobs
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "option": {"type": "audio-generate", "text": "동시성 문제는 어떻게 막으셨나요?", "voice": "Kore", "style": "차분하고 또렷하게"},
+  "model": "gemini-3.8-flash-tts",
+  "taskCount": 1
+}
+```
+
+결과는 `GET /api/jobs/{uuid}` 의 `tasks[].files[]` 에 실린다. 이미지와 같은 자리이고, 오디오는 `width` · `height` 대신 `durationSeconds` 가 있다.
+그릴지 재생할지는 `mimeType` 으로 가른다. 파일은 `url` 로 받는다 — `KEEP=1 ./scripts/file.sh <sha256>` 이면 받은 파일을 남긴다.
+
+```json
+{"sha256": "…", "url": "/api/files/…", "previewUrl": null, "mimeType": "audio/wav", "fileSize": 437788, "durationSeconds": 8.96}
+```
+
+- 받는 목소리는 어댑터가 밝힌다(`GeminiAudioProvider`). 모르는 목소리는 400 이고 응답의 `availableVoices` 에 받는 이름이 실린다. 대소문자를 가린다.
+- 소리는 받은 그대로 저장한다. Gemini 의 WAV 끝에는 출처 메타데이터 청크가 붙어 있어 파일 크기가 재생 길이보다 크다. `durationSeconds` 는 `data` 청크로 계산한 값이다.
+- 길이를 읽을 수 없는 소리(PCM WAV 가 아님)는 저장하지 않고 Task 를 재시도 없이 실패로 닫는다.
+- 비용은 입력 글 토큰과 출력 소리 토큰으로 잡힌다(`V21__gemini_tts_prices.sql`). 소리는 초당 25 토큰이다.
+- Free Tier 키의 음성 모델은 분당 3건에서 429 를 준다. 429 는 재시도하지만 간격을 두지 않아, 한꺼번에 여러 건을 보내면 재시도까지 모두 막힐 수 있다.
+- 결정의 근거는 [ADR 0006](adr/0006-generated-file-kinds.md) 에 있다.
 
 ## 직접 업로드 URL 발급
 

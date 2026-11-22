@@ -26,6 +26,7 @@ import dev.joyson.aiworkbench.generation.domain.GenerationJobType
     JsonSubTypes.Type(value = ImageOption::class, name = "image-generate"),
     JsonSubTypes.Type(value = TextGenerateOption::class, name = "text-generate"),
     JsonSubTypes.Type(value = DecisionOption::class, name = "decision"),
+    JsonSubTypes.Type(value = AudioGenerateOption::class, name = "audio-generate"),
 )
 sealed interface GenerationOption {
     /**
@@ -52,4 +53,5 @@ fun GenerationOption.fileSources(): List<FileSource> = when (this) {
     is ImageOption -> sources
     is TextGenerateOption -> attachments
     is DecisionOption -> sources
+    is AudioGenerateOption -> emptyList()
 }

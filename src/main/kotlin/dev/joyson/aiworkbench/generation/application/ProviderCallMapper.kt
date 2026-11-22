@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.GenerationJob
 import dev.joyson.aiworkbench.generation.domain.GenerationJobTask
+import dev.joyson.aiworkbench.provider.ExternalApiAudioRequest
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.AppliedParameters
 import dev.joyson.aiworkbench.provider.CostUnit
@@ -9,6 +10,7 @@ import dev.joyson.aiworkbench.provider.FailureKind as ProviderFailureKind
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateRequest
 import dev.joyson.aiworkbench.provider.ExternalApiTextRequest
 import dev.joyson.aiworkbench.provider.ProviderUsage
+import dev.joyson.aiworkbench.usage.AudioRequest
 import dev.joyson.aiworkbench.usage.DecisionRequest
 import dev.joyson.aiworkbench.usage.FailureKind
 import dev.joyson.aiworkbench.usage.ImageRequest
@@ -108,6 +110,30 @@ object ProviderCallMapper {
     ): RecordProviderCallCommand = base(job, task, providerName, decisionRequestOf(request), latencyMs, calledAt)
         .failedWith(failureReason, failureKind)
 
+    /** TTS 호출. 소리를 받았으면 성공한 호출이다 — 글과 같은 이유다. */
+    fun succeeded(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiAudioRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        usage: ProviderUsage?,
+    ): RecordProviderCallCommand = base(job, task, providerName, audioRequestOf(request), latencyMs, calledAt)
+        .succeededWith(usage)
+
+    fun failed(
+        job: GenerationJob,
+        task: GenerationJobTask,
+        providerName: String,
+        request: ExternalApiAudioRequest,
+        latencyMs: Int,
+        calledAt: Instant,
+        failureReason: String,
+        failureKind: ProviderFailureKind,
+    ): RecordProviderCallCommand = base(job, task, providerName, audioRequestOf(request), latencyMs, calledAt)
+        .failedWith(failureReason, failureKind)
+
     private fun base(
         job: GenerationJob,
         task: GenerationJobTask,
@@ -156,6 +182,11 @@ object ProviderCallMapper {
         format = if (request.jsonSchema == null) "text" else "json-schema",
         effort = request.effort?.name?.lowercase(),
         attachments = request.files.size,
+    )
+
+    private fun audioRequestOf(request: ExternalApiAudioRequest) = AudioRequest(
+        voice = request.voice,
+        styled = request.style != null,
     )
 
     private fun decisionRequestOf(request: ExternalApiDecisionRequest) = DecisionRequest(

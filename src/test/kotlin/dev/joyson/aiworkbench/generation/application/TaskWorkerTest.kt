@@ -32,6 +32,9 @@ import dev.joyson.aiworkbench.provider.ExternalApiGenerateResponse
 import dev.joyson.aiworkbench.provider.ExternalApiGenerateResult
 import dev.joyson.aiworkbench.provider.ExternalApiProvider
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionProvider
+import dev.joyson.aiworkbench.provider.ExternalApiAudioProvider
+import dev.joyson.aiworkbench.provider.ExternalApiAudioRequest
+import dev.joyson.aiworkbench.provider.ExternalApiAudioResponse
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionRequest
 import dev.joyson.aiworkbench.provider.ExternalApiDecisionResponse
 import dev.joyson.aiworkbench.provider.ExternalApiTextProvider
@@ -42,6 +45,7 @@ import dev.joyson.aiworkbench.provider.StopReason
 import dev.joyson.aiworkbench.generation.domain.DecisionAnswer
 import dev.joyson.aiworkbench.generation.domain.GeneratedDecisionRepository
 import dev.joyson.aiworkbench.generation.domain.GeneratedTextRepository
+import dev.joyson.aiworkbench.generation.domain.option.AudioGenerateOption
 import dev.joyson.aiworkbench.generation.domain.option.DecisionChoice
 import dev.joyson.aiworkbench.generation.domain.option.DecisionEvidence
 import dev.joyson.aiworkbench.generation.domain.option.DecisionOption
@@ -49,6 +53,7 @@ import dev.joyson.aiworkbench.generation.domain.option.DecisionQuestion
 import dev.joyson.aiworkbench.generation.domain.option.Effort
 import dev.joyson.aiworkbench.generation.domain.option.TextFormat
 import dev.joyson.aiworkbench.generation.domain.option.TextGenerateOption
+import dev.joyson.aiworkbench.usage.AudioRequest
 import dev.joyson.aiworkbench.usage.DecisionRequest
 import dev.joyson.aiworkbench.usage.TextRequest
 import dev.joyson.aiworkbench.provider.ImageMetadata
@@ -145,10 +150,13 @@ class TaskWorkerTest @Autowired constructor(
         uploadedFiles: UploadedFiles = this.uploadedFiles,
         textProvider: ExternalApiTextProvider? = null,
         decisionProvider: ExternalApiDecisionProvider? = null,
+        audioProvider: ExternalApiAudioProvider? = null,
     ) = TaskWorker(
         taskRepository = taskPort,
         jobRepository = jobPort,
-        providerRegistry = ProviderRegistry(listOf(provider), listOfNotNull(textProvider), listOfNotNull(decisionProvider)),
+        providerRegistry = ProviderRegistry(
+            listOf(provider), listOfNotNull(textProvider), listOfNotNull(decisionProvider), listOfNotNull(audioProvider),
+        ),
         // 입력과 결과가 같은 보관소에서 오가야 "만든 것을 다시 고친다" 가 성립한다.
         fileSourceResolver = FileSourceResolver(generatedFileFinder, uploadedFiles, fileStorage, presignedUrlIssuer),
         fileStorage = fileStorage,
@@ -1209,7 +1217,93 @@ class TaskWorkerTest @Autowired constructor(
         assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty(), "부르지 않았는데 지출이 적혔다")
     }
 
+    private val sound = byteArrayOf(0x52, 0x49, 0x46, 0x46, 1, 2, 3)
+
+    private fun audioWorker(behavior: (ExternalApiAudioRequest) -> ExternalApiAudioResponse) =
+        workerWith(
+            provider { error("이미지 경로를 타면 안 된다") },
+            audioProvider = object : ExternalApiAudioProvider {
+                override val name = PROVIDER
+                override val models = setOf(AUDIO_MODEL)
+                override fun voices(model: String) = setOf("Kore")
+                override fun generateAudio(model: String, request: ExternalApiAudioRequest) = behavior(request)
+            },
+        )
+
+    private fun spoken() = ExternalApiAudioResponse(
+        audio = sound,
+        mimeType = "audio/wav",
+        durationSeconds = 8.48,
+        usage = ProviderUsage(raw = mapOf("total_input_tokens" to 32, "total_output_tokens" to 212)),
+        providerId = "v1_abc",
+    )
+
+    @Test
+    fun `TTS 가 끝나면 오디오 파일 하나가 길이와 함께 남고 Job 이 닫힌다`() {
+        val (job, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore", style = "차분하게"))
+        var sent: ExternalApiAudioRequest? = null
+
+        audioWorker { sent = it; spoken() }.process(task.id!!)
+
+        assertEquals(ExternalApiAudioRequest(text = "질문", voice = "Kore", style = "차분하게"), sent)
+        val file = generatedFileRepository.findAllByTaskId(task.id!!).single()
+        assertEquals(BlobKey.of(job.workspaceUuid, Sha256.of(sound), "audio/wav").value, file.storageKey)
+        assertContentEquals(sound, storage.written[file.storageKey], "받은 바이트를 그대로 둔다")
+        assertEquals(FileMetadata.Audio(durationSeconds = 8.48, mimeType = "audio/wav", fileSize = sound.size), file.metadata)
+        assertEquals("v1_abc", file.providerInfo?.providerId)
+        assertEquals(TaskStatus.SUCCEEDED, taskRepository.findById(task.id!!).get().status)
+        assertEquals(JobLifecycle.CLOSED, jobRepository.findById(job.id!!).get().status)
+    }
+
+    @Test
+    fun `TTS 호출의 지출은 목소리 · 말투 여부와 사용량으로 적힌다`() {
+        val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
+
+        audioWorker { spoken() }.process(task.id!!)
+
+        val call = callRepository.findAllByTaskUuid(task.uuid).single()
+        assertTrue(call.succeeded)
+        // 읽은 글은 적지 않는다. 사용자의 글이고, 원장은 돈의 기록이다.
+        assertEquals(AudioRequest(voice = "Kore", styled = false), call.request)
+        assertEquals(mapOf<String, Any?>("total_input_tokens" to 32, "total_output_tokens" to 212), call.usageRaw)
+    }
+
+    /** 길이 없이 저장하지 않는다. 어댑터가 다시 보내지 않는 실패로 알리면 그대로 닫는다. */
+    @Test
+    fun `길이를 읽지 못한 소리는 저장하지 않고 닫는다`() {
+        val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
+
+        audioWorker { throw ExternalApiException(FailureKind.UNKNOWN, "소리의 길이를 읽지 못했다") }.process(task.id!!)
+
+        val closed = taskRepository.findById(task.id!!).get()
+        assertEquals(TaskStatus.FAILED, closed.status)
+        assertTrue(closed.failureReason!!.contains("길이"))
+        assertTrue(generatedFileRepository.findAllByTaskId(task.id!!).isEmpty())
+        assertFalse(callRepository.findAllByTaskUuid(task.uuid).single().succeeded)
+    }
+
+    @Test
+    fun `한도에 걸린 TTS 는 큐로 돌아간다`() {
+        val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
+
+        audioWorker { throw ExternalApiException(FailureKind.THROTTLED, "429") }.process(task.id!!)
+
+        assertEquals(TaskStatus.PENDING, taskRepository.findById(task.id!!).get().status)
+        assertEquals(RecordedFailureKind.THROTTLED, callRepository.findAllByTaskUuid(task.uuid).single().failureKind)
+    }
+
+    @Test
+    fun `TTS Provider 가 사라졌으면 닫는다`() {
+        val (_, task) = newTask(model = AUDIO_MODEL, option = AudioGenerateOption("질문", voice = "Kore"))
+
+        workerWith(provider { error("이미지 경로를 타면 안 된다") }).process(task.id!!)
+
+        assertEquals(TaskStatus.FAILED, taskRepository.findById(task.id!!).get().status)
+        assertTrue(callRepository.findAllByTaskUuid(task.uuid).isEmpty(), "부르지 않았는데 지출이 적혔다")
+    }
+
     private companion object {
+        const val AUDIO_MODEL = "fake-audio-1"
         const val MODEL = "fake-image-1"
         const val TEXT_MODEL = "fake-text-1"
         const val DECISION_MODEL = "fake-decision-1"
