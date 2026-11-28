@@ -112,11 +112,12 @@ overlay 에는 값이 든 Secret 이 없다. 운영자가 만든다.
       --from-env-file=deploy/overlays/home/runtime.env --dry-run=client -o yaml | sudo k3s kubectl apply -f -
     ```
 
-  - 파일이 없거나 낡았으면, 지금 Secret 에 키만 더한다(`stringData` 를 merge 하면 기존 키는 남는다). 비밀 값은 입력받아 넘긴다.
+  - 파일이 없거나 낡았으면, 지금 Secret 에 키만 더한다(`data` 를 merge 하면 기존 키는 남는다). 비밀 값은 입력받아 넘긴다.
+    값은 base64 로 바꿔 넣는다 — JSON 에 그대로 넣으면 따옴표 · 역슬래시가 든 값이 깨지거나 다른 값이 된다. 값은 명령 인자에 드러나지 않는다.
 
     ```bash
     read -rs VALUE
-    printf '{"stringData":{"<KEY>":"%s"}}' "$VALUE" \
+    printf '{"data":{"<KEY>":"%s"}}' "$(printf %s "$VALUE" | base64 -w0)" \
       | sudo k3s kubectl -n workbench patch secret workbench-runtime --type merge --patch-file /dev/stdin
     unset VALUE
     ```
