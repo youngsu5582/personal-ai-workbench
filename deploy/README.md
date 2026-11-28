@@ -104,6 +104,26 @@ overlay 에는 값이 든 Secret 이 없다. 운영자가 만든다.
   shred -u ~/authserver-signing-key.pem
   ```
 
+- `workbench-runtime` 에 키를 더하거나 값을 바꿀 때는 둘 중 하나다. 앱은 Pod 가 뜰 때 읽으므로, 바꾼 뒤 `apply`(새 이미지) 나 `rollout restart` 로 다시 띄운다.
+  - 서버의 `deploy/overlays/home/runtime.env` 가 지금 운영 값을 **모두** 갖고 있으면, 그 파일을 고치고 Secret 을 통째로 다시 만든다. 파일에 없는 키는 Secret 에서도 사라진다.
+
+    ```bash
+    sudo k3s kubectl -n workbench create secret generic workbench-runtime \
+      --from-env-file=deploy/overlays/home/runtime.env --dry-run=client -o yaml | sudo k3s kubectl apply -f -
+    ```
+
+  - 파일이 없거나 낡았으면, 지금 Secret 에 키만 더한다(`data` 를 merge 하면 기존 키는 남는다). 비밀 값은 입력받아 넘긴다.
+    값은 base64 로 바꿔 넣는다 — JSON 에 그대로 넣으면 따옴표 · 역슬래시가 든 값이 깨지거나 다른 값이 된다. 값은 명령 인자에 드러나지 않는다.
+
+    ```bash
+    read -rs VALUE
+    printf '{"data":{"<KEY>":"%s"}}' "$(printf %s "$VALUE" | base64 -w0)" \
+      | sudo k3s kubectl -n workbench patch secret workbench-runtime --type merge --patch-file /dev/stdin
+    unset VALUE
+    ```
+
+  - 들어갔는지는 키 이름만 본다: `sudo k3s kubectl -n workbench get secret workbench-runtime -o go-template='{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}'`
+
 - 토큰은 명령 인자나 셸 history 에 남기지 않는다.
 
   ```bash
@@ -127,6 +147,9 @@ git tag -a v2026.11.09 -m "서비스 · 템플릿 · 새 콘솔" origin/main && 
 - 그 커밋의 이미지가 아직 없으면 멈춘다. `image.yml` 이 덜 끝났거나, 연달아 머지돼 앞 실행이 취소된 경우다. 이미지가 생긴 뒤 Actions 에서 그 실행을 다시 돌린다.
 - PR 본문은 `.claude/scripts/deploy-pr.sh` 가 만든다. 지금 떠 있는 커밋(고정된 digest 이미지의 revision 라벨)부터 들어가는 PR · 마이그레이션 · 설정 변경을 적고, 기존 행을 바꾸는 마이그레이션이 있으면 백업 명령을 넣는다. 손으로 돌려도 같다.
 - 워크플로가 PR 을 열려면 저장소 설정 Actions → General 의 "Allow GitHub Actions to create and approve pull requests" 가 켜져 있어야 한다.
+
+**배포 PR 을 머지하기 전에** 본문의 "설정 · 매니페스트" 를 본다. `runtime.env.example` 이나 `application.yaml` 이 바뀌었으면, 기본값 없이 새로 필요한 값(예: `AUTH_SIGNING_KEY`)과 그 값이 가리키는 파일 · Secret 이 클러스터에 있는지 먼저 맞춘다.
+`Recreate` 라 apply 하면 기존 Pod 가 먼저 내려가므로, 새 Pod 가 설정 때문에 뜨지 못하면 그동안 서비스가 끊긴다.
 
 PR 을 머지한 뒤 홈서버에서:
 
