@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { ApiError, contentTypeOf, request, upload, type Job } from "../../api";
+import { audioModelNote, STT_PROMPT_EXAMPLES, STYLE_EXAMPLES, STYLE_HINT, VOICE_TRAITS } from "../../shared/audio-guide";
 import { AuthenticatedAudio, AuthenticatedImage, fileNameOf } from "../../shared/authenticated-media";
 import { fileFacts } from "../../shared/file-facts";
 import { AudioPlayer } from "../../shared/ui/audio-player";
@@ -8,6 +9,7 @@ import { CopyButton } from "../../shared/copy-button";
 import { errorText, type Context } from "../../shared/console-utils";
 import { ModelPicker, type Model } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
+import { ExampleChips } from "../../shared/ui/example-chips";
 import { Field, Input, Textarea } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { Segmented } from "../../shared/ui/segmented";
@@ -137,7 +139,7 @@ export function StudioPanel({ token, workspace }: Context) {
             onChange={(next) => { setKind(next); setModel(""); setFile(null); setModels([]); }}
             options={[{ value: "image", label: "이미지" }, { value: "text", label: "텍스트" }, { value: "audio", label: "음성" }]} />
           <ModelPicker id="studio-model" token={token} workspace={workspace} type={JOB_TYPE[kind]}
-            value={model} onChange={setModel} onModels={setModels} autoSelectFirst />
+            value={model} onChange={setModel} onModels={setModels} autoSelectFirst hint={kind === "audio" ? audioModelNote(model) : undefined} />
           <Field label={kind === "audio" ? "읽을 글" : "프롬프트"} htmlFor="studio-prompt"
             hint={kind === "audio" ? "글은 그대로 소리 내어 읽혀요. 말투는 글에 쓰지 말고 아래 칸에 적어 주세요." : undefined}>
             <Textarea id="studio-prompt" required value={prompt} onChange={(e) => setPrompt(e.target.value)} className="min-h-32"
@@ -153,12 +155,13 @@ export function StudioPanel({ token, workspace }: Context) {
                     <SelectValue placeholder={model ? "목소리를 불러오는 중이에요" : "모델을 먼저 고르세요"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {voices?.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    {voices?.map((name) => <SelectItem key={name} value={name} description={VOICE_TRAITS[name]}>{name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="말투" htmlFor="studio-style" optional>
+              <Field label="말투" htmlFor="studio-style" optional hint={STYLE_HINT}>
                 <Input id="studio-style" value={style} onChange={(e) => setStyle(e.target.value)} placeholder="예: 차분하고 또렷하게" />
+                <ExampleChips label="말투 예시" examples={STYLE_EXAMPLES} onPick={setStyle} />
               </Field>
             </>
           )}
@@ -189,6 +192,8 @@ export function StudioPanel({ token, workspace }: Context) {
                   {contentTypeOf(file).startsWith("image/") && <img src={filePreview} alt="선택한 첨부 이미지 미리보기" className="h-16 w-24 rounded-md border border-border object-cover" />}
                 </span>}
               </FileDrop>
+              {/* 첨부 칸(`<label>`) 밖에 둔다. 안에 두면 예시를 누를 때 파일 선택 창이 뜬다. */}
+              {file && contentTypeOf(file).startsWith("audio/") && <ExampleChips label="오디오 프롬프트 예시" examples={STT_PROMPT_EXAMPLES} onPick={setPrompt} />}
             </Field>
           )}
           {fail && <p role="alert" className="m-0 rounded-md bg-danger-soft px-3 py-2 text-[13px] text-danger">{fail}</p>}
