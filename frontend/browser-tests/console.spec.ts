@@ -694,3 +694,60 @@ test("이미지 요청 실패 후 같은 주소로 다시 불러온다", async (
   await expect(page.getByAltText("생성된 이미지")).toBeVisible();
   expect(fileCalls).toBeGreaterThanOrEqual(2);
 });
+
+/** 라이브러리 칸에 그릴 작은 그림. 서명 주소 자리에 data 주소를 넣어 보관소 없이 그린다. */
+const swatch = (color: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="${color}"/></svg>`)}`;
+const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+const libraryImage = (n: number, prompt: string, createdAt: string) => ({
+  file: { sha256: String(n).repeat(64).slice(0, 64), url: `/api/files/${String(n).repeat(64).slice(0, 64)}`, previewUrl: swatch(["#f97316", "#6366f1", "#14b8a6"][n % 3]), downloadUrl: null, mimeType: "image/png", fileSize: 2048, width: 1024, height: 1024 },
+  createdAt,
+  job: { uuid: "job-a", type: "image-generate", model: "image-model", prompt },
+});
+
+async function openLibrary(page: Page, files: (url: URL, workspace: string | undefined) => unknown) {
+  await page.route("**/api/files?**", route => route.fulfill({ json: files(new URL(route.request().url()), route.request().headers()["x-workspace-id"]) }));
+  await prepare(page);
+  await page.getByRole("button", { name: "라이브러리" }).click();
+}
+
+test("라이브러리는 이미지를 만든 날로 묶어 격자로 보이고 칸을 누르면 그 작업을 연다", async ({ page }) => {
+  const requested: string[] = [];
+  await openLibrary(page, url => {
+    requested.push(url.search);
+    return { items: [libraryImage(1, "노을 진 바다", daysAgo(0)), libraryImage(2, "눈 덮인 산", daysAgo(0)), libraryImage(3, "오래된 골목", daysAgo(40))], hasNext: false };
+  });
+
+  await expect(page.getByRole("region", { name: "오늘" }).getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("heading", { name: /^오늘/ })).toContainText("2개");
+  // 일주일이 넘은 것은 달로 묶는다.
+  await expect(page.getByRole("region", { name: /\d{4}년 \d{1,2}월/ }).getByRole("listitem")).toHaveCount(1);
+  expect(requested[0]).toContain("kind=image");
+  expect(requested[0]).toContain("page=0");
+
+  await page.getByRole("button", { name: /노을 진 바다 — 작업 보기/ }).click();
+  await expect(page.getByRole("heading", { name: "작업 상세" })).toBeVisible();
+});
+
+test("라이브러리에서 오디오로 바꾸면 읽은 글과 재생 칸을 보이고 빈 서비스는 만들기로 안내한다", async ({ page }) => {
+  await openLibrary(page, (url, workspace) => {
+    if (workspace !== "workspace-a") return { items: [], hasNext: false };
+    if (url.searchParams.get("kind") === "image") return { items: [libraryImage(1, "노을 진 바다", daysAgo(0))], hasNext: false };
+    return { items: [{
+      file: { sha256: "a".repeat(64), url: `/api/files/${"a".repeat(64)}`, previewUrl: PLAYABLE_WAV, downloadUrl: null, mimeType: "audio/wav", fileSize: 414_764, durationSeconds: 8.48 },
+      createdAt: daysAgo(1), job: { uuid: "job-v", type: "audio-generate", model: "tts-model", prompt: "동시성 문제는 어떻게 막으셨나요?" },
+    }], hasNext: false };
+  });
+
+  await page.getByRole("radio", { name: "오디오" }).click();
+  await expect(page.getByRole("heading", { name: /^어제/ })).toBeVisible();
+  await expect(page.getByText("동시성 문제는 어떻게 막으셨나요?")).toBeVisible();
+  await expect(page.getByText("8.5초 · WAV · 405KB", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "재생", exact: true })).toBeVisible();
+
+  await pickService(page, /^둘째 서비스/);
+  // 서비스를 바꾸면 처음 종류(이미지)부터 다시 본다.
+  await expect(page.getByText("아직 만든 이미지가 없어요")).toBeVisible();
+  await expect(page.getByText("동시성 문제는 어떻게 막으셨나요?")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "작업실에서 만들기" })).toBeVisible();
+});

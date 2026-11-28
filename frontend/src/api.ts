@@ -68,6 +68,17 @@ export type Job = {
   }[];
 };
 export type JobList = { items: Job[]; hasNext: boolean };
+/** 결과 파일 하나. 작업 상세의 결과 파일과 같은 모양이다. */
+export type GeneratedFile = Job["tasks"][number]["files"][number];
+/** 라이브러리가 가르는 종류. 서버의 `kind` 값과 같다. */
+export type FileKind = "image" | "audio";
+/** 라이브러리 항목 — 결과 파일과 그것을 만든 작업. `prompt` 는 이미지면 프롬프트, TTS 면 읽은 글이다. */
+export type LibraryItem = {
+  file: GeneratedFile;
+  createdAt: string;
+  job: { uuid: string; type: string; model: string; prompt: string | null };
+};
+export type LibraryList = { items: LibraryItem[]; hasNext: boolean };
 export class ApiError extends Error {
   constructor(
     public status: number,

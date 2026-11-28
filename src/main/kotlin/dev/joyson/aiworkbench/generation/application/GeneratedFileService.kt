@@ -1,10 +1,14 @@
 package dev.joyson.aiworkbench.generation.application
 
 import dev.joyson.aiworkbench.generation.domain.downloadFileNameOf
+import dev.joyson.aiworkbench.generation.domain.FileKind
 import dev.joyson.aiworkbench.generation.domain.FileLocation
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import java.net.URI
 import java.util.UUID
@@ -35,6 +39,8 @@ sealed interface FileDownload {
 @Service
 class GeneratedFileService(
     private val generatedFileFinder: GeneratedFileFinder,
+    private val generatedFileRepository: GeneratedFileRepository,
+    private val generationJobRepository: GenerationJobRepository,
     private val fileStorage: FileStorage,
     /** 보관소가 주소에 서명할 수 있을 때만 있다. 로컬 디스크는 못 한다. */
     private val presignedUrlIssuer: PresignedUrlIssuer?,
@@ -55,6 +61,30 @@ class GeneratedFileService(
         val fileName = downloadFileNameOf(sha256, location.mimeType)
 
         return redirectTo(location, fileName) ?: streamFrom(location, fileName)
+    }
+
+    /**
+     * 이 서비스가 만든 [kind] 의 결과 파일을 최신순으로 나누어 준다.
+     *
+     * 페이지는 작업이 아니라 **파일** 단위다. 작업 단위로 나누면 글 작업이 많은 쪽에서 빈 페이지가 생긴다.
+     * 고르는 것과 읽는 것을 나눈다 — 고르기는 소유자까지 조인하는 [GeneratedFileFinder] 가, 읽기는 엔티티 매핑이 맡는다.
+     */
+    fun listOwned(workspaceUuid: UUID, kind: FileKind, page: Int, size: Int): OwnedFileListView {
+        val refs = generatedFileFinder.findAllOwned(workspaceUuid, kind, PageRequest.of(page, size))
+        if (refs.content.isEmpty()) return OwnedFileListView(items = emptyList(), hasNext = false)
+        val files = generatedFileRepository.findAllByIdIn(refs.content.map { it.fileId }).associateBy { it.id }
+        val jobs = generationJobRepository.findAllByIdIn(refs.content.map { it.jobId }.distinct()).associateBy { it.id }
+        // 결과 파일은 지우지 않으니, 방금 고른 행은 읽을 때도 있다.
+        val items = refs.content.map { ref ->
+            val file = files.getValue(ref.fileId)
+            val job = jobs.getValue(ref.jobId)
+            OwnedFileView(
+                file = file.toView(presignedUrlIssuer),
+                createdAt = file.createdAt,
+                job = FileJobView(uuid = job.uuid, model = job.model, option = job.option),
+            )
+        }
+        return OwnedFileListView(items = items, hasNext = refs.hasNext())
     }
 
     /** 보관소가 주소에 서명할 수 있을 때. 바이트를 읽지 않는다. */

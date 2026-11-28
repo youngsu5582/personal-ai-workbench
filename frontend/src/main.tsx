@@ -7,6 +7,7 @@ import { UsagePanel } from "./features/usage/usage";
 import { StudioPanel } from "./features/studio/studio";
 import { KeysPanel } from "./features/api-keys/keys";
 import { TemplatesPanel } from "./features/templates/templates";
+import { LibraryPanel } from "./features/library/library";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -29,7 +30,6 @@ import { browserStorage } from "./shared/browser-storage";
 import { Avatar } from "./shared/ui/avatar";
 import { Button } from "./shared/ui/button";
 import { cn } from "./shared/ui/cn";
-import { EmptyState } from "./shared/ui/empty-state";
 import { PageHeader } from "./shared/ui/page-header";
 import { Segmented } from "./shared/ui/segmented";
 import { Card } from "./shared/ui/surface";
@@ -139,10 +139,9 @@ function App() {
             <PageHeader eyebrow="Playground" title="작업실" description="이미지 · 텍스트 · 음성을 만들어 보세요." />
             {workspace ? <StudioPanel key={workspace} token={token} workspace={workspace} /> : loading}
           </>}
-          {page === "library" && <>
-            <PageHeader eyebrow="Your collection" title="라이브러리" description="이 서비스에서 만든 이미지들을 모아보세요." />
-            <EmptyState icon={<FileImage />} title="라이브러리를 준비하고 있어요" description="생성 이미지 목록이 연결되면 이곳에서 결과물을 둘러볼 수 있어요." />
-          </>}
+          {page === "library" && (workspace
+            ? <LibraryPanel key={workspace} token={token} workspace={workspace} onOpenJob={uuid => go("jobs", uuid)} onStudio={() => go("studio")} />
+            : loading)}
           {page === "usage" && <>
             <PageHeader eyebrow="Insights" title="사용량" description="서비스별 AI 사용량과 비용을 살펴보세요." />
             {workspace && <UsagePanel key={workspace} token={token} workspace={workspace} />}
