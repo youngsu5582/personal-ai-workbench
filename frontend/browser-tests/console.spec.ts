@@ -183,7 +183,7 @@ test("글 생성에 오디오를 첨부하면 서버가 받는 형식으로 올�
   });
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
   await page.getByRole("radio", { name: "텍스트" }).click();
-  await page.getByLabel("프롬프트").fill("받아 써");
+  await page.getByRole("textbox", { name: "프롬프트" }).fill("받아 써");
   // 브라우저가 m4a 를 audio/x-m4a 로 알려 줘도 서버가 받는 audio/mp4 로 올린다.
   await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "answer.m4a", mimeType: "audio/x-m4a", buffer: Buffer.from("fake-audio") });
   await expect(page.getByText(/audio\/mp4 · 실행할 때 올려요/)).toBeVisible();
@@ -220,7 +220,7 @@ test("음성 작업은 모델이 받는 목소리로 읽을 글과 말투를 보
   await page.getByRole("combobox", { name: "목소리" }).click();
   await page.getByRole("option", { name: "Puck" }).click();
   await page.getByLabel("읽을 글").fill("동시성 문제는 어떻게 막으셨나요?");
-  await page.getByLabel("말투").fill("  차분하게  ");
+  await page.getByRole("textbox", { name: /^말투/ }).fill("  차분하게  ");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByRole("group", { name: "결과 1 오디오" }).locator("audio")).toHaveAttribute("src", /^data:audio/);
   await expect(page.getByAltText("생성된 이미지")).toHaveCount(0);
@@ -228,6 +228,44 @@ test("음성 작업은 모델이 받는 목소리로 읽을 글과 말투를 보
     option: { type: "audio-generate", text: "동시성 문제는 어떻게 막으셨나요?", voice: "Puck", style: "차분하게" },
     model: "tts-model", taskCount: 1,
   }]);
+});
+
+test("음성 작업실은 모델 안내와 목소리 특징을 보이고, 말투 예시를 누르면 말투 칸을 그 예시로 바꾼다", async ({ page }) => {
+  await prepare(page);
+  await page.route("**/api/models?**", route => route.fulfill({ json: { models: route.request().url().includes("type=audio-generate")
+    ? [{ id: "gemini-3.8-flash-tts", provider: "gemini", voices: ["Kore", "Puck", "Unlisted"] }]
+    : [{ id: "example-model", provider: "example" }] } }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "음성" }).click();
+  await expect(page.getByText("기본 모델이에요. 실제 호출로 확인했어요.")).toBeVisible();
+  await page.getByRole("combobox", { name: "목소리" }).click();
+  // 특징은 목록에서 이름 옆에 보이고, 항목의 이름은 보낼 값 그대로다.
+  await expect(page.getByRole("option", { name: "Puck", exact: true })).toHaveAccessibleDescription("경쾌함");
+  // 특징을 모르는 목소리는 이름만 보인다.
+  await expect(page.getByRole("option", { name: "Unlisted", exact: true })).toHaveText("Unlisted");
+  await page.getByRole("option", { name: "Puck", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "목소리" })).toHaveText("Puck");
+  const style = page.getByRole("textbox", { name: /^말투/ });
+  await style.fill("차분하게");
+  await page.getByRole("group", { name: "말투 예시" }).getByRole("button", { name: "천천히 또박또박" }).click();
+  await expect(style).toHaveValue("천천히 또박또박");
+});
+
+test("글 생성에 오디오를 첨부하면 받아쓰기 프롬프트 예시를 보이고, 누르면 프롬프트를 그 예시로 바꾼다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  const examples = page.getByRole("group", { name: "오디오 프롬프트 예시" });
+  await expect(examples).toHaveCount(0);
+  // 이미지를 첨부하면 보이지 않는다.
+  await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "a.png", mimeType: "image/png", buffer: Buffer.from("png") });
+  await expect(examples).toHaveCount(0);
+  await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "answer.wav", mimeType: "audio/wav", buffer: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64") });
+  let chooser = 0;
+  page.on("filechooser", () => { chooser += 1; });
+  await examples.getByRole("button", { name: "들리는 그대로 받아 써 줘" }).click();
+  await expect(page.getByRole("textbox", { name: "프롬프트" })).toHaveValue("들리는 그대로 받아 써 줘");
+  expect(chooser).toBe(0);
 });
 
 test("작업 내역은 음성 결과를 재생 칸과 길이로 보이고 읽을 글로 알아본다", async ({ page }) => {
@@ -478,7 +516,7 @@ test("작업실의 글 결과도 전문을 복사한다", async ({ page, context
   await page.route("**/api/jobs", route => route.fulfill({ status: 202, json: { uuid: "job-a" } }));
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
   await page.getByRole("radio", { name: "텍스트" }).click();
-  await page.getByLabel("프롬프트").fill("예시 요청");
+  await page.getByRole("textbox", { name: "프롬프트" }).fill("예시 요청");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByText("첫 서비스의 결과")).toBeVisible();
   await page.getByRole("button", { name: "결과 복사" }).click();
@@ -577,7 +615,7 @@ test("진행 중 작업 조회가 일시적으로 실패해도 결과 조회를 
   });
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
   await page.getByRole("radio", { name: "텍스트" }).click();
-  await page.getByLabel("프롬프트").fill("예시 요청");
+  await page.getByRole("textbox", { name: "프롬프트" }).fill("예시 요청");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await expect(page.getByText("첫 서비스의 결과")).toBeVisible({ timeout: 12_000 });
   expect(calls).toBeGreaterThanOrEqual(3);
@@ -605,7 +643,7 @@ test("작업 유형을 바꾸면 그 유형의 모델 목록을 받기 전에는
   textModels = true;
   await page.getByRole("button", { name: "모델 다시 불러오기" }).click();
   await expect(runButton).toBeEnabled();
-  await page.getByLabel("프롬프트").fill("예시 요청");
+  await page.getByRole("textbox", { name: "프롬프트" }).fill("예시 요청");
   await runButton.click();
   await expect.poll(() => submitted.length).toBe(1);
   expect(submitted[0]).toMatchObject({ model: "text-model" });
@@ -627,7 +665,7 @@ test("이미지 요청 실패 후 같은 주소로 다시 불러온다", async (
     ) });
   });
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
-  await page.getByLabel("프롬프트").fill("이미지 요청");
+  await page.getByRole("textbox", { name: "프롬프트" }).fill("이미지 요청");
   await page.getByRole("button", { name: "작업 실행" }).click();
   await page.getByRole("button", { name: "다시 조회" }).click();
   await expect(page.getByAltText("생성된 이미지")).toBeVisible();

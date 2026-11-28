@@ -328,7 +328,13 @@ test("TTS 템플릿을 글 · 목소리 · 말투로 만든다", async ({ page }
   await page.getByRole("textbox", { name: "읽을 글", exact: true }).fill("{{question}}");
   // 기본 모델을 고르지 않아도 이 종류의 모델이 받는 목소리에서 고른다. 목록에 있으면 Kore 가 먼저다.
   await expect(page.getByRole("combobox", { name: "목소리" })).toHaveText("Kore");
+  await page.getByRole("combobox", { name: "목소리" }).click();
+  await expect(page.getByRole("option", { name: "Achernar", exact: true })).toHaveAccessibleDescription("부드러움");
+  await page.keyboard.press("Escape");
   await choose(page, "목소리", "Puck");
+  // 말투 예시는 칸을 그 예시로 바꾼다. 변수를 두려면 그 위에 고쳐 쓴다.
+  await page.getByRole("group", { name: "말투 예시" }).getByRole("button", { name: "밝고 경쾌하게" }).click();
+  await expect(page.getByRole("textbox", { name: /^말투/ })).toHaveValue("밝고 경쾌하게");
   await page.getByRole("textbox", { name: /^말투/ }).fill("{{tone}} 말투로");
   await expect(page.locator("[data-variable-state=empty]")).toHaveText(["{{question}}", "{{tone}}"]);
   await page.getByRole("button", { name: "템플릿 저장", exact: true }).click();

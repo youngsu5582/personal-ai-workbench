@@ -1,4 +1,4 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef } from "react";
+import { forwardRef, useId, type ComponentPropsWithoutRef, type ElementRef } from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "./cn";
@@ -37,12 +37,18 @@ export const SelectLabel = forwardRef<ElementRef<typeof SelectPrimitive.Label>, 
     return <SelectPrimitive.Label ref={ref} className={cn("px-2 pb-0.5 pt-1.5 text-[11px] font-medium text-subtle-foreground", className)} {...props} />;
   });
 
-export const SelectItem = forwardRef<ElementRef<typeof SelectPrimitive.Item>, ComponentPropsWithoutRef<typeof SelectPrimitive.Item>>(
-  function SelectItem({ className, children, ...props }, ref) {
-    return <SelectPrimitive.Item ref={ref}
-      className={cn("relative flex h-8 cursor-default select-none items-center rounded-sm pl-2 pr-7 text-[13px] outline-none data-[highlighted]:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50", className)}
+/**
+ * [description] 은 목록에서만 이름 옆에 보인다. 고른 뒤의 칸에는 [children] 만 남는다 — 칸은 보낼 값을 보인다.
+ * 항목의 이름에 섞지 않고 설명(`aria-describedby`)으로 잇는다. 이름은 고르는 값 그대로여야 한다.
+ */
+export const SelectItem = forwardRef<ElementRef<typeof SelectPrimitive.Item>, ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: string }>(
+  function SelectItem({ className, children, description, ...props }, ref) {
+    const descriptionId = useId();
+    return <SelectPrimitive.Item ref={ref} aria-describedby={description ? descriptionId : undefined}
+      className={cn("relative flex h-8 cursor-default select-none items-center gap-2 rounded-sm pl-2 pr-7 text-[13px] outline-none data-[highlighted]:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50", className)}
       {...props}>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {description && <span id={descriptionId} aria-hidden="true" className="text-xs text-muted-foreground">{description}</span>}
       <SelectPrimitive.ItemIndicator className="absolute right-2 inline-flex items-center"><Check className="size-3.5 text-accent" aria-hidden="true" /></SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>;
   });

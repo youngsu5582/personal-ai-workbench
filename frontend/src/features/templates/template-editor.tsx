@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { request, upload } from "../../api";
+import { audioModelNote, STYLE_EXAMPLES, STYLE_HINT, VOICE_TRAITS } from "../../shared/audio-guide";
 import { ModelPicker, type Model } from "../../shared/model-picker";
 import { Button } from "../../shared/ui/button";
+import { ExampleChips } from "../../shared/ui/example-chips";
 import { Field, Input } from "../../shared/ui/field";
 import { FileDrop } from "../../shared/ui/file-drop";
 import { PageHeader } from "../../shared/ui/page-header";
@@ -125,7 +127,8 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
             <Input id="template-name" value={name} maxLength={255} required onChange={e => setName(e.target.value)} />
           </Field>
           <ModelPicker id="template-model" token={token} workspace={workspace} type={type} value={model} onChange={setModel} required={false}
-            onModels={setModels} label="기본 모델" hint="정해 두면 실행 화면에서 미리 골라져요. 실행할 때 바꿀 수 있어요." />
+            onModels={setModels} label="기본 모델"
+            hint={["정해 두면 실행 화면에서 미리 골라져요. 실행할 때 바꿀 수 있어요.", type === "audio-generate" && audioModelNote(model)].filter(Boolean).join(" ")} />
         </div>
 
         {type === "text-generate" && <PromptField id="template-instructions" label="시스템 지시문" optional value={instructions} onChange={setInstructions}
@@ -139,11 +142,14 @@ export function TemplateEditor({ token, workspace, template, onSaved, onCancel }
             <Field label="목소리" htmlFor="template-voice" hint={model ? undefined : "기본 모델을 고르지 않으면 실행할 때 고른 모델이 이 목소리를 받는지 확인해요."}>
               <Select value={voice} onValueChange={setVoice} disabled={!voices.length}>
                 <SelectTrigger id="template-voice"><SelectValue placeholder="목소리를 불러오는 중이에요" /></SelectTrigger>
-                <SelectContent>{voices.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+                <SelectContent>{voices.map(name => <SelectItem key={name} value={name} description={VOICE_TRAITS[name]}>{name}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <PromptField id="template-style" label="말투" optional value={style} onChange={setStyle}
-              hint="어떻게 읽을지예요. 변수를 둘 수 있어요." placeholder="예: 차분하고 또렷하게" />
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <PromptField id="template-style" label="말투" optional value={style} onChange={setStyle}
+                hint={`어떻게 읽을지예요. 변수를 둘 수 있어요. ${STYLE_HINT}`} placeholder="예: 차분하고 또렷하게" />
+              <ExampleChips label="말투 예시" examples={STYLE_EXAMPLES} onPick={setStyle} />
+            </div>
           </div>
         </>}
         {type !== "audio-generate" && <PromptField id="template-prompt" label="프롬프트" value={prompt} onChange={setPrompt} required
