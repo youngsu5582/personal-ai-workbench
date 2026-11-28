@@ -33,6 +33,13 @@ spring:
   flyway:
     enabled: false
 
+  # Flyway 를 끈 대신, 엔티티가 아닌 테이블(인가 서버의 `oauth2_authorization`)은 마이그레이션 파일을 직접 실행해 만든다.
+  # 엔티티의 테이블은 위 create-drop 이 만든다. 이 파일은 `if not exists` 라 컨텍스트마다 다시 실행돼도 된다.
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/migration/V22__oauth2_authorization.sql
+
   security:
     oauth2:
       client:
@@ -53,6 +60,7 @@ spring:
 authserver:
   audience: "${workbench.auth.audience}"
   access-token-ttl: "${workbench.auth.access-token-ttl}"
+  refresh-token-ttl: 14d
   console:
     client-secret: "test-console-client-secret-at-least-32-chars"
     redirect-uri: "https://workbench.test/auth/session/callback"

@@ -30,6 +30,8 @@ dependencyManagement {
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server")
+	// 발급한 인가를 DB 에 둔다.
+	implementation("org.springframework.boot:spring-boot-starter-jdbc")
 }
 
 kotlin {

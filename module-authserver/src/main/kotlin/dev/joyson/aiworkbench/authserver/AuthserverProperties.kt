@@ -16,6 +16,8 @@ data class AuthserverProperties(
     /** 접근 토큰의 `aud`. API 가 자기에게 온 토큰인지 이 값으로 가린다. */
     val audience: String,
     val accessTokenTtl: Duration,
+    /** 리프레시 토큰의 수명. 회전할 때마다 새 토큰이 이 수명으로 다시 시작한다. */
+    val refreshTokenTtl: Duration,
     val console: Console,
 ) {
     /** 콘솔 백엔드가 인가 서버의 클라이언트로 등록되는 값. */

@@ -6,16 +6,19 @@ import com.nimbusds.jose.jwk.source.JWKSource
 import com.nimbusds.jose.proc.SecurityContext
 import dev.joyson.aiworkbench.authserver.AuthorizationServerPaths
 import dev.joyson.aiworkbench.authserver.AuthserverProperties
+import dev.joyson.aiworkbench.authserver.authorization.JdbcAuthorizationService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
+import org.springframework.jdbc.core.JdbcOperations
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.crypto.factory.PasswordEncoderFactories
 import org.springframework.security.oauth2.core.AuthorizationGrantType
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod
 import org.springframework.security.oauth2.core.OAuth2Token
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationServerMetadata
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationServerMetadataClaimNames
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType
@@ -106,6 +109,7 @@ class AuthorizationServerConfig {
             .clientSecret(secretHash)
             .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
             .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
             .redirectUri(properties.console.redirectUri)
             .clientSettings(
                 ClientSettings.builder()
@@ -116,10 +120,22 @@ class AuthorizationServerConfig {
                     .requireAuthorizationConsent(false)
                     .build(),
             )
-            .tokenSettings(TokenSettings.builder().accessTokenTimeToLive(properties.accessTokenTtl).build())
+            .tokenSettings(
+                TokenSettings.builder()
+                    .accessTokenTimeToLive(properties.accessTokenTtl)
+                    .refreshTokenTimeToLive(properties.refreshTokenTtl)
+                    // 라이브러리의 기본은 true 라 리프레시 토큰을 돌려쓴다. false 여야 쓸 때마다 새 토큰이 나오고 옛 토큰은 쓸 수 없게 된다.
+                    .reuseRefreshTokens(false)
+                    .build(),
+            )
             .build()
         return InMemoryRegisteredClientRepository(console)
     }
+
+    /** 발급한 인가를 DB 에 둔다. 재기동해도 남는다. 무엇을 어떻게 두는지는 [JdbcAuthorizationService]. */
+    @Bean
+    fun oAuth2AuthorizationService(jdbc: JdbcOperations, registeredClients: RegisteredClientRepository): OAuth2AuthorizationService =
+        JdbcAuthorizationService(jdbc, registeredClients)
 
     /**
      * 메타데이터가 내주기로 한 것만 알리게 한다.
@@ -155,7 +171,7 @@ class AuthorizationServerConfig {
         const val CONSOLE_CLIENT_ID = "workbench-console"
 
         /** 이 인가 서버가 내주는 grant. grant 를 더하면 여기에도 더해야 메타데이터에 나타난다. */
-        private val OFFERED_GRANT_TYPES = setOf(AuthorizationGrantType.AUTHORIZATION_CODE.value)
+        private val OFFERED_GRANT_TYPES = setOf(AuthorizationGrantType.AUTHORIZATION_CODE.value, AuthorizationGrantType.REFRESH_TOKEN.value)
 
         /** 클라이언트가 자기를 증명하는 방법. 지금은 비밀값을 헤더에 싣는 것 하나다. */
         private val OFFERED_CLIENT_AUTHENTICATION_METHODS = setOf(ClientAuthenticationMethod.CLIENT_SECRET_BASIC.value)
