@@ -339,6 +339,25 @@ test("서명 주소를 받은 지 오래됐으면 내려받기 전에 새 주소
   await expect(link).toHaveAttribute("href", /attachment&v=2$/);
 });
 
+test("좁은 화면에서는 오디오 결과의 내려받기 · 링크 복사가 플레이어 안의 다음 줄로 내려간다", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await prepare(page);
+  await page.route("https://storage.example/**", route => route.fulfill({ contentType: "audio/wav", body: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64") }));
+  const signed = { ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0],
+    previewUrl: "https://storage.example/a.wav?inline", downloadUrl: "https://storage.example/a.wav?attachment" }] }] };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [signed], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: signed }));
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /동시성 문제는/ }).click();
+  const player = (await page.getByRole("group", { name: "결과 1 오디오" }).boundingBox())!;
+  const copy = (await page.getByRole("button", { name: "결과 1 오디오 링크 복사" }).boundingBox())!;
+  const slider = (await page.getByRole("slider", { name: "결과 1 오디오 재생 위치" }).boundingBox())!;
+  expect(copy.x + copy.width).toBeLessThanOrEqual(player.x + player.width);
+  expect(copy.y).toBeGreaterThan(slider.y + slider.height);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});
+
 test("첨부 칸 안의 플레이어를 눌러도 파일 선택 창이 뜨지 않는다", async ({ page }) => {
   await prepare(page);
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();

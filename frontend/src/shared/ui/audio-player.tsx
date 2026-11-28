@@ -19,7 +19,7 @@ const STEP_SECONDS = 5;
  *
  * 진행 막대는 끌거나 눌러 옮기고, 초점을 두면 방향키(5초) · Home · End 로 옮긴다.
  * [duration] 은 서버가 바이트로 잰 길이다 — 메타데이터를 읽기 전에도 전체 길이를 보이고, 읽으면 그 값으로 바꾼다.
- * [children] 은 오른쪽 끝에 붙는 동작(다운로드 · 복사)이다.
+ * [children] 은 오른쪽 끝에 붙는 동작(다운로드 · 복사)이다. 한 줄에 다 들어가지 않으면 다음 줄 오른쪽으로 내려간다.
  */
 export function AudioPlayer({ src, label, duration: known, onError, className, children }: {
   src: string;
@@ -69,7 +69,7 @@ export function AudioPlayer({ src, label, duration: known, onError, className, c
   return <div role="group" aria-label={label}
     // 첨부 칸(`<label>`) 안에 놓이면 막대 · 시간 · 여백을 누른 것이 라벨을 거쳐 파일 선택 창을 연다. 링크(내려받기)는 그대로 둔다.
     onClick={e => { if (!(e.target instanceof Element && e.target.closest("a"))) e.preventDefault(); }}
-    className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border bg-background px-2 py-1.5", className)}>
+    className={cn("flex w-full min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 rounded-lg border border-border bg-background px-2 py-1.5", className)}>
     <audio ref={audio} src={src} preload="metadata" className="hidden"
       onLoadedMetadata={e => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }}
       onTimeUpdate={e => { if (!dragging) setCurrent(e.currentTarget.currentTime); }}
@@ -87,7 +87,7 @@ export function AudioPlayer({ src, label, duration: known, onError, className, c
       onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); setDragging(true); seekToPointer(e); }}
       onPointerMove={e => { if (dragging) seekToPointer(e); }}
       onPointerUp={e => { e.currentTarget.releasePointerCapture(e.pointerId); setDragging(false); }}
-      className="group relative flex h-6 min-w-16 flex-1 cursor-pointer touch-none items-center rounded-full focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring">
+      className="group relative flex h-6 min-w-24 flex-1 cursor-pointer touch-none items-center rounded-full focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-tone-audio" style={{ width: `${ratio * 100}%` }} />
       </div>
@@ -95,6 +95,6 @@ export function AudioPlayer({ src, label, duration: known, onError, className, c
         style={{ left: `${ratio * 100}%` }} />
     </div>
     <span className="w-9 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">{clock(duration)}</span>
-    {children && <span className="flex shrink-0 items-center gap-0.5">{children}</span>}
+    {children && <span className="ml-auto flex shrink-0 items-center gap-0.5">{children}</span>}
   </div>;
 }
