@@ -179,6 +179,13 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
     return () => { active = false; };
   }, [token, workspace, selected, version]);
   const reload = () => setVersion(x => x + 1);
+  /** 화면을 비우지 않고 상세를 다시 받는다. 결과 파일이 그대로 남아 새 서명 주소로 누른 내려받기를 이어 간다. */
+  const renew = () => {
+    if (!selected) return;
+    request<Job>(token, `/api/jobs/${selected}`, workspace)
+      .then(value => setJob(old => old?.uuid === value.uuid ? value : old))
+      .catch(e => setError(message(e)));
+  };
   const refresh = <Button onClick={reload}><RefreshCw aria-hidden="true" />새로고침</Button>;
 
   if (selected) return <div>
@@ -198,11 +205,11 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
             {task.decisions.map((d, j) => <ResultBlock key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
             {task.files.map(f => isAudio(f.mimeType)
               ? <div key={f.sha256} className="flex flex-col gap-1">
-                <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} label={`결과 ${i + 1} 오디오`}
+                <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={renew} label={`결과 ${i + 1} 오디오`}
                   duration={f.durationSeconds} fileName={fileNameOf(f.sha256, f.mimeType)} downloadUrl={f.downloadUrl} />
                 <span className="text-xs text-muted-foreground">{fileFacts({ voice: job.option.voice, durationSeconds: f.durationSeconds, mimeType: f.mimeType, fileSize: f.fileSize })}</span>
               </div>
-              : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload}
+              : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={renew}
                 alt={`결과 ${i + 1} 이미지`} fileName={f.mimeType ? fileNameOf(f.sha256, f.mimeType) : undefined} downloadUrl={f.downloadUrl} />)}
           </div>)}
         </Card>

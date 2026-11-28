@@ -309,6 +309,36 @@ test("결과 파일은 서버가 준 내려받기 주소로 저장하고 로그�
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://storage.example/a.wav?inline");
 });
 
+test("서명 주소를 받은 지 오래됐으면 내려받기 전에 새 주소를 받아 그 주소로 저장한다", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-11-22T04:00:00Z") });
+  await prepare(page);
+  const storage: string[] = [];
+  await page.route("https://storage.example/**", route => {
+    const url = route.request().url();
+    storage.push(url);
+    return route.fulfill({ contentType: "audio/wav", body: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64"),
+      headers: url.includes("attachment") ? { "Content-Disposition": 'attachment; filename="a.wav"' } : {} });
+  });
+  // 상세를 받을 때마다 서명을 새로 한다 — 주소가 매번 다르다.
+  const signedAt = (n: number) => ({ ...spoken, tasks: [{ ...spoken.tasks[0], files: [{ ...spoken.tasks[0].files[0],
+    previewUrl: `https://storage.example/a.wav?inline&v=${n}`, downloadUrl: `https://storage.example/a.wav?attachment&v=${n}` }] }] });
+  let issued = 0;
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [signedAt(0)], hasNext: false } }));
+  await page.route("**/api/jobs/job-v", route => route.fulfill({ json: signedAt(++issued) }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+  await page.getByRole("button", { name: /동시성 문제는/ }).click();
+  const link = page.getByRole("link", { name: "결과 1 오디오 내려받기" });
+  await expect(link).toHaveAttribute("href", /attachment&v=1$/);
+
+  await page.clock.fastForward("11:00");
+  const download = page.waitForEvent("download");
+  await link.click();
+  expect((await download).url()).toMatch(/attachment&v=2$/);
+  // 만료됐을 주소로는 가지 않는다. 화면도 비우지 않아 결과가 그대로 있다.
+  expect(storage.filter(url => url.includes("attachment&v=1"))).toEqual([]);
+  await expect(link).toHaveAttribute("href", /attachment&v=2$/);
+});
+
 test("첨부 칸 안의 플레이어를 눌러도 파일 선택 창이 뜨지 않는다", async ({ page }) => {
   await prepare(page);
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
