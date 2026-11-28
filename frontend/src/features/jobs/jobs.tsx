@@ -234,7 +234,7 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
           <CardTitle aside={<JobOutcome job={job} />}>결과</CardTitle>
           {job.tasks.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">아직 결과가 없어요.</p>}
           {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "danger" : task.status === "SUCCEEDED" ? "success" : "accent"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
               {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
             <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} running={task.status === "RUNNING"} failed={task.status === "FAILED"} />
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
