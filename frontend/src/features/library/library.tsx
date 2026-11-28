@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, AudioLines, FileImage, RefreshCw, Sparkles } from "lucide-react";
 import { request, type FileKind, type LibraryItem, type LibraryList } from "../../api";
 import { AuthenticatedAudio, AuthenticatedThumbnail, fileNameOf } from "../../shared/authenticated-media";
@@ -120,9 +120,15 @@ export function LibraryPanel({ token, workspace, onOpenJob, onStudio }: Props) {
       .catch(e => { if (active) setError(errorText(e)); });
     return () => { active = false; };
   }, [token, workspace, path, version]);
+  /** 지금 보이는 목록의 경로. 늦게 온 갱신 응답이 그사이 바뀐 종류 · 페이지를 덮지 않게 견준다. */
+  const shown = useRef(path);
+  shown.current = path;
   /** 화면을 비우지 않고 다시 받는다. 서명 주소만 새로 받아, 누른 내려받기와 재생 위치를 이어 간다. */
   const renew = () => {
-    request<LibraryList>(token, path, workspace).then(setList).catch(e => setError(errorText(e)));
+    const requested = path;
+    request<LibraryList>(token, requested, workspace)
+      .then(value => { if (shown.current === requested) setList(value); })
+      .catch(e => { if (shown.current === requested) setError(errorText(e)); });
   };
   const changeKind = (next: FileKind) => { setKind(next); setPage(0); };
   const { noun, icon: KindIcon } = KIND_TEXT[kind];
