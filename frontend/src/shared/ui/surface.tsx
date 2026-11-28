@@ -24,6 +24,7 @@ const badgeVariants = cva("inline-flex items-center gap-1 rounded-sm px-1.5 py-p
       decision: "bg-tone-decision-soft text-tone-decision",
       audio: "bg-tone-audio-soft text-tone-audio",
       success: "bg-success-soft text-success",
+      danger: "bg-danger-soft text-danger",
     },
     shape: { square: "", pill: "rounded-full px-2" },
   },

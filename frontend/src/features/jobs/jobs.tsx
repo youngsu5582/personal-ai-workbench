@@ -35,11 +35,40 @@ function summary(job: Job) {
   if (questions.length) return questions.map(q => q.instructions).join(" · ");
   return `${labels[job.type] || job.type} 작업`;
 }
-/** 처리 종료는 성공이 아니다. 몇 개가 성공했는지는 결과마다 센다. */
-function outcome(job: Job) {
+/**
+ * 작업의 상태를 배지 하나로 말한다. 처리 종료는 성공이 아니라서, 끝난 작업은 결과마다 세어 성공 · 일부 실패 · 실패로 가른다.
+ * 개수는 결과가 둘 이상일 때만 붙인다 — 하나뿐이면 배지가 이미 전부를 말한다.
+ */
+function outcomeOf(job: Job): { label: string; tone: "neutral" | "accent" | "success" | "danger"; count: string } {
   const { total, succeeded, failed } = job.progress;
-  if (succeeded + failed === 0) return "";
-  return failed ? `성공 ${succeeded} · 실패 ${failed} / ${total}` : `성공 ${succeeded} / ${total}`;
+  const count = total > 1 && succeeded + failed > 0 ? (failed ? `성공 ${succeeded} · 실패 ${failed} / ${total}` : `성공 ${succeeded} / ${total}`) : "";
+  if (job.status !== "CLOSED") return { label: statusLabel[job.status] || job.status, tone: "accent", count };
+  if (succeeded + failed === 0) return { label: statusLabel.CLOSED, tone: "neutral", count };
+  if (failed === 0) return { label: "성공", tone: "success", count };
+  return { label: succeeded === 0 ? "실패" : "일부 실패", tone: "danger", count };
+}
+function startOfDay(at: Date) {
+  return new Date(at.getFullYear(), at.getMonth(), at.getDate()).valueOf();
+}
+/** 목록의 날짜 묶음 이름. 올해가 아니면 연도를 붙인다. 하루 길이가 23 · 25시간인 날이 있어 일수는 반올림한다. */
+function dayLabel(value: string, now = new Date()) {
+  const at = new Date(value);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / 86_400_000);
+  if (days === 0) return "오늘";
+  if (days === 1) return "어제";
+  return at.toLocaleDateString("ko-KR", { year: at.getFullYear() === now.getFullYear() ? undefined : "numeric", month: "long", day: "numeric", weekday: "short" });
+}
+const timeOf = (value: string) => new Date(value).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+/** 목록은 최신순으로 오므로 이어지는 같은 날끼리 묶는다. */
+function byDay(jobs: Job[]) {
+  const groups: { label: string; jobs: Job[] }[] = [];
+  for (const job of jobs) {
+    const label = dayLabel(job.createdAt);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.jobs.push(job);
+    else groups.push({ label, jobs: [job] });
+  }
+  return groups;
 }
 const inputHeading = (type: string) => type === "decision" ? "근거 이미지" : type === "text-generate" ? "첨부 파일" : "참고 이미지";
 /** 글 생성의 첨부는 이미지가 아닐 수 있어 장이 아니라 개로 센다. */
@@ -113,6 +142,14 @@ function JobThumb({ job }: { job: Job }) {
   if (src && !broken) return <img src={src} alt="" className="size-8 shrink-0 rounded-md border border-border bg-background object-cover" onError={() => setBroken(true)} />;
   const Icon = TYPE_ICON[job.type] ?? FileText;
   return <span className={cn("grid size-8 shrink-0 place-items-center rounded-md", TYPE_TILE[job.type] ?? "bg-muted text-muted-foreground")}><Icon className="size-4" aria-hidden="true" /></span>;
+}
+
+function JobOutcome({ job }: { job: Job }) {
+  const result = outcomeOf(job);
+  return <span className="flex flex-wrap items-center justify-end gap-2">
+    {result.count && <small className="text-xs text-muted-foreground">{result.count}</small>}
+    <Badge tone={result.tone} shape="pill">{result.label}</Badge>
+  </span>;
 }
 
 function JobRequest({ job }: { job: Job }) {
@@ -194,10 +231,10 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
     {error ? <p role="alert" className={alertClass}>{error}</p> : !job ? <p className={loadingClass}>작업을 불러오는 중이에요.</p> :
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
         <Card className="flex min-w-0 flex-col gap-4 p-4 sm:p-6">
-          <CardTitle aside={<span className="flex flex-wrap items-center justify-end gap-2">{outcome(job) && <small className="text-xs text-muted-foreground">{outcome(job)}</small>}<Badge tone={job.status === "CLOSED" ? "neutral" : "accent"} shape="pill">{statusLabel[job.status] || job.status}</Badge></span>}>결과</CardTitle>
+          <CardTitle aside={<JobOutcome job={job} />}>결과</CardTitle>
           {job.tasks.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">아직 결과가 없어요.</p>}
           {job.tasks.map((task, i) => <div key={i} className="flex min-w-0 flex-col gap-2 border-t border-border pt-4">
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "neutral" : "success"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">결과 {i + 1}<Badge tone={task.status === "FAILED" ? "danger" : task.status === "SUCCEEDED" ? "success" : "accent"} shape="pill">{statusLabel[task.status] || task.status}</Badge>
               {task.texts.length > 0 && job.option.output?.schema && <CopySchema schema={job.option.output.schema} />}</span>
             <TaskTiming requestedAt={job.createdAt} startedAt={task.startedAt} finishedAt={task.finishedAt} running={task.status === "RUNNING"} failed={task.status === "FAILED"} />
             {task.failureReason && <p role="alert" className={cn(alertClass, "[overflow-wrap:anywhere]")}>{task.failureReason}</p>}
@@ -234,22 +271,25 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
     {error ? <p role="alert" className={alertClass}>{error}</p>
       : !list ? <p className={loadingClass}>작업을 불러오는 중이에요.</p>
       : list.items.length === 0 ? <EmptyState icon={<ListChecks />} title="작업 내역이 없어요" description="이 서비스에서 요청한 작업이 여기에 표시돼요." />
-      : <div className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">{list.items.map(item => {
-        const result = outcome(item);
-        return <button key={item.uuid} type="button" onClick={() => setSelected(item.uuid)}
-          className="group m-0 flex w-full items-center gap-3 border-0 bg-transparent px-4 py-3.5 text-left sm:px-5 text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring">
-          <JobThumb job={item} />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <strong className="truncate text-[13px] font-medium">{summary(item)}</strong>
-            <small className="text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${inputCount(item.type, item.inputs.length)}`}<span className="hidden sm:inline"> · <span className="font-mono">{item.model}</span></span> · {date(item.createdAt)}{result && <span className="sm:hidden"> · {result}</span>}</small>
-          </span>
-          <span className="flex shrink-0 flex-col items-end gap-1">
-            <Badge tone={item.status === "DISPATCHED" ? "accent" : "neutral"} shape="pill">{statusLabel[item.status] || item.status}</Badge>
-            {result && <small className="hidden text-[11px] text-muted-foreground sm:block">{result}</small>}
-          </span>
-          <ArrowRight className="hidden size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5 sm:block" aria-hidden="true" />
-        </button>;
-      })}</div>}
+      : <div className="overflow-hidden rounded-xl border border-border bg-surface">{byDay(list.items).map(group => <section key={group.label} aria-label={group.label} className="border-b border-border last:border-b-0">
+        <h2 className="m-0 border-b border-border bg-muted/60 px-4 py-1.5 text-xs font-medium text-subtle-foreground sm:px-5">{group.label}</h2>
+        <div className="flex flex-col divide-y divide-border">{group.jobs.map(item => {
+          const result = outcomeOf(item);
+          return <button key={item.uuid} type="button" onClick={() => setSelected(item.uuid)}
+            className="group m-0 flex w-full items-center gap-3 border-0 bg-transparent px-4 py-3.5 text-left sm:px-5 text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring">
+            <JobThumb job={item} />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <strong className="truncate text-[13px] font-medium">{summary(item)}</strong>
+              <small className="text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{labels[item.type] || item.type}{item.inputs.length > 0 && ` · ${inputHeading(item.type)} ${inputCount(item.type, item.inputs.length)}`}<span className="hidden sm:inline"> · <span className="font-mono">{item.model}</span></span> · <time dateTime={item.createdAt} title={date(item.createdAt)}>{timeOf(item.createdAt)}</time>{result.count && <span className="sm:hidden"> · {result.count}</span>}</small>
+            </span>
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              <Badge tone={result.tone} shape="pill">{result.label}</Badge>
+              {result.count && <small className="hidden text-[11px] text-muted-foreground sm:block">{result.count}</small>}
+            </span>
+            <ArrowRight className="hidden size-3.5 text-subtle-foreground transition-transform group-hover:translate-x-0.5 sm:block" aria-hidden="true" />
+          </button>;
+        })}</div>
+      </section>)}</div>}
     {list && <div className="mt-4 flex items-center justify-end gap-3 text-xs text-muted-foreground">
       <Button size="sm" disabled={page === 0} onClick={() => setPage(x => x - 1)}>이전</Button>
       <span>{page + 1} 페이지</span>
