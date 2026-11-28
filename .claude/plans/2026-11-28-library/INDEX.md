@@ -13,11 +13,12 @@ Status: active
 - [x] 콘솔: features/library 화면
 - [x] 브라우저 테스트(모의 API) 49 통과 + Playwright 스크린샷
 - [x] docs/roadmap.md
-- [ ] 사용자 확인 → 커밋 3개(서버 API · 콘솔 화면 · 로드맵) → PR
-- [ ] 다음 PR: 라이트박스(← → 이동)
+- [x] PR [#137](https://github.com/youngsu5582/personal-ai-workbench/pull/137) — 서버 API · 콘솔 화면 · 로드맵 · 썸네일 plan
+- [ ] 머지 뒤 운영 화면에서 서명 주소 썸네일 확인
+- [ ] 다음: 썸네일(`2026-11-28-thumbnail/`) → 라이트박스(← → 이동)
 
 ## Resume Point
-미커밋 상태. 사용자 화면 확인 뒤 커밋·PR. 실데이터 E2E(로컬 서버+DB) 미실행.
+#137 리뷰 · 머지 대기. 머지되면 썸네일 plan 으로 넘어간다. 실데이터 E2E(로컬 서버+DB) 미실행.
 
 ## Files
 - INDEX.md — 이 파일
