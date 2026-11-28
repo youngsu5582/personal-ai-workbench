@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, ImageOff, RefreshCw } from "lucide-react";
 import { ApiError } from "../api";
 import { CopyButton } from "./copy-button";
 import { errorText, type Context } from "./console-utils";
@@ -17,7 +17,7 @@ type Source = Context & {
  * 인증이 필요한 파일을 브라우저가 바로 쓸 주소로 만든다. 보관소가 서명한 주소(`previewUrl`)가 있으면 그대로 쓰고,
  * 없으면 앱 주소를 토큰과 함께 받아 브라우저 안의 주소로 바꾼다 — `<img>` · `<audio>` 는 토큰을 실을 수 없다.
  */
-function useAuthenticatedSource({ token, workspace, url, previewUrl }: Source, failText: string) {
+function useAuthenticatedSource({ token, workspace, url, previewUrl }: Omit<Source, "onRefresh">, failText: string) {
   const [src, setSrc] = useState("");
   const [fail, setFail] = useState("");
   const [retry, setRetry] = useState(0);
@@ -141,4 +141,18 @@ export function AuthenticatedAudio({ label = "생성된 오디오", fileName, do
       {fileName && <FileActions src={src} previewUrl={source.previewUrl} downloadUrl={downloadUrl} fileName={fileName} label={label} onRefresh={source.onRefresh} />}
     </AudioPlayer>
     : <div className="h-11 w-full animate-pulse rounded-lg bg-muted" role="status" aria-label="오디오를 불러오는 중" />;
+}
+
+/**
+ * 격자의 한 칸을 채우는 썸네일. 칸 비율에 맞게 잘라 그리고, 내려받기 · 복사는 붙이지 않는다 — 원본은 상세에서 본다.
+ * 서명 주소가 만료되면 알리기만 한다. 칸마다 다시 받으면 한 화면에 수십 번 요청이 나가므로, 목록을 새로 받아 고친다.
+ */
+export function AuthenticatedThumbnail({ alt, className, ...source }: Omit<Source, "onRefresh"> & { alt: string; className?: string }) {
+  const { src, fail, setFail } = useAuthenticatedSource(source, "이미지를 불러오지 못했어요.");
+  if (fail) return <span className="flex size-full flex-col items-center justify-center gap-1.5 bg-muted px-2 text-center text-xs text-muted-foreground">
+    <ImageOff className="size-4" aria-hidden="true" />불러오지 못했어요
+  </span>;
+  if (!src) return <span className="block size-full animate-pulse bg-muted" role="status" aria-label="이미지를 불러오는 중" />;
+  return <img src={src} alt={alt} loading="lazy" decoding="async" className={className}
+    onError={() => setFail("이미지를 불러오지 못했어요. 새로고침해 주세요.")} />;
 }
