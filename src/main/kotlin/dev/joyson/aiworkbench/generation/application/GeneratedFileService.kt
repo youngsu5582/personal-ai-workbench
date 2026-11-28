@@ -71,6 +71,7 @@ class GeneratedFileService(
      */
     fun listOwned(workspaceUuid: UUID, kind: FileKind, page: Int, size: Int): OwnedFileListView {
         val refs = generatedFileFinder.findAllOwned(workspaceUuid, kind, PageRequest.of(page, size))
+        if (refs.content.isEmpty()) return OwnedFileListView(items = emptyList(), hasNext = false)
         val files = generatedFileRepository.findAllByIdIn(refs.content.map { it.fileId }).associateBy { it.id }
         val jobs = generationJobRepository.findAllByIdIn(refs.content.map { it.jobId }.distinct()).associateBy { it.id }
         // 결과 파일은 지우지 않으니, 방금 고른 행은 읽을 때도 있다.

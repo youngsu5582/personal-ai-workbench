@@ -148,6 +148,18 @@ class GeneratedFileListApiTest @Autowired constructor(
     }
 
     @Test
+    fun `만든 파일이 없으면 빈 목록이다`() {
+        val token = tokenOf("library-empty")
+        submit(token, IMAGE_OPTION, SharedTestConfig.FAKE_MODEL)
+
+        list(token, "image").andExpect {
+            status { isOk() }
+            jsonPath("$.items.length()") { value(0) }
+            jsonPath("$.hasNext") { value(false) }
+        }
+    }
+
+    @Test
     fun `종류와 페이지가 잘못되면 400 이고 토큰이 없으면 401 이다`() {
         val token = tokenOf("library-invalid")
 
