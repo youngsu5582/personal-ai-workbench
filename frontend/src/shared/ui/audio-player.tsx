@@ -67,6 +67,8 @@ export function AudioPlayer({ src, label, duration: known, onError, className, c
   const ratio = Number.isFinite(duration) && duration > 0 ? Math.min(current / duration, 1) : 0;
 
   return <div role="group" aria-label={label}
+    // 첨부 칸(`<label>`) 안에 놓이면 막대 · 시간 · 여백을 누른 것이 라벨을 거쳐 파일 선택 창을 연다. 링크(내려받기)는 그대로 둔다.
+    onClick={e => { if (!(e.target instanceof Element && e.target.closest("a"))) e.preventDefault(); }}
     className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-border bg-background px-2 py-1.5", className)}>
     <audio ref={audio} src={src} preload="metadata" className="hidden"
       onLoadedMetadata={e => { if (Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration); }}

@@ -309,6 +309,23 @@ test("결과 파일은 서버가 준 내려받기 주소로 저장하고 로그�
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://storage.example/a.wav?inline");
 });
 
+test("첨부 칸 안의 플레이어를 눌러도 파일 선택 창이 뜨지 않는다", async ({ page }) => {
+  await prepare(page);
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업실" }).click();
+  await page.getByRole("radio", { name: "텍스트" }).click();
+  await page.getByLabel("첨부 파일", { exact: true }).setInputFiles({ name: "answer.wav", mimeType: "audio/wav", buffer: Buffer.from(PLAYABLE_WAV.split(",")[1], "base64") });
+  const player = page.getByRole("group", { name: "선택한 첨부 오디오 미리듣기" });
+  let chooser = 0;
+  page.on("filechooser", () => { chooser += 1; });
+  await player.getByRole("slider").click();
+  await player.getByText(/^\d+:\d\d$/).first().click();
+  await page.waitForTimeout(500);
+  expect(chooser).toBe(0);
+  // 플레이어 밖의 첨부 칸을 누르면 뜬다 — 위의 0 이 헛돈 것이 아니다.
+  await page.getByText(/실행할 때 올려요/).click();
+  await expect.poll(() => chooser).toBe(1);
+});
+
 test("서명할 수 없는 보관소면 받아 둔 파일에 이름을 붙여 저장하고 링크 복사는 두지 않는다", async ({ page }) => {
   await prepare(page);
   const sha = "a".repeat(64);
