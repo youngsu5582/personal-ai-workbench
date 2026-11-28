@@ -8,12 +8,12 @@ Status: active
 ## Progress
 - [x] 문제 정리와 결정 D1~D6 (SPEC §2). 시안 두 장으로 확인
 - [x] PR 1 (`feat/history`) — 상태 배지 하나로 합치기 · 날짜 묶음 · 처리 시간 툴팁. 로컬 커밋까지. 빌드 · 의존성 검사 · 브라우저 검사 50개 통과(모의 API), 데스크톱 · 모바일 다크 스크린샷 확인
-- [ ] PR 1 push · PR 열기 (브랜치 이름 `feat/history` 그대로)
+- [x] PR 1 push · [#136](https://github.com/youngsu5582/personal-ai-workbench/pull/136). 리뷰 · 머지 대기
 - [ ] PR 2 — 작업에 템플릿 출처와 이름을 남긴다(마이그레이션) · 템플릿 이름 틀 · 출처 표시 · 템플릿 필터 · 이름 검색. 시작 전 설계를 사용자에게 보인다
-- [ ] `docs/roadmap.md` 갱신 — PR 번호가 생긴 뒤
+- [ ] `docs/roadmap.md` 갱신 — PR 2 에서 한 줄로. PR 1 은 걸어온 길에 오를 크기가 아니다
 
 ## Resume Point
-PR 1 은 로컬 커밋까지. push 는 사용자 확인 뒤. 다음은 PR 2 설계(SPEC §3)를 구체화해 사용자에게 보이기.
+#136 리뷰 · 머지 대기. 다음은 PR 2 설계(SPEC §3)를 구체화해 사용자에게 보이기.
 
 ## Files
 - SPEC.md — 확인한 사실, 결정, PR 2 설계 초안
