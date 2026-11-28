@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { ApiError, contentTypeOf, request, upload, type Job } from "../../api";
-import { AuthenticatedAudio, AuthenticatedImage } from "../../shared/authenticated-media";
+import { AuthenticatedAudio, AuthenticatedImage, fileNameOf } from "../../shared/authenticated-media";
+import { fileFacts } from "../../shared/file-facts";
+import { AudioPlayer } from "../../shared/ui/audio-player";
 import { CopyButton } from "../../shared/copy-button";
 import { errorText, type Context } from "../../shared/console-utils";
 import { ModelPicker, type Model } from "../../shared/model-picker";
@@ -183,7 +185,7 @@ export function StudioPanel({ token, workspace }: Context) {
                     <span className="truncate text-[13px] text-foreground">{file.name}</span>
                     <span className="text-xs text-muted-foreground">{contentTypeOf(file) || "형식 알 수 없음"} · 실행할 때 올려요 · 바꾸려면 누르세요</span>
                   </span>
-                  {contentTypeOf(file).startsWith("audio/") && <audio controls preload="metadata" src={filePreview} aria-label="선택한 첨부 오디오 미리듣기" className="w-full" />}
+                  {contentTypeOf(file).startsWith("audio/") && filePreview && <AudioPlayer src={filePreview} label="선택한 첨부 오디오 미리듣기" />}
                   {contentTypeOf(file).startsWith("image/") && <img src={filePreview} alt="선택한 첨부 이미지 미리보기" className="h-16 w-24 rounded-md border border-border object-cover" />}
                 </span>}
               </FileDrop>
@@ -223,8 +225,13 @@ export function StudioPanel({ token, workspace }: Context) {
                 {task.files.map((f) => {
                   const refresh = () => request<Job>(token, `/api/jobs/${job.uuid}`, workspace).then(setJob).catch((e) => setFail(errorText(e)));
                   return f.mimeType?.startsWith("audio/")
-                    ? <AuthenticatedAudio key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh} label={`결과 ${i + 1} 오디오`} />
-                    : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh} />;
+                    ? <div key={f.sha256} className="flex flex-col gap-1">
+                      <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh} label={`결과 ${i + 1} 오디오`}
+                        duration={f.durationSeconds} fileName={fileNameOf(f.sha256, f.mimeType)} downloadUrl={f.downloadUrl} />
+                      <span className="text-xs text-muted-foreground">{fileFacts({ voice: job.option.voice, durationSeconds: f.durationSeconds, mimeType: f.mimeType, fileSize: f.fileSize })}</span>
+                    </div>
+                    : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={refresh}
+                      fileName={f.mimeType ? fileNameOf(f.sha256, f.mimeType) : undefined} downloadUrl={f.downloadUrl} />;
                 })}
               </div>
             ))}

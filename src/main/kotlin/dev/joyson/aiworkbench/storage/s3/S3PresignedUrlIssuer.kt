@@ -20,7 +20,12 @@ class S3PresignedUrlIssuer(
     private val ttl: Duration,
 ) : PresignedUrlIssuer {
 
-    override fun issue(key: String, fileName: String): URI =
+    override fun issue(key: String, fileName: String): URI = presign(key, contentDisposition(INLINE, fileName))
+
+    /** 응답 헤더가 `attachment` 라 브라우저가 열지 않고 저장한다. 이름은 [issue] 와 같다. */
+    override fun issueDownload(key: String, fileName: String): URI = presign(key, contentDisposition(ATTACHMENT, fileName))
+
+    private fun presign(key: String, disposition: String): URI =
         presigner.presignGetObject { request ->
             request
                 .signatureDuration(ttl)
@@ -31,12 +36,13 @@ class S3PresignedUrlIssuer(
                         .responseCacheControl("private, no-store")
                         // 키가 내용 주소라 그대로 두면 64자 해시가 파일명이 된다.
                         // 이 값은 서명에 포함되므로 받는 쪽이 고칠 수 없다.
-                        .responseContentDisposition(contentDisposition(fileName))
+                        .responseContentDisposition(disposition)
                 }
         }.url().toURI()
 
     /**
-     * `inline` 이라 브라우저가 바로 그린다. `<img src>` 로 쓰려면 `attachment` 면 안 된다.
+     * 미리보기는 `inline` 이라 브라우저가 바로 그린다. `<img src>` 로 쓰려면 `attachment` 면 안 된다.
+     * 내려받기는 `attachment` 라 저장한다.
      *
      * **이름을 두 번 적는다.** HTTP 헤더는 기본이 latin-1 이라 UTF-8 을 그대로 넣으면 깨진다
      * (`고양이.png` → `ê³ ìì´.png`). RFC 5987 의 `filename*` 이 인코딩을 명시하는 자리이고,
@@ -48,16 +54,18 @@ class S3PresignedUrlIssuer(
      * Spring 의 `ContentDisposition` 을 쓰지 않는 이유는 이 모듈이 웹을 모르기 때문이다 —
      * 보관소가 HTTP 응답 헤더 규격을 아는 것까지가 경계다.
      */
-    private fun contentDisposition(fileName: String): String {
+    private fun contentDisposition(type: String, fileName: String): String {
         val ascii = fileName
             .filter { it.code in PRINTABLE_ASCII && it != '"' && it != '\\' }
             .ifBlank { "download" }
         val encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20")
 
-        return """inline; filename="$ascii"; filename*=UTF-8''$encoded"""
+        return """$type; filename="$ascii"; filename*=UTF-8''$encoded"""
     }
 
     private companion object {
         private val PRINTABLE_ASCII = 32..126
+        private const val INLINE = "inline"
+        private const val ATTACHMENT = "attachment"
     }
 }

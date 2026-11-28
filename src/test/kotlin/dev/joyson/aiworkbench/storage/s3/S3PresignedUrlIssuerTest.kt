@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertNotEquals
 
 /**
@@ -60,6 +61,20 @@ class S3PresignedUrlIssuerTest {
         val response = get(issuer().issue(key, "cat.png"))
 
         assertEquals("image/png", response.headers().firstValue("content-type").orElse(null))
+    }
+
+    /** 미리보기는 열고 내려받기는 저장한다. 이름은 둘이 같다. */
+    @Test
+    fun `내려받기 주소는 저장하라고 답하고 미리보기 주소는 열라고 답한다`() {
+        val key = "users/a/blobs/77/88/7788.png"
+        storage.put(key, png, "image/png")
+
+        val preview = get(issuer().issue(key, "cat.png")).headers().firstValue("content-disposition").orElse("")
+        val download = get(issuer().issueDownload(key, "cat.png")).headers().firstValue("content-disposition").orElse("")
+
+        assertTrue(preview.startsWith("inline;"), preview)
+        assertTrue(download.startsWith("attachment;"), download)
+        assertTrue("filename=\"cat.png\"" in download, download)
     }
 
     @Test

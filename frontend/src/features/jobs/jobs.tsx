@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, FileText, ImageOff, ListChecks, RefreshCw } from "lucide-react";
 import { request, type Job, type JobList } from "../../api";
-import { AuthenticatedAudio, AuthenticatedImage } from "../../shared/authenticated-media";
+import { AuthenticatedAudio, AuthenticatedImage, fileNameOf } from "../../shared/authenticated-media";
+import { fileFacts } from "../../shared/file-facts";
+import { AudioPlayer } from "../../shared/ui/audio-player";
 import { CopyButton } from "../../shared/copy-button";
 import { JOB_TYPE_ICON as TYPE_ICON, JOB_TYPE_LABEL as labels, JOB_TYPE_TILE as TYPE_TILE } from "../../shared/job-types";
 import { duration, TaskTiming } from "./task-timing";
@@ -43,8 +45,6 @@ const inputHeading = (type: string) => type === "decision" ? "근거 이미지" 
 /** 글 생성의 첨부는 이미지가 아닐 수 있어 장이 아니라 개로 센다. */
 const inputCount = (type: string, count: number) => type === "text-generate" ? `${count}개` : `${count}장`;
 const isAudio = (mimeType: string | null) => mimeType?.startsWith("audio/") === true;
-/** 재생 길이. 소수 첫째 자리까지 보인다 — 서버는 바이트로 센 값을 그대로 준다. */
-const seconds = (value: number) => `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}초`;
 /** 모든 결과가 끝났을 때만 답한다. 하나라도 끝난 시각이 없으면 작업이 끝났다고 말할 수 없다. */
 function finishedAtOf(job: Job) {
   const ends = job.tasks.map(task => task.finishedAt);
@@ -144,12 +144,12 @@ function JobInputs({ job, token, workspace, onRefresh }: Props & { job: Job; onR
         ? input.url
           ? <AuthenticatedAudio token={token} workspace={workspace} url={input.url} previewUrl={input.previewUrl} onRefresh={onRefresh} label={`${heading} 오디오`} />
           : input.previewUrl
-          ? <audio controls preload="metadata" src={input.previewUrl} aria-label={`${heading} 오디오`} className="w-full" />
+          ? <AudioPlayer src={input.previewUrl} label={`${heading} 오디오`} />
           : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />이 보관소에서는 미리 들을 수 없어요.</p>
         : input.url || input.previewUrl
         ? <AuthenticatedImage token={token} workspace={workspace} url={input.url ?? ""} previewUrl={input.previewUrl} onRefresh={onRefresh} alt={heading} />
         : <p className="m-0 flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"><ImageOff className="size-3.5 shrink-0" aria-hidden="true" />미리 볼 수 없어요.</p>}
-      <figcaption className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{captionOf(input)} · <span className="font-mono">{input.source.sha256.slice(0, 12)}</span></figcaption>
+      <figcaption className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{isAudio(input.mimeType) && "입력 · "}{captionOf(input)} · <span className="font-mono">{input.source.sha256.slice(0, 12)}</span></figcaption>
     </figure>)}</div>
   </div>;
 }
@@ -179,6 +179,13 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
     return () => { active = false; };
   }, [token, workspace, selected, version]);
   const reload = () => setVersion(x => x + 1);
+  /** 화면을 비우지 않고 상세를 다시 받는다. 결과 파일이 그대로 남아 새 서명 주소로 누른 내려받기를 이어 간다. */
+  const renew = () => {
+    if (!selected) return;
+    request<Job>(token, `/api/jobs/${selected}`, workspace)
+      .then(value => setJob(old => old?.uuid === value.uuid ? value : old))
+      .catch(e => setError(message(e)));
+  };
   const refresh = <Button onClick={reload}><RefreshCw aria-hidden="true" />새로고침</Button>;
 
   if (selected) return <div>
@@ -198,10 +205,12 @@ export function JobsPanel({ token, workspace, initialSelected }: Props & { initi
             {task.decisions.map((d, j) => <ResultBlock key={j} mono text={JSON.stringify(d.answers, null, 2)} />)}
             {task.files.map(f => isAudio(f.mimeType)
               ? <div key={f.sha256} className="flex flex-col gap-1">
-                <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} label={`결과 ${i + 1} 오디오`} />
-                {f.durationSeconds != null && <span className="text-xs text-muted-foreground">{seconds(f.durationSeconds)}</span>}
+                <AuthenticatedAudio token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={renew} label={`결과 ${i + 1} 오디오`}
+                  duration={f.durationSeconds} fileName={fileNameOf(f.sha256, f.mimeType)} downloadUrl={f.downloadUrl} />
+                <span className="text-xs text-muted-foreground">{fileFacts({ voice: job.option.voice, durationSeconds: f.durationSeconds, mimeType: f.mimeType, fileSize: f.fileSize })}</span>
               </div>
-              : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={reload} />)}
+              : <AuthenticatedImage key={f.sha256} token={token} workspace={workspace} url={f.url} previewUrl={f.previewUrl} onRefresh={renew}
+                alt={`결과 ${i + 1} 이미지`} fileName={f.mimeType ? fileNameOf(f.sha256, f.mimeType) : undefined} downloadUrl={f.downloadUrl} />)}
           </div>)}
         </Card>
         <Card className="flex min-w-0 flex-col gap-4 p-4 sm:p-6">

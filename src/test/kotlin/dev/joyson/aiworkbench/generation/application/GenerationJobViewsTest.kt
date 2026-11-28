@@ -1,5 +1,6 @@
 package dev.joyson.aiworkbench.generation.application
 
+import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.FileMetadata
 import dev.joyson.aiworkbench.generation.domain.GeneratedFile
@@ -33,9 +34,26 @@ class GenerationJobViewsTest {
         assertEquals("https://storage.test/users/o/blobs/ab/cd/abcd.png?name=$fileUuid.png", view.previewUrl)
     }
 
+    /** 미리보기와 내려받기는 같은 파일 · 같은 이름이고, 내려받기는 저장하라고 서명한 주소다. */
+    @Test
+    fun `발급자가 있으면 내려받기 주소도 실린다`() {
+        val issuer = object : PresignedUrlIssuer {
+            override fun issue(key: String, fileName: String) = URI.create("https://storage.test/$key?inline=$fileName")
+            override fun issueDownload(key: String, fileName: String) = URI.create("https://storage.test/$key?attachment=$fileName")
+        }
+
+        val view = file.toView(issuer)
+
+        assertEquals("https://storage.test/users/o/blobs/ab/cd/abcd.png?inline=$fileUuid.png", view.previewUrl)
+        assertEquals("https://storage.test/users/o/blobs/ab/cd/abcd.png?attachment=$fileUuid.png", view.downloadUrl)
+    }
+
     @Test
     fun `발급자가 없으면 null 이고 받는 쪽은 우리 경로로 폴백한다`() {
-        assertNull(file.toView(presignedUrlIssuer = null).previewUrl)
+        val view = file.toView(presignedUrlIssuer = null)
+
+        assertNull(view.previewUrl)
+        assertNull(view.downloadUrl)
     }
 
     @Test

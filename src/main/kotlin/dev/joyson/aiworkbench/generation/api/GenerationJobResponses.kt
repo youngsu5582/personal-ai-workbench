@@ -128,6 +128,14 @@ sealed interface FileResponse {
      */
     val previewUrl: String?
 
+    /**
+     * **저장할** 주소. 보관소가 서명할 수 없으면 `null` 이고, 그때는 [url] 로 받아 저장한다.
+     *
+     * [previewUrl] 은 브라우저가 열어서 그리거나 재생하는 주소라, 다른 출처인 보관소 주소에서는
+     * `<a download>` 가 이름도 저장도 따르지 않는다. 이 주소는 응답 헤더가 저장을 말한다. 수명은 [previewUrl] 과 같다.
+     */
+    val downloadUrl: String?
+
     /** 이미지로 그릴지 오디오로 재생할지 가르는 근거다. [InputFileResponse.mimeType] 과 같다. */
     val mimeType: String
 
@@ -137,6 +145,7 @@ sealed interface FileResponse {
         override val sha256: String,
         override val url: String,
         override val previewUrl: String?,
+        override val downloadUrl: String?,
         val width: Int,
         val height: Int,
         override val mimeType: String,
@@ -147,6 +156,7 @@ sealed interface FileResponse {
         override val sha256: String,
         override val url: String,
         override val previewUrl: String?,
+        override val downloadUrl: String?,
         override val mimeType: String,
         override val fileSize: Int,
         /** 재생 길이(초). 바이트에서 계산한 값이다. */
@@ -203,11 +213,11 @@ private fun GeneratedFileView.toResponse(): FileResponse {
     // 종류가 늘면 여기서 컴파일이 멈춘다 — 새 종류의 사실이 말없이 응답에서 빠지지 않게.
     return when (val metadata = metadata) {
         is FileMetadata.Image -> FileResponse.Image(
-            sha256 = sha256, url = url, previewUrl = previewUrl,
+            sha256 = sha256, url = url, previewUrl = previewUrl, downloadUrl = downloadUrl,
             width = metadata.width, height = metadata.height, mimeType = metadata.mimeType, fileSize = metadata.fileSize,
         )
         is FileMetadata.Audio -> FileResponse.Audio(
-            sha256 = sha256, url = url, previewUrl = previewUrl,
+            sha256 = sha256, url = url, previewUrl = previewUrl, downloadUrl = downloadUrl,
             mimeType = metadata.mimeType, fileSize = metadata.fileSize, durationSeconds = metadata.durationSeconds,
         )
     }

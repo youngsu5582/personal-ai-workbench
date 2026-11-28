@@ -102,6 +102,8 @@ data class GeneratedFileView(
      * web 이 만드는 우리 경로를 쓴다.
      */
     val previewUrl: String?,
+    /** [previewUrl] 과 같은 파일을 **저장하게** 하는 주소. 서명할 수 없는 보관소면 `null`. 수명도 같다. */
+    val downloadUrl: String?,
 )
 
 /**
@@ -120,6 +122,9 @@ internal fun GeneratedFile.toView(presignedUrlIssuer: PresignedUrlIssuer?): Gene
         metadata = metadata,
         previewUrl = presignedUrlIssuer
             ?.issue(storageKey, downloadFileNameOf(sha256, metadata.mimeType))
+            ?.toString(),
+        downloadUrl = presignedUrlIssuer
+            ?.issueDownload(storageKey, downloadFileNameOf(sha256, metadata.mimeType))
             ?.toString(),
     )
 

@@ -62,7 +62,7 @@ export type Job = {
     startedAt?: string | null;
     finishedAt?: string | null;
     /** 그릴지 재생할지는 `mimeType` 으로 가른다. 이미지는 가로 · 세로, 오디오는 재생 길이(초)가 있다. */
-    files: { url: string; previewUrl: string | null; sha256: string; mimeType: string; width?: number; height?: number; durationSeconds?: number }[];
+    files: { url: string; previewUrl: string | null; downloadUrl?: string | null; sha256: string; mimeType: string; fileSize?: number; width?: number; height?: number; durationSeconds?: number }[];
     texts: { content: unknown }[];
     decisions: { answers: unknown[] }[];
   }[];

@@ -266,6 +266,8 @@ class GenerationJobQueryApiTest @Autowired constructor(
             // 테스트 환경은 로컬 디스크라 서명할 수 없다. 이 값이 null 이라는 것이
             // "받는 쪽은 url 로 폴백해야 한다" 는 계약이다.
             jsonPath("$.tasks[0].files[0].previewUrl") { doesNotExist() }
+            // 내려받기 주소도 서명할 수 없으면 null 이다. 받는 쪽은 url 로 받아 저장한다.
+            jsonPath("$.tasks[0].files[0].downloadUrl") { doesNotExist() }
             jsonPath("$.tasks[0].files[0].width") { value(1024) }
             jsonPath("$.tasks[0].files[0]") { value(not(hasKey("durationSeconds"))) }
 
