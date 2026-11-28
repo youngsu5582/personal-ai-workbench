@@ -106,6 +106,22 @@ data class GeneratedFileView(
     val downloadUrl: String?,
 )
 
+data class OwnedFileListView(val items: List<OwnedFileView>, val hasNext: Boolean)
+
+/** 라이브러리 항목 하나. 결과 파일과, 그 파일을 만든 작업을 알아볼 만큼의 정보. */
+data class OwnedFileView(
+    val file: GeneratedFileView,
+    val createdAt: Instant,
+    val job: FileJobView,
+)
+
+/** 결과 파일 옆에 보일 작업 정보. 항목마다 작업 상세를 다시 묻지 않게 요청 내용을 함께 싣는다. */
+data class FileJobView(
+    val uuid: UUID,
+    val model: String,
+    val option: GenerationOption,
+)
+
 /**
  * Entity → 공개 View 매핑.
  *

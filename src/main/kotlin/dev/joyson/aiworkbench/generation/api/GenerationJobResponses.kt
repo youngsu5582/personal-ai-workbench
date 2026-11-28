@@ -208,7 +208,7 @@ private fun contentOf(content: String, format: TextFormat): JsonNode = when (for
     is TextFormat.JsonSchema -> JsonMapper.shared().readTree(content)
 }
 
-private fun GeneratedFileView.toResponse(): FileResponse {
+internal fun GeneratedFileView.toResponse(): FileResponse {
     val url = GeneratedFileController.pathOf(sha256)
     // 종류가 늘면 여기서 컴파일이 멈춘다 — 새 종류의 사실이 말없이 응답에서 빠지지 않게.
     return when (val metadata = metadata) {

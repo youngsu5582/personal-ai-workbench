@@ -3,12 +3,17 @@ package dev.joyson.aiworkbench.generation.infrastructure
 import dev.joyson.jooq.tables.references.GENERATED_FILES
 import dev.joyson.jooq.tables.references.GENERATION_JOBS
 import dev.joyson.jooq.tables.references.GENERATION_JOB_TASKS
+import dev.joyson.aiworkbench.generation.domain.FileKind
 import dev.joyson.aiworkbench.generation.domain.FileLocation
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
+import dev.joyson.aiworkbench.generation.domain.OwnedFileRef
 import org.jooq.DSLContext
 import org.jooq.Field
 import org.jooq.impl.DSL
 import org.jooq.impl.SQLDataType
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Slice
+import org.springframework.data.domain.SliceImpl
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
@@ -69,5 +74,20 @@ class JooqGeneratedFileFinder(
             .associate { (sha256, storageKey, mimeType) ->
                 sha256!! to FileLocation(storageKey = storageKey!!, mimeType = mimeType!!)
             }
+    }
+
+    /** 다음 쪽이 있는지는 한 건 더 읽어서 안다. 개수를 세는 쿼리를 따로 두지 않는다. */
+    override fun findAllOwned(workspaceUuid: UUID, kind: FileKind, pageable: Pageable): Slice<OwnedFileRef> {
+        val rows = dsl.select(GENERATED_FILES.ID, GENERATION_JOBS.ID)
+            .from(GENERATED_FILES)
+            .join(GENERATION_JOB_TASKS).on(GENERATION_JOB_TASKS.ID.eq(GENERATED_FILES.TASK_ID))
+            .join(GENERATION_JOBS).on(GENERATION_JOBS.ID.eq(GENERATION_JOB_TASKS.JOB_ID))
+            .where(GENERATION_JOBS.WORKSPACE_UUID.eq(workspaceUuid))
+            .and(mimeType.startsWith(kind.mimeTypePrefix))
+            .orderBy(GENERATED_FILES.ID.desc())
+            .limit(pageable.pageSize + 1)
+            .offset(pageable.offset)
+            .fetch { (fileId, jobId) -> OwnedFileRef(fileId = fileId!!, jobId = jobId!!) }
+        return SliceImpl(rows.take(pageable.pageSize), pageable, rows.size > pageable.pageSize)
     }
 }

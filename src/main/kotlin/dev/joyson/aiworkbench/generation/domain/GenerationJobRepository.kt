@@ -19,6 +19,9 @@ interface GenerationJobRepository : Repository<GenerationJob, Long> {
 
     fun findByWorkspaceUuidOrderByIdDesc(workspaceUuid: UUID, pageable: Pageable): Slice<GenerationJob>
 
+    /** 결과 파일 목록이 가리키는 작업을 한 번에 읽는다. 순서는 지키지 않는다. */
+    fun findAllByIdIn(ids: Collection<Long>): List<GenerationJob>
+
     /**
      * 남은 Task 가 없으면 Job 을 닫는다. 이미 닫혔거나 남은 Task 가 있으면 아무것도 하지 않는다.
      *

@@ -10,4 +10,7 @@ interface GeneratedFileRepository : Repository<GeneratedFile, Long> {
 
     /** Task 하나당 한 번씩 묻지 않으려고 한 번에 가져온다. */
     fun findAllByTaskIdIn(taskIds: Collection<Long>): List<GeneratedFile>
+
+    /** 목록이 고른 파일을 한 번에 읽는다. 순서는 지키지 않으니 부르는 쪽이 식별자로 다시 줄 세운다. */
+    fun findAllByIdIn(ids: Collection<Long>): List<GeneratedFile>
 }

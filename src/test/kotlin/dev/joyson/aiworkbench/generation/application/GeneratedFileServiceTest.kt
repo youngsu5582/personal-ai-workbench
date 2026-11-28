@@ -3,6 +3,8 @@ package dev.joyson.aiworkbench.generation.application
 import dev.joyson.aiworkbench.storage.Sha256
 import dev.joyson.aiworkbench.generation.domain.FileLocation
 import dev.joyson.aiworkbench.generation.domain.GeneratedFileFinder
+import dev.joyson.aiworkbench.generation.domain.GeneratedFileRepository
+import dev.joyson.aiworkbench.generation.domain.GenerationJobRepository
 import dev.joyson.aiworkbench.storage.FileStorage
 import dev.joyson.aiworkbench.storage.PresignedUrlIssuer
 import org.mockito.Mockito.mock
@@ -38,6 +40,15 @@ class GeneratedFileServiceTest {
         override fun delete(key: String) = error("지우지 않는다")
     }
 
+    /** 내려받기는 목록용 리포지토리를 쓰지 않는다. 부르면 목 기본값이 아니라 실패로 드러나게 둔다. */
+    private fun service(finder: GeneratedFileFinder, storage: FileStorage, issuer: PresignedUrlIssuer?) = GeneratedFileService(
+        generatedFileFinder = finder,
+        generatedFileRepository = mock(GeneratedFileRepository::class.java) { error("내려받기는 목록을 읽지 않는다") },
+        generationJobRepository = mock(GenerationJobRepository::class.java) { error("내려받기는 목록을 읽지 않는다") },
+        fileStorage = storage,
+        presignedUrlIssuer = issuer,
+    )
+
     private fun finder(result: FileLocation?) = mock(GeneratedFileFinder::class.java).also {
         org.mockito.Mockito.`when`(it.findOwned(fileUuid, ownerUuid)).thenReturn(result)
     }
@@ -45,11 +56,7 @@ class GeneratedFileServiceTest {
     @Test
     fun `발급자가 있으면 주소로 넘기고 바이트를 읽지 않는다`() {
         val storage = RecordingStorage()
-        val service = GeneratedFileService(
-            generatedFileFinder = finder(location),
-            fileStorage = storage,
-            presignedUrlIssuer = { key, fileName -> URI.create("https://storage.test/$key?name=$fileName") },
-        )
+        val service = service(finder(location), storage, PresignedUrlIssuer { key, fileName -> URI.create("https://storage.test/$key?name=$fileName") })
 
         val download = service.download(fileUuid, ownerUuid)
 
@@ -62,7 +69,7 @@ class GeneratedFileServiceTest {
     @Test
     fun `발급자가 없으면 우리가 읽어 내보낸다`() {
         val storage = RecordingStorage()
-        val service = GeneratedFileService(finder(location), storage, presignedUrlIssuer = null)
+        val service = service(finder(location), storage, issuer = null)
 
         val streamed = assertIs<FileDownload.Streamed>(service.download(fileUuid, ownerUuid))
 
@@ -75,18 +82,14 @@ class GeneratedFileServiceTest {
     @Test
     fun `남의 파일이면 발급조차 하지 않는다`() {
         // 발급된 주소는 그 자체가 통행증이라, 인가가 그보다 먼저여야 한다.
-        val service = GeneratedFileService(
-            generatedFileFinder = finder(null),
-            fileStorage = RecordingStorage(),
-            presignedUrlIssuer = { _, _ -> error("여기까지 오면 안 된다") },
-        )
+        val service = service(finder(null), RecordingStorage(), PresignedUrlIssuer { _, _ -> error("여기까지 오면 안 된다") })
 
         assertNull(service.download(fileUuid, ownerUuid))
     }
 
     @Test
     fun `행은 있는데 보관소에 없으면 없는 것으로 답한다`() {
-        val service = GeneratedFileService(finder(location), RecordingStorage(content = null), null)
+        val service = service(finder(location), RecordingStorage(content = null), issuer = null)
 
         assertNull(service.download(fileUuid, ownerUuid))
     }

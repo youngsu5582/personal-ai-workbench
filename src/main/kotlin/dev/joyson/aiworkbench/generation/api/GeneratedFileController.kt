@@ -2,6 +2,7 @@ package dev.joyson.aiworkbench.generation.api
 
 import dev.joyson.aiworkbench.generation.application.FileDownload
 import dev.joyson.aiworkbench.generation.application.GeneratedFileService
+import dev.joyson.aiworkbench.generation.domain.FileKind
 import dev.joyson.aiworkbench.ownership.WorkspaceContext
 import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
@@ -11,7 +12,9 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 import jakarta.validation.constraints.Pattern
 
 /**
@@ -30,6 +33,27 @@ import jakarta.validation.constraints.Pattern
 class GeneratedFileController(
     private val generatedFileService: GeneratedFileService,
 ) {
+
+    /**
+     * 이 서비스가 만든 결과 파일을 종류별로 최신순으로 나누어 준다.
+     *
+     * [kind] 를 비워 두지 않는다. 종류마다 그리는 방식이 달라 한 목록에 섞어 받을 일이 없고,
+     * 종류가 늘어도 이미 쓰는 쪽이 받는 것이 바뀌지 않는다.
+     */
+    @GetMapping
+    fun list(
+        scope: WorkspaceContext,
+        @RequestParam kind: String,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "24") size: Int,
+    ): GeneratedFileListResponse {
+        val fileKind = FileKind.entries.firstOrNull { it.value == kind }
+            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 종류다: $kind")
+        if (page < 0 || size !in 1..60 || page.toLong() * size > Int.MAX_VALUE) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 페이지 요청입니다.")
+        }
+        return generatedFileService.listOwned(scope.workspaceUuid, fileKind, page, size).toResponse()
+    }
 
     @GetMapping("/{sha256}")
     fun download(scope: WorkspaceContext, @PathVariable @Pattern(regexp = "[0-9a-f]{64}") sha256: String): ResponseEntity<*> =
