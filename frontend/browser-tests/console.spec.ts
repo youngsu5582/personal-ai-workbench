@@ -143,6 +143,29 @@ test("작업 내역은 요청 내용과 참고 이미지 · 성공 수를 함께
   await expect(page.getByText(/생성한 이미지/)).toHaveCount(2);
 });
 
+test("작업 내역은 날짜로 묶고 상태를 결과 수로 가른 배지 하나로 보인다", async ({ page }) => {
+  await prepare(page);
+  const today = new Date().toISOString();
+  const rejected = {
+    ...job, uuid: "job-r", createdAt: today, option: { type: "text-generate", prompt: "거절된 요청" },
+    progress: { total: 1, succeeded: 0, failed: 1 },
+    tasks: [{ status: "FAILED", failureReason: "거절됨", files: [], texts: [], decisions: [] }],
+  };
+  const mixed = { ...job, uuid: "job-m", createdAt: today, taskCount: 3, option: { type: "text-generate", prompt: "셋 중 둘만 된 요청" }, progress: { total: 3, succeeded: 2, failed: 1 } };
+  await page.route("**/api/jobs?**", route => route.fulfill({ json: { items: [rejected, mixed, job], hasNext: false } }));
+  await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
+
+  const todayGroup = page.getByRole("region", { name: "오늘" });
+  await expect(todayGroup.getByRole("button")).toHaveCount(2);
+  await expect(todayGroup.getByRole("button", { name: /거절된 요청.*실패/ })).toBeVisible();
+  await expect(todayGroup.getByRole("button", { name: /셋 중 둘만 된 요청.*일부 실패.*성공 2 · 실패 1 \/ 3/ })).toBeVisible();
+  // 결과가 하나뿐인 성공은 개수 없이 배지만 보이고, 처리 종료라는 말은 남지 않는다.
+  const single = page.getByRole("button", { name: /예시 요청/ });
+  await expect(single).toContainText("성공");
+  await expect(single).not.toContainText("/ 1");
+  await expect(page.getByText("처리 종료")).toHaveCount(0);
+});
+
 test("글 생성의 오디오 첨부는 첨부 파일로 세고 오디오로 그린다", async ({ page }) => {
   await prepare(page);
   const attached = {
@@ -599,7 +622,7 @@ test("모바일 다크 모드에서 서비스 선택과 작업 내역을 볼 수
   await page.getByRole("button", { name: "다크 모드로 변경" }).click();
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page.getByRole("navigation", { name: "주 메뉴" }).getByRole("button", { name: "작업 내역", exact: true }).click();
-  await expect(page.getByRole("button", { name: /예시 요청.*성공 1 \/ 1/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /예시 요청.*성공/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

@@ -10,6 +10,11 @@ function clock(value: string) {
   return [at.getHours(), at.getMinutes(), at.getSeconds()].map(part => String(part).padStart(2, "0")).join(":");
 }
 
+/** 처리를 모델 호출과 결과 보관으로 나누어 보이지 않는다 — 보는 사람이 그 차이로 할 수 있는 일이 없다. 둘로 나눈 값은 완료 로그와 지표에 있다. */
+const WAIT_HINT = "요청부터 처리를 시작할 때까지 줄 서 있던 시간";
+const WORK_HINT = "모델 호출과 결과 보관을 합친 시간";
+const hintClass = "cursor-help underline decoration-dotted underline-offset-2";
+
 /**
  * 한 결과가 기다린 시간과 처리된 시간을 한 줄에 놓는다.
  *
@@ -28,8 +33,8 @@ export function TaskTiming({ requestedAt, startedAt, finishedAt, running, failed
   const total = Math.max(1, waited + worked);
   return <div className="flex min-w-0 flex-col gap-1.5">
     <p className="m-0 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-      <span>대기 <strong className="font-medium text-foreground">{duration(waited)}</strong></span>
-      <span>처리 <strong className={cn("font-medium", failed ? "text-danger" : "text-foreground")}>{duration(worked)}</strong></span>
+      <span title={WAIT_HINT}><span className={hintClass}>대기</span> <strong className="font-medium text-foreground">{duration(waited)}</strong></span>
+      <span title={WORK_HINT}><span className={hintClass}>처리</span> <strong className={cn("font-medium", failed ? "text-danger" : "text-foreground")}>{duration(worked)}</strong></span>
       <span className="sm:ml-auto">{clock(requestedAt)} 요청 · {clock(startedAt)} 시작 · {clock(finishedAt)} 끝</span>
     </p>
     <div className="flex h-1.5 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={`대기 ${duration(waited)}, 처리 ${duration(worked)}`}>
